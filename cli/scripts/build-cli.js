@@ -195,12 +195,22 @@ function ensureModuleInBundle(pkg) {
   console.log(`✅ Bundled ${pkg}`);
 }
 ensureModuleInBundle("sql.js");
+// The realtime bridge is loaded by custom-server.js, so it is not visible to
+// Next's output tracer and must be carried explicitly by the CLI bundle.
+ensureModuleInBundle("ws");
 const betterDir = path.join(cliAppDir, "node_modules", "better-sqlite3");
 if (fs.existsSync(betterDir)) {
   fs.rmSync(betterDir, { recursive: true, force: true });
   console.log("✅ Stripped better-sqlite3 (lives in ~/.9router/runtime)");
 }
 console.log("");
+
+const realtimeSrc = path.join(appDir, "src", "realtime");
+const realtimeDest = path.join(cliAppDir, "src", "realtime");
+if (fs.existsSync(realtimeSrc)) {
+  copyRecursive(realtimeSrc, realtimeDest);
+  console.log("✅ Copied realtime bridge files\n");
+}
 
 // Step 4: Copy static files
 console.log("4️⃣  Copying static files...");

@@ -512,7 +512,7 @@ export default function TokenSaverClient() {
                 </a>
               </p>
               <span
-                className={`text-xs px-2 py-0.5 rounded ${headroomRunning ? "bg-success/15 text-success" : "bg-warning/15 text-warning"}`}
+                className={`text-xs px-2 py-0.5  ${headroomRunning ? "bg-success/15 text-success" : "bg-warning/15 text-warning"}`}
               >
                 {headroomStatusLabel}
               </span>
@@ -554,7 +554,7 @@ export default function TokenSaverClient() {
                   return (
                     <div
                       key={extra}
-                      className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border border-success/40 bg-success/5 text-text"
+                      className="flex items-center gap-1.5 text-xs px-2 py-1  border border-success/40 bg-success/5 text-text"
                       title={extraTitle}
                     >
                       <Toggle
@@ -580,7 +580,7 @@ export default function TokenSaverClient() {
                 return (
                   <label
                     key={extra}
-                    className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded border cursor-pointer transition-colors ${
+                    className={`flex items-center gap-1.5 text-xs px-2 py-1  border cursor-pointer transition-colors ${
                       pending
                         ? "border-primary bg-primary/10 text-primary"
                         : "border-border text-text-muted hover:bg-surface-2"
@@ -602,7 +602,7 @@ export default function TokenSaverClient() {
                 <button
                   onClick={handleInstallExtras}
                   disabled={extrasActionLoading}
-                  className="text-xs px-2.5 py-1 rounded bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                  className="text-xs px-2.5 py-1  bg-primary text-white hover:opacity-90 disabled:opacity-50"
                 >
                   {extrasActionLoading
                     ? "Installing…"
@@ -617,7 +617,7 @@ export default function TokenSaverClient() {
               <p className="text-xs text-text-muted mt-1">Restarting proxy…</p>
             )}
             {(extrasActionLoading || removingExtra) && installLog && (
-              <pre className="mt-2 max-h-32 overflow-auto rounded bg-surface-2 p-2 text-[10px] leading-tight text-text-muted whitespace-pre-wrap">
+              <pre className="mt-2 max-h-32 overflow-auto  bg-surface-2 p-2 text-[10px] leading-tight text-text-muted whitespace-pre-wrap">
                 {installLog}
               </pre>
             )}
@@ -657,7 +657,7 @@ export default function TokenSaverClient() {
                     <button
                       key={lvl.id}
                       onClick={() => handleCavemanLevel(lvl.id)}
-                      className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                      className={`px-3 py-1.5  text-xs font-medium border transition-colors ${
                         cavemanLevel === lvl.id
                           ? "bg-primary text-white border-primary"
                           : "bg-transparent border-border text-text-muted hover:bg-surface-2"
@@ -708,7 +708,7 @@ export default function TokenSaverClient() {
                     <button
                       key={lvl.id}
                       onClick={() => handlePonytailLevel(lvl.id)}
-                      className={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                      className={`px-3 py-1.5  text-xs font-medium border transition-colors ${
                         ponytailLevel === lvl.id
                           ? "bg-primary text-white border-primary"
                           : "bg-transparent border-border text-text-muted hover:bg-surface-2"
@@ -749,7 +749,7 @@ export default function TokenSaverClient() {
                   (PXPIPE)
                 </a>
               </p>
-              <span className={`text-xs px-2 py-0.5 rounded ${pxpipeChipClass}`}>
+              <span className={`text-xs px-2 py-0.5  ${pxpipeChipClass}`}>
                 {pxpipeStatusLabel}
               </span>
               <button
@@ -800,7 +800,7 @@ export default function TokenSaverClient() {
               href="/api/headroom/proxy/dashboard"
               target="_blank"
               rel="noreferrer"
-              className="w-full rounded border border-border px-4 py-2 text-center text-sm hover:bg-surface-2"
+              className="w-full  border border-border px-4 py-2 text-center text-sm hover:bg-surface-2"
             >
               Open Headroom Dashboard
             </a>
@@ -853,7 +853,7 @@ export default function TokenSaverClient() {
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium">Install then click Start:</p>
               <div className="flex items-center gap-2">
-                <pre className="flex-1 rounded bg-black/5 dark:bg-white/5 p-2 text-xs font-mono overflow-x-auto">
+                <pre className="flex-1  bg-black/5 dark:bg-white/5 p-2 text-xs font-mono overflow-x-auto">
                   {`pip install "headroom-ai[proxy]"`}
                 </pre>
                 <Button
@@ -907,7 +907,7 @@ export default function TokenSaverClient() {
             </span>
           </div>
           {pxpipeHealth?.checks?.length > 0 && (
-            <div className="flex flex-col gap-1 rounded border border-border p-3">
+            <div className="flex flex-col gap-1  border border-border p-3">
               <p className="text-sm font-medium mb-1">Health check</p>
               {pxpipeHealth.checks.map((check) => (
                 <div key={check.id} className="flex items-center justify-between text-xs">
@@ -960,7 +960,7 @@ export default function TokenSaverClient() {
               </Button>
               <a
                 href="/dashboard/pxpipe#logs"
-                className="col-span-2 rounded border border-border px-4 py-2 text-center text-sm hover:bg-surface-2"
+                className="col-span-2  border border-border px-4 py-2 text-center text-sm hover:bg-surface-2"
               >
                 Open Logs
               </a>

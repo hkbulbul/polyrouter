@@ -108,7 +108,7 @@ export default function GitLabAuthModal({ isOpen, providerInfo, onSuccess, onClo
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setMode("oauth")}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                className="flex flex-col items-center gap-2 p-4  border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
               >
                 <span className="material-symbols-outlined text-2xl text-primary">lock_open</span>
                 <div>
@@ -118,7 +118,7 @@ export default function GitLabAuthModal({ isOpen, providerInfo, onSuccess, onClo
               </button>
               <button
                 onClick={() => setMode("pat")}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                className="flex flex-col items-center gap-2 p-4  border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
               >
                 <span className="material-symbols-outlined text-2xl text-primary">key</span>
                 <div>
@@ -139,7 +139,7 @@ export default function GitLabAuthModal({ isOpen, providerInfo, onSuccess, onClo
                 GitLab Applications
               </a>{" "}
               with redirect URI{" "}
-              <code className="bg-sidebar px-1 rounded text-xs">{getRedirectUri()}</code>
+              <code className="bg-sidebar px-1  text-xs">{getRedirectUri()}</code>
             </p>
             <Input label="GitLab Base URL" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={GITLAB_COM} />
             <Input label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Your OAuth application client ID" />
@@ -164,9 +164,9 @@ export default function GitLabAuthModal({ isOpen, providerInfo, onSuccess, onClo
               <a href={`${baseUrl.trim() || GITLAB_COM}/-/user_settings/personal_access_tokens`} target="_blank" rel="noreferrer" className="text-primary underline">
                 GitLab Access Tokens
               </a>{" "}
-              with scopes: <code className="bg-sidebar px-1 rounded text-xs">api</code>,{" "}
-              <code className="bg-sidebar px-1 rounded text-xs">read_user</code>, and{" "}
-              <code className="bg-sidebar px-1 rounded text-xs">ai_features</code>.
+              with scopes: <code className="bg-sidebar px-1  text-xs">api</code>,{" "}
+              <code className="bg-sidebar px-1  text-xs">read_user</code>, and{" "}
+              <code className="bg-sidebar px-1  text-xs">ai_features</code>.
             </p>
             <Input label="GitLab Base URL" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={GITLAB_COM} />
             <Input label="Personal Access Token" value={pat} onChange={(e) => setPat(e.target.value)} placeholder="glpat-xxxxxxxxxxxxxxxxxxxx" type="password" />

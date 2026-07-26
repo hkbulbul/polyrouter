@@ -23,7 +23,8 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle }) 
   const providerInfo = AI_PROVIDERS[provider.id];
   const isNoAuth = !!providerInfo?.noAuth;
 
-  const providerConns = connections.filter((c) => c.provider === provider.id);
+  const connectionProviderId = kind === "speechToSpeech" && provider.id === "openai" ? "codex" : provider.id;
+  const providerConns = connections.filter((c) => c.provider === connectionProviderId);
   const connected = providerConns.filter((c) => { const s = getEffectiveStatus(c); return s === "active" || s === "success"; }).length;
   const error = providerConns.filter((c) => { const s = getEffectiveStatus(c); return s === "error" || s === "expired" || s === "unavailable"; }).length;
   const total = providerConns.length;
@@ -32,7 +33,7 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle }) 
   const handleToggleClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (onToggle) onToggle(provider.id, allDisabled);
+    if (onToggle) onToggle(connectionProviderId, allDisabled);
   };
 
   const renderStatus = () => {
@@ -57,14 +58,14 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle }) 
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
-              className="size-8 rounded-lg flex items-center justify-center shrink-0"
+              className="size-8  flex items-center justify-center shrink-0"
               style={{ backgroundColor: `${provider.color?.length > 7 ? provider.color : (provider.color ?? "#888") + "15"}` }}
             >
               <ProviderIcon
                 src={`/providers/${provider.id}.png`}
                 alt={provider.name}
                 size={30}
-                className="object-contain rounded-lg max-w-[30px] max-h-[30px]"
+                className="object-contain  max-w-[30px] max-h-[30px]"
                 fallbackText={provider.textIcon || provider.id.slice(0, 2).toUpperCase()}
                 fallbackColor={provider.color}
               />
@@ -111,12 +112,12 @@ function ComboList({ combos }) {
                   const pid = typeof entry === "string" ? entry.split("/")[0] : "";
                   const p = AI_PROVIDERS[pid];
                   return (
-                    <div key={`${entry}-${i}`} title={p?.name || entry} className="size-5 rounded flex items-center justify-center" style={{ backgroundColor: `${(p?.color ?? "#888")}15` }}>
+                    <div key={`${entry}-${i}`} title={p?.name || entry} className="size-5  flex items-center justify-center" style={{ backgroundColor: `${(p?.color ?? "#888")}15` }}>
                       <ProviderIcon
                         src={`/providers/${pid}.png`}
                         alt={p?.name || pid}
                         size={18}
-                        className="object-contain rounded max-w-[18px] max-h-[18px]"
+                        className="object-contain  max-w-[18px] max-h-[18px]"
                         fallbackText={p?.textIcon || pid.slice(0, 2).toUpperCase()}
                         fallbackColor={p?.color}
                       />
@@ -138,7 +139,7 @@ function ComboList({ combos }) {
 }
 
 export default function MediaProviderKindPage() {
-  const { kind } = useParams();
+  const { kind: requestedKind } = useParams();
   const router = useRouter();
   const [connections, setConnections] = useState([]);
   const [customNodes, setCustomNodes] = useState([]);
@@ -147,12 +148,13 @@ export default function MediaProviderKindPage() {
 
   // webSearch/webFetch listing pages are merged into /web
   useEffect(() => {
-    if (kind === "webSearch" || kind === "webFetch") {
+    if (requestedKind === "webSearch" || requestedKind === "webFetch") {
       router.replace("/dashboard/media-providers/web");
     }
-  }, [kind, router]);
+  }, [requestedKind, router]);
 
-  const kindConfig = MEDIA_PROVIDER_KINDS.find((k) => k.id === kind);
+  const kindConfig = MEDIA_PROVIDER_KINDS.find((k) => k.id === requestedKind || k.id.toLowerCase() === String(requestedKind || "").toLowerCase());
+  const kind = kindConfig?.id || requestedKind;
   const isEmbedding = kind === "embedding";
   const supportsCombo = COMBO_KINDS.has(kind);
 
@@ -247,7 +249,7 @@ export default function MediaProviderKindPage() {
       )}
 
       {allProviders.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-border rounded-xl text-text-muted text-sm">
+        <div className="text-center py-12 border border-dashed border-border  text-text-muted text-sm">
           No providers support <strong>{kindConfig.label}</strong> yet.
         </div>
       ) : (

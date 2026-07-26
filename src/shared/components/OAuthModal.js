@@ -2,6 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import PropTypes from "prop-types";
+
+async function readOAuthJson(response, label) {
+  const body = await response.text();
+  try {
+    return JSON.parse(body);
+  } catch {
+    const contentType = response.headers.get("content-type") || "unknown content type";
+    const preview = body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+    throw new Error(`${label} returned HTTP ${response.status} (${contentType}): ${preview || "empty response"}`);
+  }
+}
 import { Modal, Button, Input } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 
@@ -56,7 +67,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         }),
       });
 
-      const data = await res.json();
+      const data = await readOAuthJson(res, "OAuth exchange");
       if (!res.ok) throw new Error(data.error);
 
       setStep("success");
@@ -75,7 +86,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, state: authData.state }),
       });
-      const data = await res.json();
+      const data = await readOAuthJson(res, "OAuth manual-code exchange");
       if (!res.ok) throw new Error(data.error);
 
       setStep("success");
@@ -120,7 +131,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
           body: JSON.stringify({ deviceCode, codeVerifier, extraData }),
         });
 
-        const data = await res.json();
+        const data = await readOAuthJson(res, "OAuth device-code poll");
 
         if (data.success) {
           pollingAbortRef.current = true; // Stop polling immediately
@@ -181,7 +192,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
           deviceCodeUrl.searchParams.set("auth_method", "idc");
         }
         const res = await fetch(deviceCodeUrl.toString());
-        const data = await res.json();
+        const data = await readOAuthJson(res, "OAuth device-code request");
         if (!res.ok) throw new Error(data.error);
 
         setDeviceData(data);
@@ -242,7 +253,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         Object.entries(oauthMeta).forEach(([k, v]) => { if (v) authorizeUrl.searchParams.set(k, v); });
       }
       const res = await fetch(authorizeUrl.toString());
-      const data = await res.json();
+      const data = await readOAuthJson(res, "OAuth authorize");
       if (!res.ok) throw new Error(data.error);
 
       // Codex: start proxy with server-side session (auto-exchange) + fallback to channels
@@ -256,7 +267,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
           proxyUrl.searchParams.set("code_verifier", data.codeVerifier);
           proxyUrl.searchParams.set("redirect_uri", redirectUri);
           const proxyRes = await fetch(proxyUrl.toString());
-          const proxyData = await proxyRes.json();
+          const proxyData = await readOAuthJson(proxyRes, "Codex callback proxy");
           codexProxyActive = proxyData.success;
           codexServerSide = !!proxyData.serverSide;
         } catch {
@@ -275,7 +286,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
           proxyUrl.searchParams.set("code_verifier", data.codeVerifier);
           proxyUrl.searchParams.set("redirect_uri", redirectUri);
           const proxyRes = await fetch(proxyUrl.toString());
-          const proxyData = await proxyRes.json();
+          const proxyData = await readOAuthJson(proxyRes, "xAI callback proxy");
           xaiProxyActive = proxyData.success;
           xaiServerSide = !!proxyData.serverSide;
           if (!xaiProxyActive && proxyData.reason === "port_busy") {
@@ -372,7 +383,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       attempts += 1;
       try {
           const res = await fetch(`/api/oauth/${pollProvider}/poll-status?state=${encodeURIComponent(authData.state)}`);
-        const data = await res.json();
+          const data = await readOAuthJson(res, "OAuth status poll");
         if (cancelled || callbackProcessedRef.current) return;
         if (data.status === "done") {
           callbackProcessedRef.current = true;
@@ -560,7 +571,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         {(step === "waiting" || step === "input") && !isDeviceCode && (
           <>
             {/* Option A: Auto via popup */}
-            <div className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg bg-sidebar/50">
+            <div className="flex items-center gap-2 px-3 py-2 border border-border  bg-sidebar/50">
               <span className="material-symbols-outlined text-base text-primary animate-spin">
                 progress_activity
               </span>
@@ -628,7 +639,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
               <p className="text-sm text-text-muted mb-4">
                 Visit the login URL below and authorize:
               </p>
-              <div className="bg-sidebar p-4 rounded-lg mb-4">
+              <div className="bg-sidebar p-4  mb-4">
                 <p className="text-xs text-text-muted mb-1">Login URL</p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-sm break-all">{deviceLoginUrl}</code>
@@ -650,7 +661,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                   </Button>
                 </div>
               </div>
-              <div className="bg-primary/10 p-4 rounded-lg">
+              <div className="bg-primary/10 p-4 ">
                 <p className="text-xs text-text-muted mb-1">Your Code</p>
                 <div className="flex items-center justify-center gap-2">
                   <p className="text-2xl font-mono font-bold text-primary">{deviceData.user_code}</p>

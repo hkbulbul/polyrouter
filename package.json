@@ -1,10 +1,10 @@
 {
   "name": "9router-app",
-  "version": "0.5.40",
+  "version": "1.0.0.0",
   "description": "9Router web dashboard",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 20127",
+    "dev": "node custom-server.js",
     "dev:webpack": "next dev --webpack --port 20127",
     "build": "next build --webpack",
     "start": "next start --port 20127",
@@ -44,10 +44,11 @@
     "sql.js": "^1.14.1",
     "undici": "^7.19.2",
     "uuid": "^13.0.0",
+    "ws": "^8.21.0",
     "zustand": "^5.0.10"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^12.6.2"
+    "better-sqlite3": "^12.11.1"
   },
   "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools — sql.js is used as fallback at runtime",
   "devDependencies": {

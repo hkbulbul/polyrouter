@@ -78,7 +78,7 @@ export default function IFlowCookieModal({ isOpen, onSuccess, onClose }) {
                   platform.iflow.cn
                 </a>
               </p>
-              <div className="bg-surface-secondary p-3 rounded-lg text-xs space-y-2">
+              <div className="bg-surface-secondary p-3  text-xs space-y-2">
                 <p className="font-medium text-text-primary">How to get cookie:</p>
                 <ol className="list-decimal list-inside space-y-1 text-text-muted">
                   <li>Open platform.iflow.cn in your browser</li>
@@ -98,14 +98,14 @@ export default function IFlowCookieModal({ isOpen, onSuccess, onClose }) {
                 value={cookie}
                 onChange={(e) => setCookie(e.target.value)}
                 placeholder="BXAuth=xxx; ..."
-                className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-lg text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                className="w-full px-3 py-2 bg-surface-secondary border border-border  text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                 rows={4}
                 disabled={loading}
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-error/10 border border-error/20 rounded-lg">
+              <div className="p-3 bg-error/10 border border-error/20 ">
                 <p className="text-sm text-error">{error}</p>
               </div>
             )}

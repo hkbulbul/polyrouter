@@ -126,6 +126,7 @@ const MODEL_TYPE_TO_KIND = {
   tts: "tts",
   embedding: "embedding",
   stt: "stt",
+  speechToSpeech: "speechToSpeech",
   imageToText: "imageToText",
   video: "video",
 };

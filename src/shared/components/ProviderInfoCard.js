@@ -4,6 +4,7 @@ import Card from "./Card";
 
 // Only show fields user actually cares about
 const FIELD_SCHEMA = {
+  authentication:   { label: "Authentication", format: (v) => v },
   mode:             { label: "Mode",       format: (v) => v },
   defaultModel:     { label: "Model",      format: (v) => v, mono: true },
   baseUrl:          { label: "Endpoint",   format: (v) => v, isLink: true, mono: true },
@@ -17,7 +18,7 @@ const FIELD_SCHEMA = {
   maxCharacters:    { label: "Max chars",  format: (v) => v.toLocaleString() },
 };
 
-export default function ProviderInfoCard({ config, provider, title = "Provider Info" }) {
+export default function ProviderInfoCard({ config, provider, title = "Provider Info", showSignup = true }) {
   if (!config) return null;
 
   const rows = Object.entries(FIELD_SCHEMA)
@@ -38,7 +39,7 @@ export default function ProviderInfoCard({ config, provider, title = "Provider I
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold">{title}</h2>
-        {signupUrl && (
+        {showSignup && signupUrl && (
           <a
             href={signupUrl}
             target="_blank"

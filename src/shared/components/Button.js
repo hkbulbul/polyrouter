@@ -12,9 +12,9 @@ const variants = {
 };
 
 const sizes = {
-  sm: "h-7 px-3 text-xs rounded-[8px]",
-  md: "h-9 px-4 text-sm rounded-[10px]",
-  lg: "h-11 px-6 text-sm rounded-[10px]",
+  sm: "h-7 px-3 text-xs ",
+  md: "h-9 px-4 text-sm ",
+  lg: "h-11 px-6 text-sm ",
 };
 
 export default function Button({

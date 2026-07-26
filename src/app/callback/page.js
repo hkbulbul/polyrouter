@@ -118,7 +118,7 @@ function CallbackContent() {
             <p className="text-text-muted mb-4">
               Please copy the URL from the address bar and paste it in the application.
             </p>
-            <div className="bg-surface border border-border rounded-lg p-3 text-left">
+            <div className="bg-surface border border-border  p-3 text-left">
               <code className="text-xs break-all">{typeof window !== "undefined" ? window.location.href : ""}</code>
             </div>
           </>

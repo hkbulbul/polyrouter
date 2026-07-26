@@ -19,7 +19,7 @@ export default function MitmLinkCard({ tool }) {
                 alt={tool.name}
                 width={32}
                 height={32}
-                className="size-8 object-contain rounded-lg"
+                className="size-8 object-contain "
                 sizes="32px"
                 onError={(e) => { e.target.style.display = "none"; }}
               loading="lazy"

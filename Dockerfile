@@ -35,6 +35,9 @@ COPY --from=builder /app/open-sse ./open-sse
 COPY --from=builder /app/src/mitm ./src/mitm
 # Standalone node_modules may omit deps only required by the MITM child process.
 COPY --from=builder /app/node_modules/node-forge ./node_modules/node-forge
+# The realtime bridge is started by custom-server.js, outside Next's file tracer.
+COPY --from=builder /app/node_modules/ws ./node_modules/ws
+COPY --from=builder /app/src/realtime ./src/realtime
 # Ensure `next` is available at runtime in case tracing did not include it.
 COPY --from=builder /app/node_modules/next ./node_modules/next
 

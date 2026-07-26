@@ -41,14 +41,14 @@ function ProviderCard({ provider, kind, connections }) {
       <Card padding="xs" className={`h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}>
         <div className="flex min-w-0 items-center gap-3">
           <div
-            className="size-8 rounded-lg flex items-center justify-center shrink-0"
+            className="size-8  flex items-center justify-center shrink-0"
             style={{ backgroundColor: `${provider.color?.length > 7 ? provider.color : (provider.color ?? "#888") + "15"}` }}
           >
             <ProviderIcon
               src={`/providers/${provider.id}.png`}
               alt={provider.name}
               size={30}
-              className="object-contain rounded-lg max-w-[30px] max-h-[30px]"
+              className="object-contain  max-w-[30px] max-h-[30px]"
               fallbackText={provider.textIcon || provider.id.slice(0, 2).toUpperCase()}
               fallbackColor={provider.color}
             />
@@ -81,12 +81,12 @@ function ComboList({ combos }) {
                   const pid = typeof entry === "string" ? entry.split("/")[0] : "";
                   const p = AI_PROVIDERS[pid];
                   return (
-                    <div key={`${entry}-${i}`} title={p?.name || entry} className="size-5 rounded flex items-center justify-center" style={{ backgroundColor: `${(p?.color ?? "#888")}15` }}>
+                    <div key={`${entry}-${i}`} title={p?.name || entry} className="size-5  flex items-center justify-center" style={{ backgroundColor: `${(p?.color ?? "#888")}15` }}>
                       <ProviderIcon
                         src={`/providers/${pid}.png`}
                         alt={p?.name || pid}
                         size={18}
-                        className="object-contain rounded max-w-[18px] max-h-[18px]"
+                        className="object-contain  max-w-[18px] max-h-[18px]"
                         fallbackText={p?.textIcon || pid.slice(0, 2).toUpperCase()}
                         fallbackColor={p?.color}
                       />
@@ -129,7 +129,7 @@ function Section({ title, icon, kind, providers, connections, combos, onCreateCo
 
       {/* Providers grid — bottom */}
       {providers.length === 0 ? (
-        <div className="text-center py-8 border border-dashed border-border rounded-xl text-text-muted text-sm">
+        <div className="text-center py-8 border border-dashed border-border  text-text-muted text-sm">
           No providers.
         </div>
       ) : (

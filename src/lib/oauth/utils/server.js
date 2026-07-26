@@ -67,7 +67,10 @@ export function startLocalServer(onCallback, fixedPort = null) {
 
     // Listen on fixed port or find available port
     const portToUse = fixedPort || 0;
-    server.listen(portToUse, "127.0.0.1", () => {
+    // OAuth redirects use `http://localhost/...`. Binding to the literal
+    // IPv4 address can fail on Windows when the browser resolves localhost
+    // to ::1 first, producing ERR_CONNECTION_REFUSED.
+    server.listen(portToUse, "localhost", () => {
       const { port } = server.address();
       resolve({
         server,
@@ -255,7 +258,7 @@ export function startCodexProxy(appPort) {
       stopCodexProxy();
     });
 
-    server.listen(CODEX_PORT, "127.0.0.1", () => {
+    server.listen(CODEX_PORT, "localhost", () => {
       codexProxyServer = server;
       codexProxyTimeout = setTimeout(() => stopCodexProxy(), CODEX_PROXY_TIMEOUT_MS);
       resolve({ success: true });
@@ -397,6 +400,7 @@ export function startXaiProxy(appPort) {
       stopXaiProxy();
     });
 
+    // xAI's registered redirect URI is explicitly 127.0.0.1.
     server.listen(XAI_PROXY_PORT, "127.0.0.1", () => {
       xaiProxyServer = server;
       xaiProxyTimeout = setTimeout(() => stopXaiProxy(), XAI_PROXY_TIMEOUT_MS);
@@ -423,4 +427,3 @@ export function stopXaiProxy() {
     xaiProxyServer = null;
   }
 }
-

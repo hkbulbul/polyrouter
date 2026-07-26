@@ -7,6 +7,7 @@ const KIND_ENDPOINT = {
   image: "/v1/images/generations",
   tts: "/v1/audio/speech",
   stt: "/v1/audio/transcriptions",
+  speechToSpeech: "/v1/realtime",
   embedding: "/v1/embeddings",
   imageToText: "/v1/chat/completions",
   webSearch: "/v1/search",

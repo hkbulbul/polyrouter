@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
 import PropTypes from "prop-types";
-import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal } from "@/shared/components";
+import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal, Dropdown, DropdownItem, OAuthModal } from "@/shared/components";
+import { OAUTH_PROVIDERS } from "@/shared/constants/providers";
 
 // ── CooldownTimer ──────────────────────────────────────────────
 function CooldownTimer({ until }) {
@@ -24,17 +25,15 @@ function CooldownTimer({ until }) {
   }, [until]);
 
   if (!remaining) return null;
-  return <span className="text-xs text-orange-500 font-mono">⏱ {remaining}</span>;
+  return <span className="text-xs text-green-500 font-mono">⏱ {remaining}</span>;
 }
 
 CooldownTimer.propTypes = { until: PropTypes.string.isRequired };
 
 // ── ConnectionRow ──────────────────────────────────────────────
-function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete }) {
-  const [showProxyDropdown, setShowProxyDropdown] = useState(false);
+function ConnectionRow({ connection, proxyPools, isOAuth, statusMode, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete }) {
   const [updatingProxy, setUpdatingProxy] = useState(false);
   const [isCooldown, setIsCooldown] = useState(false);
-  const proxyDropdownRef = useRef(null);
 
   const proxyPoolMap = new Map((proxyPools || []).map((p) => [p.id, p]));
   const boundProxyPoolId = connection.providerSpecificData?.proxyPoolId || null;
@@ -75,17 +74,16 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
     return () => { if (t) clearInterval(t); };
   }, [modelLockUntil]);
 
-  useEffect(() => {
-    if (!showProxyDropdown) return;
-    const handler = (e) => {
-      if (proxyDropdownRef.current && !proxyDropdownRef.current.contains(e.target))
-        setShowProxyDropdown(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showProxyDropdown]);
+  const handleSelectProxy = async (poolId) => {
+    setUpdatingProxy(true);
+    try { await onUpdateProxy(poolId === "__none__" ? null : poolId); }
+    finally { setUpdatingProxy(false); }
+  };
 
-  const effectiveStatus = connection.testStatus === "unavailable" && !isCooldown ? "active" : connection.testStatus;
+  const authFailure = /refresh token|token expired|invalidated|unauthorized|401/i.test(connection.lastError || "");
+  const effectiveStatus = statusMode === "oauth"
+    ? (authFailure ? "error" : (connection.isActive === false ? "disabled" : "active"))
+    : (connection.testStatus === "unavailable" && !isCooldown ? "active" : connection.testStatus);
 
   const getStatusVariant = () => getConnectionStatusVariant(connection.isActive, effectiveStatus);
 
@@ -93,20 +91,14 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
     ? connection.name || connection.email || connection.displayName || "OAuth Account"
     : connection.name;
 
-  const handleSelectProxy = async (poolId) => {
-    setUpdatingProxy(true);
-    try { await onUpdateProxy(poolId === "__none__" ? null : poolId); }
-    finally { setUpdatingProxy(false); setShowProxyDropdown(false); }
-  };
-
   return (
-    <div className={`group flex flex-col gap-3 p-2 rounded-lg sm:flex-row sm:items-center sm:justify-between hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors ${connection.isActive === false ? "opacity-60" : ""}`}>
+    <div className={`group flex flex-col gap-3 p-2  sm:flex-row sm:items-center sm:justify-between hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors ${connection.isActive === false ? "opacity-60" : ""}`}>
       <div className="flex w-full min-w-0 flex-1 items-start gap-3 sm:items-center">
         <div className="flex flex-col">
-          <button onClick={onMoveUp} disabled={isFirst} className={`p-0.5 rounded ${isFirst ? "text-text-muted/30 cursor-not-allowed" : "hover:bg-sidebar text-text-muted hover:text-primary"}`}>
+          <button onClick={onMoveUp} disabled={isFirst} className={`p-0.5  ${isFirst ? "text-text-muted/30 cursor-not-allowed" : "hover:bg-sidebar text-text-muted hover:text-primary"}`}>
             <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
           </button>
-          <button onClick={onMoveDown} disabled={isLast} className={`p-0.5 rounded ${isLast ? "text-text-muted/30 cursor-not-allowed" : "hover:bg-sidebar text-text-muted hover:text-primary"}`}>
+          <button onClick={onMoveDown} disabled={isLast} className={`p-0.5  ${isLast ? "text-text-muted/30 cursor-not-allowed" : "hover:bg-sidebar text-text-muted hover:text-primary"}`}>
             <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
           </button>
         </div>
@@ -119,7 +111,7 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
             </Badge>
             {hasAnyProxy && <Badge variant={proxyBadgeVariant} size="sm">Proxy</Badge>}
             {isCooldown && connection.isActive !== false && <CooldownTimer until={modelLockUntil} />}
-            {connection.lastError && connection.isActive !== false && (
+            {connection.lastError && connection.isActive !== false && (statusMode !== "oauth" || authFailure) && (
               <span className="text-xs text-red-500 truncate max-w-[300px]" title={connection.lastError}>{connection.lastError}</span>
             )}
             <span className="text-xs text-text-muted">#{connection.priority}</span>
@@ -127,7 +119,7 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
           {hasAnyProxy && (
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-text-muted truncate max-w-[420px]" title={proxyDisplayText}>{proxyDisplayText}</span>
-              {maskedProxyUrl && <code className="text-[10px] font-mono bg-black/5 dark:bg-white/5 px-1 py-0.5 rounded text-text-muted">{maskedProxyUrl}</code>}
+              {maskedProxyUrl && <code className="text-[10px] font-mono bg-black/5 dark:bg-white/5 px-1 py-0.5  text-text-muted">{maskedProxyUrl}</code>}
               {noProxyText && <span className="text-[11px] text-text-muted truncate max-w-[320px]" title={noProxyText}>no_proxy: {noProxyText}</span>}
             </div>
           )}
@@ -136,30 +128,38 @@ function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMov
       <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
         <div className="flex flex-wrap gap-1">
           {(proxyPools || []).length > 0 && (
-            <div className="relative" ref={proxyDropdownRef}>
-              <button
-                onClick={() => setShowProxyDropdown((v) => !v)}
-                className={`flex flex-col items-center px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${hasAnyProxy ? "text-primary" : "text-text-muted hover:text-primary"}`}
-                disabled={updatingProxy}
-              >
-                <span className="material-symbols-outlined text-[18px]">{updatingProxy ? "progress_activity" : "lan"}</span>
-                <span className="text-[10px] leading-tight">Proxy</span>
-              </button>
-              {showProxyDropdown && (
-                <div className="absolute right-0 top-full mt-1 z-50 bg-bg border border-border rounded-lg shadow-lg py-1 min-w-[160px]">
-                  <button onClick={() => handleSelectProxy("__none__")} className={`w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 ${!boundProxyPoolId ? "text-primary font-medium" : "text-text-main"}`}>None</button>
-                  {(proxyPools || []).map((pool) => (
-                    <button key={pool.id} onClick={() => handleSelectProxy(pool.id)} className={`w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 ${boundProxyPoolId === pool.id ? "text-primary font-medium" : "text-text-main"}`}>{pool.name}</button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Dropdown
+              trigger={
+                <button
+                  className={`flex flex-col items-center px-2 py-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${hasAnyProxy ? "text-primary" : "text-text-muted hover:text-primary"}`}
+                  disabled={updatingProxy}
+                >
+                  <span className="material-symbols-outlined text-[18px]">{updatingProxy ? "progress_activity" : "lan"}</span>
+                  <span className="text-[10px] leading-tight">Proxy</span>
+                </button>
+              }
+            >
+              <DropdownItem
+                icon={null}
+                label="None"
+                onClick={() => handleSelectProxy("__none__")}
+                danger={false}
+              />
+              {(proxyPools || []).map((pool) => (
+                <DropdownItem
+                  key={pool.id}
+                  icon={null}
+                  label={pool.name}
+                  onClick={() => handleSelectProxy(pool.id)}
+                />
+              ))}
+            </Dropdown>
           )}
-          <button onClick={onEdit} className="flex flex-col items-center px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 text-text-muted hover:text-primary">
+          <button onClick={onEdit} className="flex flex-col items-center px-2 py-1  hover:bg-black/5 dark:hover:bg-white/5 text-text-muted hover:text-primary">
             <span className="material-symbols-outlined text-[18px]">edit</span>
             <span className="text-[10px] leading-tight">Edit</span>
           </button>
-          <button onClick={onDelete} className="flex flex-col items-center px-2 py-1 rounded hover:bg-red-500/10 text-red-500">
+          <button onClick={onDelete} className="flex flex-col items-center px-2 py-1  hover:bg-red-500/10 text-red-500">
             <span className="material-symbols-outlined text-[18px]">delete</span>
             <span className="text-[10px] leading-tight">Delete</span>
           </button>
@@ -183,6 +183,7 @@ ConnectionRow.propTypes = {
   }).isRequired,
   proxyPools: PropTypes.array,
   isOAuth: PropTypes.bool.isRequired,
+  statusMode: PropTypes.string,
   isFirst: PropTypes.bool.isRequired,
   isLast: PropTypes.bool.isRequired,
   onMoveUp: PropTypes.func.isRequired,
@@ -249,12 +250,12 @@ function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, on
       <div className="flex flex-col gap-4">
         <div>
           <label className="text-xs text-text-muted mb-1 block">Name</label>
-          <input className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Production Key" />
+          <input className="w-full px-3 py-2 text-sm border border-border  bg-background focus:outline-none focus:border-primary" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Production Key" />
         </div>
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-xs text-text-muted mb-1 block">API Key</label>
-            <input type="password" className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary" value={formData.apiKey} onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })} />
+            <input type="password" className="w-full px-3 py-2 text-sm border border-border  bg-background focus:outline-none focus:border-primary" value={formData.apiKey} onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })} />
           </div>
           <div className="pt-6">
             <Button onClick={handleValidate} disabled={!formData.apiKey || validating || saving} variant="secondary">
@@ -269,7 +270,7 @@ function AddApiKeyModal({ isOpen, provider, providerName, proxyPools, onSave, on
         )}
         <div>
           <label className="text-xs text-text-muted mb-1 block">Priority</label>
-          <input type="number" className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value) || 1 })} />
+          <input type="number" className="w-full px-3 py-2 text-sm border border-border  bg-background focus:outline-none focus:border-primary" value={formData.priority} onChange={(e) => setFormData({ ...formData, priority: Number.parseInt(e.target.value) || 1 })} />
         </div>
         <Select label="Proxy Pool" value={formData.proxyPoolId} onChange={(e) => setFormData({ ...formData, proxyPoolId: e.target.value })}
           options={[{ value: NONE, label: "None" }, ...(proxyPools || []).map((p) => ({ value: p.id, label: p.name }))]} />
@@ -295,7 +296,8 @@ AddApiKeyModal.propTypes = {
 
 // ── ConnectionsCard ────────────────────────────────────────────
 // Self-contained card: fetches, displays and manages all connections for a provider.
-export default function ConnectionsCard({ providerId, isOAuth }) {
+export default function ConnectionsCard({ providerId, authProviderId, isOAuth, statusMode = "default" }) {
+  const connectionProviderId = authProviderId || providerId;
   const [connections, setConnections] = useState([]);
   const [proxyPools, setProxyPools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -316,14 +318,14 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
       const connData = await connRes.json();
       const proxyData = await proxyRes.json();
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
-      if (connRes.ok) setConnections((connData.connections || []).filter((c) => c.provider === providerId));
+      if (connRes.ok) setConnections((connData.connections || []).filter((c) => c.provider === connectionProviderId));
       if (proxyRes.ok) setProxyPools(proxyData.proxyPools || []);
-      const override = (settingsData.providerStrategies || {})[providerId] || {};
+      const override = (settingsData.providerStrategies || {})[connectionProviderId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
     } catch (e) { console.log("ConnectionsCard fetch error:", e); }
     finally { setLoading(false); }
-  }, [providerId]);
+  }, [connectionProviderId]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
@@ -336,8 +338,8 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
       if (strategy) override.fallbackStrategy = strategy;
       if (strategy === "round-robin" && stickyLimit !== "") override.stickyRoundRobinLimit = Number(stickyLimit) || 3;
       const updated = { ...current };
-      if (Object.keys(override).length === 0) delete updated[providerId];
-      else updated[providerId] = override;
+      if (Object.keys(override).length === 0) delete updated[connectionProviderId];
+      else updated[connectionProviderId] = override;
       await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ providerStrategies: updated }) });
     } catch (e) { console.log("saveStrategy error:", e); }
   };
@@ -384,7 +386,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
 
   const handleSaveApiKey = async (formData) => {
     try {
-      const res = await fetch("/api/providers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: providerId, ...formData }) });
+      const res = await fetch("/api/providers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: connectionProviderId, ...formData }) });
       if (res.ok) { await fetch_(); setShowAddModal(false); }
     } catch (e) { console.log("save apikey error:", e); }
   };
@@ -396,7 +398,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
     } catch (e) { console.log("update connection error:", e); }
   };
 
-  if (loading) return <Card><div className="h-20 animate-pulse bg-black/5 rounded-lg" /></Card>;
+  if (loading) return <Card><div className="h-20 animate-pulse bg-black/5 " /></Card>;
 
   return (
     <>
@@ -420,7 +422,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
                 <input
                   type="number" min={1} value={providerStickyLimit}
                   onChange={(e) => { setProviderStickyLimit(e.target.value); saveStrategy("round-robin", e.target.value); }}
-                  className="w-16 px-2 py-1 text-xs border border-border rounded-md bg-background focus:outline-none focus:border-primary"
+                  className="w-16 px-2 py-1 text-xs border border-border  bg-background focus:outline-none focus:border-primary"
                 />
               </div>
             )}
@@ -441,6 +443,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
                   connection={conn}
                   proxyPools={proxyPools}
                   isOAuth={isOAuth}
+                  statusMode={statusMode}
                   isFirst={idx === 0}
                   isLast={idx === connections.length - 1}
                   onMoveUp={() => handleSwapPriority(idx, idx - 1)}
@@ -459,13 +462,29 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
         )}
       </Card>
 
-      <AddApiKeyModal
-        isOpen={showAddModal}
-        provider={providerId}
-        proxyPools={proxyPools}
-        onSave={handleSaveApiKey}
-        onClose={() => setShowAddModal(false)}
-      />
+      {isOAuth ? (
+        <OAuthModal
+          isOpen={showAddModal}
+          provider={connectionProviderId}
+          providerInfo={{
+            ...OAUTH_PROVIDERS[connectionProviderId],
+            name: providerId === "openai" ? "OpenAI" : OAUTH_PROVIDERS[connectionProviderId]?.name,
+          }}
+          onSuccess={() => {
+            fetch_();
+            setShowAddModal(false);
+          }}
+          onClose={() => setShowAddModal(false)}
+        />
+      ) : (
+        <AddApiKeyModal
+          isOpen={showAddModal}
+          provider={connectionProviderId}
+          proxyPools={proxyPools}
+          onSave={handleSaveApiKey}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
       <EditConnectionModal
         isOpen={showEditModal}
         connection={selectedConnection}
@@ -489,5 +508,7 @@ export default function ConnectionsCard({ providerId, isOAuth }) {
 
 ConnectionsCard.propTypes = {
   providerId: PropTypes.string.isRequired,
+  authProviderId: PropTypes.string,
   isOAuth: PropTypes.bool,
+  statusMode: PropTypes.string,
 };

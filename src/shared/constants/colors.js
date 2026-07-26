@@ -3,12 +3,12 @@
 // Dark theme: Deep charcoal/brown tones
 
 export const COLORS = {
-  // Primary - Warm Coral/Terracotta (Claude-like)
+  // Primary - Green
   primary: {
-    DEFAULT: "#D97757",
-    hover: "#C56243",
-    light: "#E8A58C",
-    dark: "#B0664D",
+    DEFAULT: "#16a34a",
+    hover: "#15803d",
+    light: "#4ade80",
+    dark: "#166534",
   },
 
   // Light theme backgrounds

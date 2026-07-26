@@ -195,7 +195,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* AWS Builder ID */}
             <button
               onClick={() => onMethodSelect("builder-id")}
-              className="w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">shield</span>
@@ -211,7 +211,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* AWS IAM Identity Center (IDC) */}
             <button
               onClick={() => handleMethodSelect("idc")}
-              className="w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">business</span>
@@ -227,7 +227,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* AWS API Key */}
             <button
               onClick={() => handleMethodSelect("api-key")}
-              className="w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">key</span>
@@ -243,7 +243,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* Google Social Login - HIDDEN */}
             <button
               onClick={() => handleMethodSelect("social-google")}
-              className="hidden w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="hidden w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">account_circle</span>
@@ -259,7 +259,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* GitHub Social Login - HIDDEN */}
             <button
               onClick={() => handleMethodSelect("social-github")}
-              className="hidden w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="hidden w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">code</span>
@@ -275,7 +275,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* Import Token */}
             <button
               onClick={() => handleMethodSelect("import")}
-              className="w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">file_upload</span>
@@ -291,7 +291,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             {/* Import CLIProxyAPI JSON */}
             <button
               onClick={() => handleMethodSelect("import-cli-proxy")}
-              className="w-full p-4 text-left border border-border rounded-lg hover:bg-sidebar transition-colors"
+              className="w-full p-4 text-left border border-border  hover:bg-sidebar transition-colors"
             >
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary mt-0.5">data_object</span>
@@ -357,7 +357,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
         {/* API Key */}
         {selectedMethod === "api-key" && (
           <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3  border border-blue-200 dark:border-blue-800">
               <div className="flex gap-2">
                 <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
                 <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -395,7 +395,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
             </div>
 
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="bg-red-50 dark:bg-red-900/20 p-3  border border-red-200 dark:border-red-800">
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}
@@ -414,14 +414,14 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
         {/* Social Login Info (Google) */}
         {selectedMethod === "social-google" && (
           <div className="space-y-4">
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+            <div className="bg-green-50 dark:bg-green-900/20 p-4  border border-green-200 dark:border-green-800">
               <div className="flex gap-2">
-                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">info</span>
+                <span className="material-symbols-outlined text-green-600 dark:text-green-400">info</span>
                 <div className="flex-1 text-sm">
-                  <p className="font-medium text-amber-900 dark:text-amber-100 mb-1">
+                  <p className="font-medium text-green-900 dark:text-green-100 mb-1">
                     Manual Callback Required
                   </p>
-                  <p className="text-amber-800 dark:text-amber-200">
+                  <p className="text-green-800 dark:text-green-200">
                     After login, you&apos;ll need to copy the callback URL from your browser and paste it back here.
                   </p>
                 </div>
@@ -442,14 +442,14 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
         {/* Social Login Info (GitHub) */}
         {selectedMethod === "social-github" && (
           <div className="space-y-4">
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+            <div className="bg-green-50 dark:bg-green-900/20 p-4  border border-green-200 dark:border-green-800">
               <div className="flex gap-2">
-                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">info</span>
+                <span className="material-symbols-outlined text-green-600 dark:text-green-400">info</span>
                 <div className="flex-1 text-sm">
-                  <p className="font-medium text-amber-900 dark:text-amber-100 mb-1">
+                  <p className="font-medium text-green-900 dark:text-green-100 mb-1">
                     Manual Callback Required
                   </p>
-                  <p className="text-amber-800 dark:text-amber-200">
+                  <p className="text-green-800 dark:text-green-200">
                     After login, you&apos;ll need to copy the callback URL from your browser and paste it back here.
                   </p>
                 </div>
@@ -490,7 +490,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
               <>
                 {/* Success message if auto-detected */}
                 {autoDetected && (
-                  <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="bg-green-50 dark:bg-green-900/20 p-3  border border-green-200 dark:border-green-800">
                     <div className="flex gap-2">
                       <span className="material-symbols-outlined text-green-600 dark:text-green-400">check_circle</span>
                       <p className="text-sm text-green-800 dark:text-green-200">
@@ -502,7 +502,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
 
                 {/* Info message if not auto-detected */}
                 {!autoDetected && !error && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3  border border-blue-200 dark:border-blue-800">
                     <div className="flex gap-2">
                       <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
                       <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -525,7 +525,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                  <div className="bg-red-50 dark:bg-red-900/20 p-3  border border-red-200 dark:border-red-800">
                     <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                   </div>
                 )}
@@ -546,7 +546,7 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
         {/* Import CLIProxyAPI JSON */}
         {selectedMethod === "import-cli-proxy" && (
           <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3  border border-blue-200 dark:border-blue-800">
               <div className="flex gap-2">
                 <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
                 <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -563,12 +563,12 @@ export default function KiroAuthModal({ isOpen, onMethodSelect, onClose }) {
                 value={cliProxyJson}
                 onChange={(e) => setCliProxyJson(e.target.value)}
                 placeholder={'{"auth_method":"external_idp","access_token":"...","refresh_token":"...","client_id":"...","token_endpoint":"https://login.microsoftonline.com/.../oauth2/v2.0/token","profile_arn":"...","scopes":"..."}'}
-                className="min-h-40 w-full rounded-md border border-border bg-background p-3 font-mono text-sm outline-none focus:border-primary"
+                className="min-h-40 w-full  border border-border bg-background p-3 font-mono text-sm outline-none focus:border-primary"
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="bg-red-50 dark:bg-red-900/20 p-3  border border-red-200 dark:border-red-800">
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}

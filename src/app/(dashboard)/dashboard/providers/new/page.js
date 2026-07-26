@@ -107,7 +107,7 @@ export default function NewProviderPage() {
           {selectedProvider && (
             <Card.Section className="flex items-center gap-3">
               <div
-                className="size-10 rounded-lg flex items-center justify-center bg-bg border border-border"
+                className="size-10  flex items-center justify-center bg-bg border border-border"
               >
                 <span
                   className="material-symbols-outlined text-xl"
@@ -136,7 +136,7 @@ export default function NewProviderPage() {
                   key={method.value}
                   type="button"
                   onClick={() => handleChange("authMethod", method.value)}
-                  className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-lg border transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-2 p-4  border transition-all ${
                     formData.authMethod === method.value
                       ? "border-primary bg-primary/5 text-primary"
                       : "border-border hover:border-primary/50"
@@ -196,7 +196,7 @@ export default function NewProviderPage() {
 
           {/* Error Message */}
           {errors.submit && (
-            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
+            <div className="p-4  bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm">
               {errors.submit}
             </div>
           )}
