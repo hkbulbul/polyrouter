@@ -31,7 +31,11 @@ export default function HowItWorks() {
           {/* Step 2: PolyRouter Hub */}
           <div className="flex flex-col gap-6 relative group md:items-center md:text-center">
             <div className="w-24 h-24  bg-[#181411] border-2 border-[#16a34a] flex items-center justify-center shadow-[0_0_30px_rgba(249,120,21,0.2)] z-10 mx-auto">
-              <span className="material-symbols-outlined text-4xl text-[#16a34a] animate-pulse">hub</span>
+              <img
+                src="/polyrouter-logo.png"
+                alt="PolyRouter"
+                className="w-16 h-16 object-contain animate-pulse"
+              />
             </div>
             <div>
               <h3 className="text-xl font-bold mb-2 text-[#16a34a]">2. PolyRouter Hub</h3>

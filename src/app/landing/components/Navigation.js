@@ -16,9 +16,11 @@ export default function Navigation() {
           onClick={() => router.push("/")}
           aria-label="Navigate to home"
         >
-          <div className="size-8  bg-linear-to-br from-[#16a34a] to-green-700 flex items-center justify-center text-white">
-            <span className="material-symbols-outlined text-[20px]">hub</span>
-          </div>
+          <img
+            src="/polyrouter-logo.png"
+            alt="PolyRouter"
+            className="size-8 object-contain rounded-md"
+          />
           <h2 className="text-white text-xl font-bold tracking-tight">PolyRouter</h2>
         </button>
 

@@ -8,9 +8,11 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-2 lg:col-span-2">
             <div className="flex items-center gap-3 mb-6">
-              <div className="size-6  bg-[#16a34a] flex items-center justify-center text-white">
-                <span className="material-symbols-outlined text-[16px]">hub</span>
-              </div>
+              <img
+                src="/polyrouter-logo.png"
+                alt="PolyRouter"
+                className="size-6 object-contain rounded-sm"
+              />
               <h3 className="text-white text-lg font-bold">PolyRouter</h3>
             </div>
             <p className="text-gray-500 text-sm max-w-xs mb-6">

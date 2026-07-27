@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="24" fill="#0a0a0a"/>
-  <text x="96" y="120" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="#ffffff" text-anchor="middle">9R</text>
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="36" fill="url(#gradient)"/>
+  <text x="36" y="132" font-family="system-ui, -apple-system, sans-serif" font-size="84" font-weight="700" fill="white">P</text>
+  <text x="106" y="132" font-family="system-ui, -apple-system, sans-serif" font-size="62" font-weight="600" fill="white">R</text>
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#14532d"/>
+    </linearGradient>
+  </defs>
 </svg>
