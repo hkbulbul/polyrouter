@@ -1,3 +1,8 @@
+# v1.0.4 (CLI) — 2026-07-27
+
+## Fixes
+- **Realtime**: resolve ESM/CJS module format conflict that caused WebSocket network errors in the npm package. The Next.js standalone build sets `type: "commonjs"` in its `package.json`, which prevented Node from loading the realtime runtime's ESM syntax. Added `src/realtime/package.json` with `type: "module"` so the realtime bridge loads correctly regardless of parent context.
+
 # v0.5.40 (2026-07-20)
 
 ## Features

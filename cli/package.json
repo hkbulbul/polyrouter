@@ -1,6 +1,6 @@
 {
   "name": "polyrouter",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "PolyRouter CLI - Start and manage PolyRouter server",
   "bin": {
     "polyrouter": "./cli.js"
