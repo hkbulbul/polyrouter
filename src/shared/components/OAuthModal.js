@@ -15,6 +15,7 @@ async function readOAuthJson(response, label) {
 }
 import { Modal, Button, Input } from "@/shared/components";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { createOpenAIOAuthRelayState } from "@/shared/utils/openaiOAuthRelay";
 
 /**
  * OAuth Modal Component
@@ -239,9 +240,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const appPort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
       let redirectUri;
       if (provider === "codex") {
-        // 127.0.0.1 avoids interception by the Sign in with ChatGPT
-        // browser extension, which reserves localhost:1455 for its relay flow.
-        redirectUri = "http://127.0.0.1:1455/auth/callback";
+        // OpenAI allowlists this exact redirect URI for the Codex client.
+        redirectUri = "http://localhost:1455/auth/callback";
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
       } else {
@@ -257,6 +257,15 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const res = await fetch(authorizeUrl.toString());
       const data = await readOAuthJson(res, "OAuth authorize");
       if (!res.ok) throw new Error(data.error);
+
+      if (provider === "codex") {
+        const appState = data.state;
+        const callbackUrl = `${window.location.origin}/callback`;
+        data.state = createOpenAIOAuthRelayState(callbackUrl, appState);
+        const authUrl = new URL(data.authUrl);
+        authUrl.searchParams.set("state", data.state);
+        data.authUrl = authUrl.toString();
+      }
 
       // Codex: start proxy with server-side session (auto-exchange) + fallback to channels
       let codexProxyActive = false;
@@ -433,6 +442,12 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       }
 
       if (token || code) {
+        if (provider === "codex" && state !== authData.state) {
+          callbackProcessedRef.current = true;
+          setError("OpenAI OAuth callback state did not match");
+          setStep("error");
+          return;
+        }
         callbackProcessedRef.current = true;
         await exchangeTokens(token || code, state);
       }
@@ -493,7 +508,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       window.removeEventListener("storage", handleStorage);
       if (channel) channel.close();
     };
-  }, [authData, exchangeTokens]);
+  }, [authData, exchangeTokens, provider]);
 
   // Handle manual URL input
   const handleManualSubmit = async () => {

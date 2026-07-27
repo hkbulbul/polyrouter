@@ -1,6 +1,6 @@
 {
   "name": "polyrouter",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "PolyRouter CLI - Start and manage PolyRouter server",
   "bin": {
     "polyrouter": "./cli.js"
@@ -40,7 +40,7 @@
     "ai",
     "api"
   ],
-  "license": "MIT",
+  "license": "UNLICENSED",
   "devDependencies": {
     "esbuild": "^0.25.12",
     "nodemon": "^3.1.14"

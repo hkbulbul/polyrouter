@@ -223,11 +223,9 @@ async function getProviderModels(id) {
  * @returns {Promise<Object>} { success, data: { authUrl, codeVerifier, state, redirectUri } }
  */
 async function getOAuthAuthUrl(provider) {
-  // Codex requires fixed port 1455 and path /auth/callback.
-  // Use 127.0.0.1 so the Sign in with ChatGPT browser extension does not
-  // intercept the callback intended for this local CLI.
+  // Codex requires the exact callback registered by OpenAI.
   const redirectUri = provider === "codex"
-    ? "http://127.0.0.1:1455/auth/callback"
+    ? "http://localhost:1455/auth/callback"
     : "http://localhost:20128/callback";
   return makeRequest("GET", `/api/oauth/${provider}/authorize?redirect_uri=${encodeURIComponent(redirectUri)}`);
 }

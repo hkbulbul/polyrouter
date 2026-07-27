@@ -35,7 +35,7 @@ function CallbackContent() {
     // the popup against the well-known redirect_uri to phish the code).
     const expectedOrigins = [
       window.location.origin, // Same origin (for most providers)
-      "http://127.0.0.1:1455", // Codex specific port; avoid browser extension relay interception.
+      "http://localhost:1455", // Codex callback registered by OpenAI.
     ];
 
     // Method 1: postMessage to opener (popup mode)

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-const CALLBACK_URL = "http://127.0.0.1:1455/auth/callback";
+const CALLBACK_URL = "http://localhost:1455/auth/callback";
 
 describe("Codex OAuth", () => {
   afterEach(async () => {
@@ -28,11 +28,11 @@ describe("Codex OAuth", () => {
     expect(url.searchParams.has("originator")).toBe(false);
   });
 
-  it("starts the callback proxy on the extension-safe loopback address", async () => {
+  it("starts the callback proxy on OpenAI's registered localhost address", async () => {
     const { startCodexProxy } = await import("../../src/lib/oauth/utils/server.js");
 
     expect(await startCodexProxy(20128)).toEqual({ success: true });
-    const response = await fetch("http://127.0.0.1:1455/not-found");
+    const response = await fetch("http://localhost:1455/not-found");
     expect(response.status).toBe(404);
   });
 
