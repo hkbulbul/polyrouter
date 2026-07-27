@@ -3,7 +3,21 @@
 import PropTypes from "prop-types";
 import Card from "@/shared/components/Card";
 
-const fmt = (n) => new Intl.NumberFormat().format(n || 0);
+const fmt = (value) => {
+  const n = Number(value) || 0;
+  const abs = Math.abs(n);
+  if (abs < 1_000) return new Intl.NumberFormat().format(n);
+
+  const units = [
+    { threshold: 1_000_000_000, suffix: "B" },
+    { threshold: 1_000_000, suffix: "M" },
+    { threshold: 1_000, suffix: "K" },
+  ];
+  const unit = units.find(({ threshold }) => abs >= threshold);
+  const scaled = n / unit.threshold;
+  const formatted = scaled.toFixed(scaled >= 100 ? 0 : 1).replace(/\.0$/, "");
+  return `${formatted}${unit.suffix}`;
+};
 const fmtCost = (n) => `$${(n || 0).toFixed(2)}`;
 
 export default function OverviewCards({ stats }) {

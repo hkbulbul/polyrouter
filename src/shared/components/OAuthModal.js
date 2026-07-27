@@ -239,7 +239,9 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       const appPort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
       let redirectUri;
       if (provider === "codex") {
-        redirectUri = "http://localhost:1455/auth/callback";
+        // 127.0.0.1 avoids interception by the Sign in with ChatGPT
+        // browser extension, which reserves localhost:1455 for its relay flow.
+        redirectUri = "http://127.0.0.1:1455/auth/callback";
       } else if (provider === "xai") {
         redirectUri = "http://127.0.0.1:56121/callback";
       } else {

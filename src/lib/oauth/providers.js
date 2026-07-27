@@ -137,6 +137,9 @@ const PROVIDERS = {
         state: state,
       };
       const queryString = Object.entries(params)
+        // `originator` is an upstream Codex API header, not an OAuth query
+        // parameter. Keep auth URLs aligned with the official request builder.
+        .filter(([key]) => key !== "originator")
         .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
         .join("&");
       return `${config.authorizeUrl}?${queryString}`;

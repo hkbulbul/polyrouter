@@ -31,6 +31,8 @@ export class CodexService extends OAuthService {
     };
 
     const queryString = Object.entries(params)
+      // `originator` belongs on Codex API requests, not the OAuth URL.
+      .filter(([key]) => key !== "originator")
       .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
       .join("&");
 

@@ -258,7 +258,9 @@ export function startCodexProxy(appPort) {
       stopCodexProxy();
     });
 
-    server.listen(CODEX_PORT, "localhost", () => {
+    // Bind to the explicit loopback IP so the Sign in with ChatGPT browser
+    // extension cannot intercept this callback on localhost:1455.
+    server.listen(CODEX_PORT, "127.0.0.1", () => {
       codexProxyServer = server;
       codexProxyTimeout = setTimeout(() => stopCodexProxy(), CODEX_PROXY_TIMEOUT_MS);
       resolve({ success: true });

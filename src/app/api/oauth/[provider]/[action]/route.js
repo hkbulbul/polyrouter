@@ -92,14 +92,34 @@ export async function GET(request, { params }) {
       const state = searchParams.get("state");
       const codeVerifier = searchParams.get("code_verifier");
       const redirectUri = searchParams.get("redirect_uri");
-      const result = provider === "xai"
-        ? await startXaiProxy(Number(appPort))
-        : await startCodexProxy(Number(appPort));
+      const hasServerSession = Boolean(state && codeVerifier && redirectUri);
       let serverSide = false;
-      if (result.success && state && codeVerifier && redirectUri) {
+
+      // Register the session before opening the listener so an immediate
+      // provider redirect cannot be handled as a legacy fallback callback.
+      if (hasServerSession) {
         serverSide = provider === "xai"
           ? registerXaiSession({ state, codeVerifier, redirectUri })
           : registerCodexSession({ state, codeVerifier, redirectUri });
+      }
+
+      let result;
+      try {
+        result = provider === "xai"
+          ? await startXaiProxy(Number(appPort))
+          : await startCodexProxy(Number(appPort));
+      } catch (error) {
+        if (serverSide) {
+          if (provider === "xai") clearXaiSession(state);
+          else clearCodexSession(state);
+        }
+        throw error;
+      }
+
+      if (!result.success && serverSide) {
+        if (provider === "xai") clearXaiSession(state);
+        else clearCodexSession(state);
+        serverSide = false;
       }
       return NextResponse.json({ ...result, serverSide });
     }
