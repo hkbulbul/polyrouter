@@ -8,10 +8,12 @@ import {
 } from "./protocol.js";
 async function authenticateUpgrade(request, host) {
   const url = new URL(request.url || "/", `http://${host}`);
-  // The dev server binds to `localhost` on Windows (often IPv6 ::1), while
-  // 127.0.0.1 may be unreachable. Keep this in-process hop on the same local
-  // hostname in both dev and production; it never leaves the machine.
-  const internalHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
+  // Always use 127.0.0.1 for the in-process auth hop — it is reachable
+  // regardless of whether the server binds 0.0.0.0, localhost, ::, or ::1.
+  // `localhost` is ambiguous on Windows (resolves to IPv6 ::1, unreachable
+  // when the server binds IPv4-only 0.0.0.0).
+  const internalHost = (host === "0.0.0.0" || host === "::" || host === "localhost" || host === "::1")
+    ? "127.0.0.1" : host;
   const response = await fetch(`http://${internalHost}:${process.env.PORT || 20128}/api/realtime/authorize`, {
     method: "POST",
     headers: {

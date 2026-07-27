@@ -1,3 +1,8 @@
+# v1.0.5 (CLI) — 2026-07-27
+
+## Fixes
+- **Realtime**: fix internal auth hop using `localhost` (resolves to IPv6 `::1` on Windows, unreachable when server binds IPv4-only `0.0.0.0`). Changed to `127.0.0.1` for the in-process fetch.
+
 # v1.0.4 (CLI) — 2026-07-27
 
 ## Fixes
