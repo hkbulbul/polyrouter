@@ -56,6 +56,38 @@ describe("Antigravity → OpenAI", () => {
 });
 
 describe("Antigravity → Claude", () => {
+  it("converts Claude custom tools into the Cloud Code Claude tool contract", () => {
+    const out = translateRequest(FORMATS.CLAUDE, FORMATS.ANTIGRAVITY, "claude-opus-4-6-thinking", {
+      model: "ag/claude-opus-4-6-thinking",
+      max_tokens: 32,
+      messages: [{ role: "user", content: "Apply the patch" }],
+      tools: [{
+        type: "custom",
+        name: "apply_patch",
+        description: "Apply a freeform patch",
+        format: { type: "grammar", syntax: "lark", definition: "start: /.+/" },
+      }],
+    }, true, { projectId: "project-1", connectionId: "conn-1" }, "antigravity");
+
+    const declaration = out.request.tools[0].functionDeclarations[0];
+    expect(declaration).toMatchObject({
+      name: "apply_patch",
+      parameters: {
+        type: "object",
+        properties: { input: { type: "string" } },
+        required: ["input"],
+      },
+      input_schema: {
+        type: "object",
+        properties: { input: { type: "string" } },
+        required: ["input"],
+      },
+    });
+    expect(out.request.tools).toHaveLength(1);
+    expect(declaration).not.toHaveProperty("format");
+    expect(declaration).not.toHaveProperty("inputSchema");
+  });
+
   it("tool call input_json_delta includes Anthropic index", () => {
     const state = initState(FORMATS.CLAUDE);
     const events = translateResponse(FORMATS.ANTIGRAVITY, FORMATS.CLAUDE, {
@@ -82,7 +114,7 @@ describe("Antigravity → Claude", () => {
 });
 
 describe("Antigravity executor", () => {
-  it("strips optional from nested tool schemas", () => {
+  it("strips optional from nested tool schemas and serializes schema types", () => {
     const out = new AntigravityExecutor().transformRequest("gemini-2.5-pro", {
       request: {
         contents: [{ role: "user", parts: [{ text: "hi" }] }],
@@ -105,8 +137,61 @@ describe("Antigravity executor", () => {
       },
     }, true, { projectId: "project-1", connectionId: "conn-1" });
 
-    const query = out.request.tools[0].functionDeclarations[0].parameters.properties.query;
+    const declaration = out.request.tools[0].functionDeclarations[0];
+    const query = declaration.parametersJsonSchema.properties.query;
+    expect(declaration).not.toHaveProperty("parameters");
     expect(query).toEqual({ type: "string", description: "Search query" });
+  });
+
+  it("preserves Cloud Code Claude custom tool schemas", () => {
+    const out = new AntigravityExecutor().transformRequest("claude-sonnet-4-6", {
+      request: {
+        contents: [{ role: "user", parts: [{ text: "hi" }] }],
+        tools: [{
+          functionDeclarations: [{
+            name: "configure",
+            parameters: {
+              type: "object",
+              properties: {
+                options: {
+                  type: "object",
+                  properties: { enabled: { type: "boolean" } },
+                  required: ["enabled"],
+                },
+              },
+              required: ["options"],
+            },
+            input_schema: {
+              type: "object",
+              properties: {
+                options: {
+                  type: "object",
+                  properties: { enabled: { type: "boolean" } },
+                  required: ["enabled"],
+                },
+              },
+              required: ["options"],
+            },
+          }],
+        }],
+      },
+    }, true, { projectId: "project-1", connectionId: "conn-1" });
+
+    const declaration = out.request.tools[0].functionDeclarations[0];
+    expect(declaration).toMatchObject({
+      name: "configure",
+      parameters: {
+        type: "object",
+        properties: { options: { type: "object" } },
+        required: ["options"],
+      },
+      input_schema: {
+        type: "object",
+        properties: { options: { type: "object" } },
+        required: ["options"],
+      },
+    });
+    expect(out.request.toolConfig).toEqual({ functionCallingConfig: { mode: "VALIDATED" } });
   });
 
   it("does not inject the legacy Antigravity default system prompt for Gemini-backed models", () => {

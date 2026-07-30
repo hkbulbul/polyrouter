@@ -295,6 +295,61 @@ function flattenTypeArrays(obj) {
   }
 }
 
+const GOOGLE_SCHEMA_TYPES = new Set([
+  "string", "number", "integer", "boolean", "array", "object"
+]);
+
+// Normalize known Google Schema enum values before applying JSON Schema cleanup.
+function normalizeGoogleSchemaTypes(obj) {
+  if (!obj || typeof obj !== "object") return;
+
+  if (typeof obj.type === "string") {
+    const normalizedType = obj.type.toLowerCase();
+    if (GOOGLE_SCHEMA_TYPES.has(normalizedType)) obj.type = normalizedType;
+  } else if (Array.isArray(obj.type)) {
+    obj.type = obj.type.map(type => {
+      const normalizedType = typeof type === "string" ? type.toLowerCase() : type;
+      return GOOGLE_SCHEMA_TYPES.has(normalizedType) ? normalizedType : type;
+    });
+  }
+
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") normalizeGoogleSchemaTypes(value);
+  }
+}
+
+// Clone a JSON Schema for Cloud Code's parametersJsonSchema field. This field accepts
+// standard JSON Schema, unlike the narrower protobuf Schema used by `parameters`.
+export function normalizeCloudCodeJsonSchema(schema) {
+  const normalized = structuredClone(schema || { type: "object", properties: {} });
+  normalizeGoogleSchemaTypes(normalized);
+
+  function removeCloudCodeOnlyFields(value) {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) removeCloudCodeOnlyFields(item);
+      return;
+    }
+    // `optional` is a client-side extension, not JSON Schema, and Cloud Code
+    // rejects it in VALIDATED function declarations.
+    delete value.optional;
+    for (const child of Object.values(value)) removeCloudCodeOnlyFields(child);
+  }
+
+  removeCloudCodeOnlyFields(normalized);
+  return normalized;
+}
+
+// Serialize a declaration for the Cloud Code v1internal transports. Keep exactly
+// one schema representation so complex JSON Schema isn't downgraded to protobuf Schema.
+export function serializeCloudCodeFunctionDeclaration(declaration) {
+  const { parameters, parametersJsonSchema, ...rest } = declaration;
+  return {
+    ...rest,
+    parametersJsonSchema: normalizeCloudCodeJsonSchema(parametersJsonSchema ?? parameters)
+  };
+}
+
 // Infer missing type=object when properties exist (Gemini requires explicit type)
 function ensureObjectType(obj) {
   if (!obj || typeof obj !== "object") return;
@@ -310,6 +365,7 @@ export function cleanJSONSchemaForAntigravity(schema) {
   let cleaned = schema;
 
   // Phase 1: Convert and prepare
+  normalizeGoogleSchemaTypes(cleaned);
   convertConstToEnum(cleaned);
   convertEnumValuesToStrings(cleaned);
 

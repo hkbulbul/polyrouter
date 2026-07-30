@@ -7,6 +7,9 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".next-cli-build/**",
+    ".next-realtime-test/**",
+    "cli/app/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

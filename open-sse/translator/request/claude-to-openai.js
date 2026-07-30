@@ -70,7 +70,16 @@ export function claudeToOpenAIRequest(model, body, stream) {
       function: {
         name: tool.name,
         description: String(tool.description || ""),
-        parameters: tool.input_schema || { type: "object", properties: {} }
+        // Anthropic custom tools carry freeform input through `format`, rather
+        // than a JSON `input_schema`. Cloud Code only accepts schema-bearing
+        // function declarations, so represent that freeform input explicitly.
+        parameters: tool.input_schema || (tool.type === "custom"
+          ? {
+              type: "object",
+              properties: { input: { type: "string", description: "Freeform tool input" } },
+              required: ["input"]
+            }
+          : { type: "object", properties: {} })
       }
     }));
   }

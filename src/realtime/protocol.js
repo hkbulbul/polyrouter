@@ -1,7 +1,7 @@
 const MAX_EVENT_BYTES = 256 * 1024;
 
 export const REALTIME_PATH = "/v1/realtime";
-export const REALTIME_PROTOCOL = "9router.realtime.voice.v1";
+export const REALTIME_PROTOCOL = "polyrouter.realtime.voice.v1";
 // ChatGPT/Codex OAuth accounts use the realtime model exposed by the
 // reference OAuth bridge. Keep the public API model names as fallbacks.
 export const DEFAULT_REALTIME_MODEL = "gpt-realtime-2";

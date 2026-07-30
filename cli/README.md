@@ -1,46 +1,50 @@
-<div align="center">
+# PolyRouter CLI — Local AI Gateway and OpenAI-Compatible API Router
 
-# PolyRouter
+PolyRouter is a local AI gateway for AI coding tools and applications. The CLI starts the PolyRouter dashboard and a single OpenAI-compatible `/v1` API endpoint, then routes requests across configured AI providers with format translation, OAuth/API-key connections, multi-account routing, model fallback, token optimization, quota tracking, and local SQLite persistence.
 
-**One endpoint for all your AI providers.**
-
-A local AI routing gateway with automatic fallback, format translation, multi-account routing, token optimization, and real-time usage tracking.
-
-[![npm](https://img.shields.io/npm/v/polyrouter.svg)](https://www.npmjs.com/package/polyrouter)
-[![Downloads](https://img.shields.io/npm/dm/polyrouter.svg)](https://www.npmjs.com/package/polyrouter)
-
-</div>
-
----
-
-## Quick Start
-
-Install PolyRouter globally:
+## Install
 
 ```bash
 npm install -g polyrouter
 polyrouter
 ```
 
-Or run it without installing:
+Or run it without a global installation:
 
 ```bash
 npx polyrouter
 ```
 
-The dashboard opens at:
+After startup:
+
+- **Dashboard:** `http://localhost:20128/dashboard`
+- **OpenAI-compatible API:** `http://localhost:20128/v1`
+
+## Connect an AI Coding Tool
+
+1. Open the PolyRouter dashboard.
+2. Go to **Providers** and connect an OAuth or API-key provider.
+3. Create or copy an API key from the dashboard.
+4. Configure your AI tool with:
 
 ```text
-http://localhost:20128/dashboard
+Endpoint: http://localhost:20128/v1
+API key:  Your PolyRouter dashboard API key
+Model:    A provider model or custom model combo
 ```
 
-The OpenAI-compatible API endpoint is:
+PolyRouter works with compatible tools such as **Claude Code, Codex, Cursor, Cline, OpenClaw, OpenCode, Continue, Roo Code, Kilo Code, and GitHub Copilot**.
 
-```text
-http://localhost:20128/v1
-```
+## Features
 
----
+- Local OpenAI-compatible AI gateway and API router
+- 40+ AI providers through OAuth, API keys, and compatible endpoints
+- Automatic request and response format translation
+- Model-combo fallback and multi-account routing
+- OAuth token refresh and provider quota monitoring
+- RTK token optimization for tool-result payloads
+- Local SQLite settings and provider configuration
+- Usage, token, cost, and reset-time tracking in the dashboard
 
 ## CLI Options
 
@@ -52,69 +56,26 @@ polyrouter --skip-update      # Skip the update check
 polyrouter --help             # Show all options
 ```
 
----
+## API Examples
 
-## How It Works
+### Chat completions
 
-```text
-AI Tool
-   │
-   │  OpenAI-compatible request
-   ▼
-PolyRouter
-   ├─ Format translation
-   ├─ Account selection
-   ├─ Token optimization
-   ├─ Quota and usage tracking
-   └─ Automatic provider/model fallback
-   │
-   ▼
-AI Provider
+```bash
+curl http://localhost:20128/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_POLYROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-provider-model-or-combo",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
 ```
 
-Configure your AI tool with:
+### List models
 
-```text
-Endpoint: http://localhost:20128/v1
-API Key:  Copy from the PolyRouter dashboard
-Model:    Select a provider model or custom combo
+```bash
+curl http://localhost:20128/v1/models \
+  -H "Authorization: Bearer YOUR_POLYROUTER_API_KEY"
 ```
-
----
-
-## Features
-
-- **40+ AI providers** through OAuth or API keys
-- **OpenAI-compatible endpoint** for supported AI tools
-- **Request and response format translation**
-- **Automatic model-combo fallback**
-- **Multi-account routing and failover**
-- **OAuth token refresh**
-- **RTK token optimization**
-- **Quota and usage analytics**
-- **Custom model aliases and combinations**
-- **Local SQLite persistence**
-
----
-
-## Compatible Tools
-
-PolyRouter works with tools that support OpenAI-compatible or configurable AI endpoints, including:
-
-**Claude Code · Codex · Cursor · Cline · OpenClaw · OpenCode · Continue · Roo Code · Kilo Code · GitHub Copilot** and more.
-
----
-
-## Data Location
-
-PolyRouter currently stores runtime data under the existing application data directory:
-
-- **macOS/Linux:** `~/.9router/`
-- **Windows:** `%USERPROFILE%/.9router/`
-
-Your provider credentials, settings, and SQLite database remain on your machine unless you explicitly enable a remote feature.
-
----
 
 ## Updating
 
@@ -122,22 +83,43 @@ Your provider credentials, settings, and SQLite database remain on your machine 
 npm install -g polyrouter@latest
 ```
 
-Restart PolyRouter after installation:
+Restart the gateway after updating:
 
 ```bash
 polyrouter
 ```
 
----
+## Local Data and SQLite
+
+PolyRouter keeps its primary settings, provider configuration, and SQLite database on the machine that runs the gateway unless you intentionally enable a remote feature.
+
+Default application-data locations:
+
+- **macOS/Linux:** `~/.polyrouter/`
+- **Windows:** `%APPDATA%\polyrouter\`
+
+The main SQLite database is located at:
+
+```text
+$DATA_DIR/db/data.sqlite
+```
+
+Set the `DATA_DIR` environment variable to use another writable location.
+
+## Documentation and Support
+
+- [Project README](../README.md)
+- [Docker deployment and persistence](../DOCKER.md)
+- [Environment configuration](../.env.example)
+
+For installation, configuration, or licensing assistance, contact the PolyRouter owner through your authorized distribution channel.
 
 ## Security
 
 - Change the default dashboard password immediately.
-- Keep PolyRouter bound to localhost unless remote access is intentionally configured.
-- Do not share OAuth tokens, API keys, or the local application data directory.
+- Keep the gateway on localhost unless you intentionally configure remote access.
+- Never share API keys, OAuth tokens, local SQLite databases, logs, or the application-data directory.
 - Use HTTPS and a secure reverse proxy for remote deployments.
-
----
 
 ## License
 

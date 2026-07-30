@@ -22,6 +22,7 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
+import { isToolSchemaValidationError } from "open-sse/services/accountFallback.js";
 
 /**
  * Handle chat completion request
@@ -270,6 +271,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     });
 
     if (result.success) return result.response;
+
+    // A rejected tool schema is deterministic for this request, not an account failure.
+    if (isToolSchemaValidationError(result.status, result.error)) {
+      log.warn("CHAT", `[${provider}/${model}] tool schema validation failed; preserving account availability`);
+      return result.response;
+    }
 
     // Mark account unavailable (auto-calculates cooldown with exponential backoff, or precise resetsAtMs)
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, result.resetsAtMs);

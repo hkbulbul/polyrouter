@@ -5,7 +5,7 @@ import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX 
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
-import { cleanJSONSchemaForAntigravity } from "../translator/formats/gemini.js";
+import { serializeCloudCodeFunctionDeclaration } from "../translator/formats/gemini.js";
 import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature.js";
 
 // Sanitize function name: Gemini requires [a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}
@@ -20,6 +20,36 @@ const MAX_RETRY_AFTER_MS = 10000;
 const ANTIGRAVITY_TRANSIENT_RETRY_MAX_MS = 15000;
 const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 64000;
 const ANTIGRAVITY_IDE_REQUEST_ID_RE = /^agent\/[^/]+\/\d+\/[^/]+\/\d+$/;
+
+function summarizeToolSchema(schema, depth = 0) {
+  if (!schema || typeof schema !== "object" || depth >= 3) return null;
+  const properties = schema.properties && typeof schema.properties === "object"
+    ? Object.values(schema.properties).map(value => summarizeToolSchema(value, depth + 1))
+    : [];
+  return {
+    type: schema.type,
+    propertyCount: properties.length || undefined,
+    requiredCount: Array.isArray(schema.required) ? schema.required.length : undefined,
+    items: schema.items ? summarizeToolSchema(schema.items, depth + 1) : undefined,
+    properties: properties.length ? properties : undefined,
+    hasAdditionalProperties: Object.hasOwn(schema, "additionalProperties") || undefined,
+    hasComposition: Boolean(schema.anyOf || schema.oneOf || schema.allOf || schema.$ref) || undefined,
+  };
+}
+
+function logAntigravityToolSchemaSummary(declarations) {
+  if (process.env.DEBUG_ANTIGRAVITY_TOOL_SCHEMA !== "true") return;
+  for (const index of [38, 39]) {
+    const declaration = declarations[index];
+    if (!declaration) continue;
+    console.debug("[AG_TOOL_SCHEMA]", JSON.stringify({
+      declaration: index,
+      name: declaration.name,
+      schemaField: declaration.parametersJsonSchema ? "parametersJsonSchema" : "parameters",
+      schema: summarizeToolSchema(declaration.parametersJsonSchema || declaration.parameters)
+    }));
+  }
+}
 
 const ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS = [
   /high\s+traffic/i,
@@ -214,10 +244,31 @@ export class AntigravityExecutor extends BaseExecutor {
       return c;
     });
 
-    // Sanitize tool schemas and function names before sending to Antigravity.
+    // The Claude backend uses Anthropic-native custom tools. Gemini-backed
+    // models use the Cloud Code functionDeclarations representation instead.
+    const isClaudeModel = model.toLowerCase().includes("claude");
     let tools = body.request?.tools;
 
-    if (tools && tools.length > 0) {
+    if (tools && tools.length > 0 && isClaudeModel) {
+      const seenToolNames = new Set();
+      const declarations = [];
+      for (const group of tools) {
+        for (const declaration of group?.functionDeclarations || []) {
+          if (!declaration?.name) continue;
+          const name = sanitizeFunctionName(declaration.name);
+          if (seenToolNames.has(name)) continue;
+          seenToolNames.add(name);
+          const schema = declaration.input_schema || declaration.parameters || { type: "object", properties: {} };
+          declarations.push({
+            name,
+            description: declaration.description || "",
+            parameters: declaration.parameters || structuredClone(schema),
+            input_schema: structuredClone(schema),
+          });
+        }
+      }
+      tools = declarations.length > 0 ? [{ functionDeclarations: declarations }] : [];
+    } else if (tools && tools.length > 0) {
       // Merge all groups into a single functionDeclarations group (Gemini expects 1 group)
       const seenToolNames = new Set();
       const allDeclarations = [];
@@ -226,15 +277,14 @@ export class AntigravityExecutor extends BaseExecutor {
           const name = sanitizeFunctionName(fn.name);
           if (seenToolNames.has(name)) continue;
           seenToolNames.add(name);
-          allDeclarations.push({
+          allDeclarations.push(serializeCloudCodeFunctionDeclaration({
             ...fn,
             name,
-            parameters: fn.parameters
-              ? cleanJSONSchemaForAntigravity(structuredClone(fn.parameters))
-              : { type: "object", properties: { reason: { type: "string", description: "Brief explanation" } }, required: ["reason"] }
-          });
+            parameters: fn.parameters || { type: "object", properties: {} }
+          }));
         }
       }
+      logAntigravityToolSchemaSummary(allDeclarations);
       tools = allDeclarations.length > 0 ? [{ functionDeclarations: allDeclarations }] : [];
     }
 

@@ -1,6 +1,18 @@
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { OAUTH_ENDPOINTS, GEMINI_CLI_API_CLIENT, geminiCLIUserAgent } from "../config/appConstants.js";
+import { serializeCloudCodeFunctionDeclaration } from "../translator/formats/gemini.js";
+
+function serializeCloudCodeTools(request) {
+  if (!request?.tools) return request;
+  return {
+    ...request,
+    tools: request.tools.map(group => ({
+      ...group,
+      functionDeclarations: group.functionDeclarations?.map(serializeCloudCodeFunctionDeclaration) || []
+    }))
+  };
+}
 
 export class GeminiCLIExecutor extends BaseExecutor {
   constructor() {
@@ -26,11 +38,13 @@ export class GeminiCLIExecutor extends BaseExecutor {
     // Store model for use in buildHeaders (called by base.execute after transformRequest)
     this._currentModel = model;
     // Cloud Code Assist wraps the Gemini payload: { project, model, request: <body> }
-    if (body && body.request && body.model) return body;
+    if (body && body.request && body.model) {
+      return { ...body, request: serializeCloudCodeTools(body.request) };
+    }
     return {
       project: credentials?.projectId || body?.project,
       model,
-      request: body
+      request: serializeCloudCodeTools(body)
     };
   }
 

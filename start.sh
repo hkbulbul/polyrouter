@@ -1,4 +1,4 @@
-docker stop 9router
-docker rm 9router
-docker build -t 9router .
-docker run -d --name 9router -p 20128:20128 --env-file .env -v 9router-data:/app/data 9router
+docker stop polyrouter
+docker rm polyrouter
+docker build -t polyrouter .
+docker run -d --name polyrouter -p 20128:20128 --env-file .env -v polyrouter-data:/app/data polyrouter

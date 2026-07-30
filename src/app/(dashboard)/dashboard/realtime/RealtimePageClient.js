@@ -168,7 +168,7 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
     <section className="max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-text-main">Speech to Speech</h1>
-        <p className="mt-1 text-sm text-text-muted">Talk naturally using your connected {providerName || "OpenAI"} account. Audio stays between this browser, your local 9Router, and the realtime provider.</p>
+        <p className="mt-1 text-sm text-text-muted">Talk naturally using your connected {providerName || "OpenAI"} account. Audio stays between this browser, your local PolyRouter, and the realtime provider.</p>
       </div>
       <div className="border border-border-subtle bg-surface p-6 space-y-5">
         <div className="flex items-center justify-between gap-4">

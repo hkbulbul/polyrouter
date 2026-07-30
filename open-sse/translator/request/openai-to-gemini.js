@@ -14,7 +14,8 @@ import {
   generateRequestId,
   generateSessionId,
   generateProjectId,
-  cleanJSONSchemaForAntigravity
+  cleanJSONSchemaForAntigravity,
+  serializeCloudCodeFunctionDeclaration
 } from "../formats/gemini.js";
 import { deriveSessionId, toNumericSessionId } from "../../utils/sessionManager.js";
 import { ROLE, GEMINI_ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
@@ -46,7 +47,7 @@ function normalizeGeminiContents(contents) {
 }
 
 // Core: Convert OpenAI request to Gemini format (base for all variants)
-function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG_SIGNATURE) {
+function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG_SIGNATURE, preserveToolSchemas = false) {
   const result = {
     model: model,
     contents: [],
@@ -203,7 +204,9 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
     for (const t of body.tools) {
       // Check if already in Anthropic/Claude format (no type field, direct name/description/input_schema)
       if (t.name && t.input_schema) {
-        const cleanedSchema = cleanJSONSchemaForAntigravity(structuredClone(t.input_schema || { type: "object", properties: {} }));
+        const cleanedSchema = preserveToolSchemas
+          ? structuredClone(t.input_schema || { type: "object", properties: {} })
+          : cleanJSONSchemaForAntigravity(structuredClone(t.input_schema || { type: "object", properties: {} }));
         functionDeclarations.push({
           name: sanitizeGeminiFunctionName(t.name),
           description: t.description || "",
@@ -213,7 +216,9 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
       // OpenAI format
       else if (t.type === OPENAI_BLOCK.FUNCTION && t.function) {
         const fn = t.function;
-        const cleanedSchema = cleanJSONSchemaForAntigravity(structuredClone(fn.parameters || { type: "object", properties: {} }));
+        const cleanedSchema = preserveToolSchemas
+          ? structuredClone(fn.parameters || { type: "object", properties: {} })
+          : cleanJSONSchemaForAntigravity(structuredClone(fn.parameters || { type: "object", properties: {} }));
         functionDeclarations.push({
           name: sanitizeGeminiFunctionName(fn.name),
           description: fn.description || "",
@@ -238,26 +243,9 @@ export function openaiToGeminiRequest(model, body, stream) {
 
 // OpenAI -> Gemini CLI (Cloud Code Assist)
 export function openaiToGeminiCLIRequest(model, body, stream) {
-  const gemini = openaiToGeminiBase(model, body, stream, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE);
-  // Thinking is normalized centrally by applyThinking (thinkingUnified.js) after translation.
-
-  // Clean schema for tools
-  if (gemini.tools?.[0]?.functionDeclarations) {
-    for (const fn of gemini.tools[0].functionDeclarations) {
-      if (fn.parameters) {
-        const cleanedSchema = cleanJSONSchemaForAntigravity(fn.parameters);
-        fn.parameters = cleanedSchema;
-        // if (isClaude) {
-        //   fn.parameters = cleanedSchema;
-        // } else {
-        //   fn.parametersJsonSchema = cleanedSchema;
-        //   delete fn.parameters;
-        // }
-      }
-    }
-  }
-
-  return gemini;
+  // Cloud Code accepts full JSON Schema at the executor boundary. Preserve it
+  // here so dictionary and composition semantics are not lost before egress.
+  return openaiToGeminiBase(model, body, stream, DEFAULT_THINKING_GEMINI_CLI_SIGNATURE, true);
 }
 
 // Wrap Gemini CLI format in Cloud Code wrapper
@@ -378,23 +366,27 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     }
   }
 
-  // Convert Claude tools to Gemini functionDeclarations
+  // Cloud Code accepts Gemini's functionDeclarations wrapper, then forwards
+  // declarations to its Claude backend. Preserve both schema field names:
+  // parameters satisfies Cloud Code while input_schema satisfies Anthropic.
   if (claudeRequest.tools && Array.isArray(claudeRequest.tools)) {
     const functionDeclarations = [];
     for (const tool of claudeRequest.tools) {
-      if (tool.name && tool.input_schema) {
-        const cleanedSchema = cleanJSONSchemaForAntigravity(tool.input_schema);
-        functionDeclarations.push({
-          name: sanitizeGeminiFunctionName(tool.name),
-          description: tool.description || "",
-          parameters: cleanedSchema
-        });
-      }
+      if (!tool?.name) continue;
+      const schema = cleanJSONSchemaForAntigravity(
+        structuredClone(tool.input_schema || { type: "object", properties: {} })
+      );
+      functionDeclarations.push({
+        name: sanitizeGeminiFunctionName(tool.name),
+        description: tool.description || "",
+        parameters: schema,
+        input_schema: structuredClone(schema),
+      });
     }
     if (functionDeclarations.length > 0) {
       envelope.request.tools = [{ functionDeclarations }];
       envelope.request.toolConfig = {
-        functionCallingConfig: { mode: "VALIDATED" }
+        functionCallingConfig: { mode: "VALIDATED" },
       };
     }
   }

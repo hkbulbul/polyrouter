@@ -58,8 +58,25 @@ const TOOL_BODY = (model) => ({
   ],
 });
 
-async function callChat(body) {
-  const res = await fetch(`${BASE_URL}/chat/completions`, {
+// Claude Code sends freeform custom tools alongside ordinary function tools.
+// Antigravity's Claude backend must receive these as schema-bearing declarations.
+const CLAUDE_CUSTOM_TOOL_BODY = (model) => ({
+  model,
+  stream: false,
+  max_tokens: 64,
+  messages: [{ role: "user", content: "Apply the patch" }],
+  tools: [{
+    type: "custom",
+    name: "apply_patch",
+    description: "Apply a freeform patch",
+    format: { type: "grammar", syntax: "lark", definition: "start: /.+/" },
+  }],
+});
+
+const CLAUDE_MODELS = AG_MODELS.filter(model => model.includes("/claude-"));
+
+async function callChat(body, endpoint = "/chat/completions") {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -122,6 +139,24 @@ describe.skipIf(!RUN_REAL).concurrent("antigravity models — real", () => {
       }
 
       expect(status, `${model} tool: ${text.slice(0, 300)}`).toBe(200);
+    }, TIMEOUT_MS);
+  }
+
+  for (const model of CLAUDE_MODELS) {
+    it(`${model}: custom freeform tool`, async () => {
+      const { status, json, text } = await callChat(CLAUDE_CUSTOM_TOOL_BODY(model), "/messages?beta=true");
+
+      if ([401, 402, 403, 429].includes(status)) {
+        console.warn(`[skip] ${model}: ${status} (credential/quota)`);
+        return;
+      }
+
+      const errMsg = json?.error?.message || text;
+      if (status === 400 && /tools?\.\d+\.custom\.input_schema.*Field required|custom\.input_schema.*Field required|Unknown name "(?:name|description|input_schema|inputSchema)" at 'request\.tools/i.test(errMsg)) {
+        throw new Error(`BUG: ${model} — invalid Cloud Code Claude tool envelope: ${errMsg.slice(0, 300)}`);
+      }
+
+      expect(status, `${model} custom tool: ${text.slice(0, 300)}`).toBe(200);
     }, TIMEOUT_MS);
   }
 });

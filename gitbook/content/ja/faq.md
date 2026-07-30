@@ -1,12 +1,12 @@
 # よくある質問
 
-9Routerに関する一般的な質問。
+PolyRouterに関する一般的な質問。
 
 ---
 
-## 9Routerとは?
+## PolyRouterとは?
 
-**9Routerは、サブスクリプションの価値を最大化し、コストを最小限に抑えるAIモデルルーターです。**
+**PolyRouterは、サブスクリプションの価値を最大化し、コストを最小限に抑えるAIモデルルーターです。**
 
 3階層フォールバックシステムを使用して、複数のAIプロバイダー間でリクエストをインテリジェントにルーティングします:
 1. **サブスクリプション階層** - すでに支払っているClaude Code、Codex、Geminiのクォータを最大化
@@ -23,7 +23,7 @@
 
 ## 料金体系はどうなっていますか?
 
-**9Routerは3階層の料金戦略を使用します:**
+**PolyRouterは3階層の料金戦略を使用します:**
 
 ### Tier 1: サブスクリプション(最初に最大化)
 - **Claude Code** (Pro/Max): 月$20〜100 - 5時間 + 週次クォータ
@@ -50,9 +50,9 @@
 
 ---
 
-## 9Routerは無料ですか?
+## PolyRouterは無料ですか?
 
-**はい、9Router自体は100%無料でオープンソースです。**
+**はい、PolyRouter自体は100%無料でオープンソースです。**
 
 **利用可能な無料階層プロバイダー:**
 - **Gemini CLI** - 月18万コンプリーション(無料Googleアカウント)
@@ -96,7 +96,7 @@
 
 ## 複数のプロバイダーを使用できますか?
 
-**はい! これは9Routerのコア機能です。**
+**はい! これはPolyRouterのコア機能です。**
 
 **コンボにより、複数のプロバイダーを自動フォールバック付きで連鎖させることができます:**
 
@@ -129,7 +129,7 @@ Dashboard → Combos → Create New
 
 ## クォータトラッキングはどのように機能しますか?
 
-**9Routerはすべてのプロバイダーのクォータをリアルタイムで追跡します:**
+**PolyRouterはすべてのプロバイダーのクォータをリアルタイムで追跡します:**
 
 **機能:**
 - **トークン消費** - リクエストごとの入出力トークン
@@ -154,17 +154,17 @@ Dashboard → Providers → Quota Tracking
 
 ---
 
-## 9RouterはCursorで動作しますか?
+## PolyRouterはCursorで動作しますか?
 
 **はい、ただしCursorはクラウドエンドポイントが必要です。**
 
 **問題:** Cursor IDEはlocalhostエンドポイントをサポートしていません。
 
-**解決策:** 9Routerクラウドデプロイメントを使用:
+**解決策:** PolyRouterクラウドデプロイメントを使用:
 
 ```
 Cursor Settings → Models → Advanced:
-  OpenAI API Base URL: https://9router.com/v1
+  OpenAI API Base URL: https://useusepolyrouter.com/v1
   OpenAI API Key: [ダッシュボードから取得]
   Model: cc/claude-opus-4-5-20251101
 ```
@@ -172,8 +172,8 @@ Cursor Settings → Models → Advanced:
 **代替案:** パブリックドメインでVPSにセルフホスト:
 ```bash
 # VPSへデプロイ
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/hkbulbul/polyrouter.git
+cd polyrouter/app
 npm install && npm run build
 npm start
 
@@ -192,22 +192,22 @@ npm start
 
 ---
 
-## 9Routerをセルフホストできますか?
+## PolyRouterをセルフホストできますか?
 
-**はい! 9Routerは複数のデプロイメントオプションをサポートします:**
+**はい! PolyRouterは複数のデプロイメントオプションをサポートします:**
 
 ### Localhost(デフォルト)
 ```bash
-npm install -g 9router
-9router
+npm install -g polyrouter
+polyrouter
 → Dashboard: http://localhost:3000
 → API: http://localhost:20128/v1
 ```
 
 ### VPS/クラウド
 ```bash
-git clone https://github.com/decolua/9router.git
-cd 9router/app
+git clone https://github.com/hkbulbul/polyrouter.git
+cd polyrouter/app
 npm install && npm run build
 
 export JWT_SECRET="your-secure-secret"
@@ -219,23 +219,23 @@ npm start
 
 ### Docker
 ```bash
-docker build -t 9router .
+docker build -t polyrouter .
 docker run -d \
   -p 3000:3000 \
   -e JWT_SECRET="your-secret" \
-  -v 9router-data:/app/data \
-  9router
+  -v polyrouter-data:/app/data \
+  polyrouter
 ```
 
 ### Cloudflare Workers
 ```bash
-cd 9router/app
+cd polyrouter/app
 npm run deploy:cloudflare
 ```
 
 **環境変数:**
 - `JWT_SECRET` - **本番環境で必ず変更!**
-- `DATA_DIR` - データベース保存パス(デフォルト: `~/.9router`)
+- `DATA_DIR` - データベース保存パス(デフォルト: `~/.polyrouter`)
 - `INITIAL_PASSWORD` - ダッシュボードログイン(デフォルト: `123456`)
 - `NODE_ENV` - デプロイ時は`production`に設定
 
@@ -245,11 +245,11 @@ npm run deploy:cloudflare
 
 ## データは安全ですか?
 
-**はい、9Routerはセキュリティとプライバシーを優先します:**
+**はい、PolyRouterはセキュリティとプライバシーを優先します:**
 
 **ローカルストレージ:**
-- すべてのデータは`~/.9router`(またはカスタム`DATA_DIR`)にローカル保存
-- 9Routerサーバーへのデータ送信なし
+- すべてのデータは`~/.polyrouter`(またはカスタム`DATA_DIR`)にローカル保存
+- PolyRouterサーバーへのデータ送信なし
 - OAuthトークンはJWTで暗号化
 
 **テレメトリなし:**
@@ -268,31 +268,31 @@ npm run deploy:cloudflare
 - クラウドデプロイでHTTPSを有効化
 - APIキーを定期的にローテーション
 
-**9Routerが保存するもの:**
+**PolyRouterが保存するもの:**
 - プロバイダーOAuthトークン(暗号化)
 - APIキー(暗号化)
 - 使用統計(ローカルのみ)
 - コンボ設定
 
-**9Routerが保存しないもの:**
+**PolyRouterが保存しないもの:**
 - プロンプトやレスポンス
 - 生成したコード
 - 個人情報
 
 ---
 
-## 9Routerを更新するには?
+## PolyRouterを更新するには?
 
 **更新方法はインストールタイプによって異なります:**
 
 ### グローバルNPMインストール
 ```bash
-npm update -g 9router
+npm update -g polyrouter
 ```
 
 ### ローカルインストール
 ```bash
-cd 9router/app
+cd polyrouter/app
 git pull origin main
 npm install
 npm run build
@@ -301,23 +301,23 @@ npm start
 
 ### Docker
 ```bash
-docker pull 9router:latest
-docker stop 9router
-docker rm 9router
+docker pull polyrouter:latest
+docker stop polyrouter
+docker rm polyrouter
 docker run -d \
   -p 3000:3000 \
-  -v 9router-data:/app/data \
-  9router:latest
+  -v polyrouter-data:/app/data \
+  polyrouter:latest
 ```
 
 **バージョンを確認:**
 ```bash
-9router --version
+polyrouter --version
 ```
 
 **破壊的変更:**
-- [CHANGELOG.md](https://github.com/decolua/9router/blob/main/CHANGELOG.md)を確認
-- メジャー更新前に`~/.9router`をバックアップ
+- [CHANGELOG.md](https://github.com/hkbulbul/polyrouter/blob/main/CHANGELOG.md)を確認
+- メジャー更新前に`~/.polyrouter`をバックアップ
 - メジャーバージョンの移行ガイドを確認
 
 ---
@@ -329,18 +329,18 @@ docker run -d \
 ### 貢献方法:
 
 1. **バグを報告:**
-   - [GitHub Issues](https://github.com/decolua/9router/issues)
+   - [GitHub Issues](https://github.com/hkbulbul/polyrouter/issues)
    - エラーログ、再現手順を含める
 
 2. **機能をリクエスト:**
-   - [GitHub Discussions](https://github.com/decolua/9router/discussions)
+   - [GitHub Discussions](https://github.com/hkbulbul/polyrouter/discussions)
    - ユースケースと利点を説明
 
 3. **コードを提出:**
    ```bash
    # リポジトリをフォーク
-   git clone https://github.com/YOUR_USERNAME/9router.git
-   cd 9router
+   git clone https://github.com/YOUR_USERNAME/polyrouter.git
+   cd polyrouter
    
    # ブランチを作成
    git checkout -b feature/your-feature
@@ -375,13 +375,13 @@ docker run -d \
 - ドキュメントを更新
 - コミットは小さく、わかりやすく
 
-詳細は[CONTRIBUTING.md](https://github.com/decolua/9router/blob/main/CONTRIBUTING.md)を参照。
+詳細は[CONTRIBUTING.md](https://github.com/hkbulbul/polyrouter/blob/main/CONTRIBUTING.md)を参照。
 
 ---
 
 ## さらにヘルプが必要?
 
-- **ドキュメント:** [9router.com/docs](https://9router.com/docs)
-- **GitHub:** [github.com/decolua/9router](https://github.com/decolua/9router)
-- **Issues:** [github.com/decolua/9router/issues](https://github.com/decolua/9router/issues)
+- **ドキュメント:** [useusepolyrouter.com/docs](https://useusepolyrouter.com/docs)
+- **GitHub:** [github.com/hkbulbul/polyrouter](https://github.com/hkbulbul/polyrouter)
+- **Issues:** [github.com/hkbulbul/polyrouter/issues](https://github.com/hkbulbul/polyrouter/issues)
 - **トラブルシューティング:** [troubleshooting.md](troubleshooting.md)
