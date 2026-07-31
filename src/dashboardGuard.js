@@ -26,6 +26,7 @@ const PUBLIC_API_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/status",
+  "/api/auth/setup-password",
   "/api/auth/oidc",
   "/api/version",
   "/api/settings/require-login",
@@ -86,10 +87,23 @@ const LOCAL_ONLY_PATHS = [
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
-function isLoopbackHostname(h) {
-  if (!h) return false;
-  const name = h.split(":")[0].replace(/^\[|\]$/g, "").toLowerCase();
-  return LOOPBACK_HOSTS.has(name);
+function isLoopbackHostname(value) {
+  if (typeof value !== "string" || !value) return false;
+
+  let host = value.trim().toLowerCase();
+  if (host.startsWith("[")) {
+    const match = /^\[([^\]]+)\](?::\d+)?$/.exec(host);
+    if (!match) return false;
+    host = match[1];
+  } else if (!host.startsWith("::")) {
+    const match = /^([^:]+)(?::\d+)?$/.exec(host);
+    if (!match) return false;
+    host = match[1];
+  }
+
+  // Handle IPv4-mapped IPv6 (::ffff:127.0.0.1) — common on Windows.
+  host = host.replace(/^::ffff:/, "");
+  return LOOPBACK_HOSTS.has(host);
 }
 
 export function isLocalRequest(request) {

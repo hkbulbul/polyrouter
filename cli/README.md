@@ -79,9 +79,13 @@ curl http://localhost:20128/v1/models \
 
 ## Updating
 
+Stop PolyRouter first, including its tray/background process, then run:
+
 ```bash
-npm install -g polyrouter@latest
+npm install -g polyrouter@latest --prefer-online
 ```
+
+`--prefer-online` asks npm to revalidate registry metadata instead of relying on a stale cache when possible. It does not bypass permissions, file locks, or registry/network failures. On Windows, an `EBUSY` or `EPERM` error means PolyRouter, Node, a terminal, or security software still has files open in npm's global package directory—close the locking process and retry rather than deleting the installation manually.
 
 Restart the gateway after updating:
 
@@ -116,7 +120,7 @@ For installation, configuration, or licensing assistance, contact the PolyRouter
 
 ## Security
 
-- Change the default dashboard password immediately.
+- Create a strong dashboard password during first-run setup.
 - Keep the gateway on localhost unless you intentionally configure remote access.
 - Never share API keys, OAuth tokens, local SQLite databases, logs, or the application-data directory.
 - Use HTTPS and a secure reverse proxy for remote deployments.

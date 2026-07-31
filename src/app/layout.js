@@ -2,6 +2,7 @@ import { IBM_Plex_Sans } from "next/font/google";
 import "material-symbols/outlined.css";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
+import GoogleAnalyticsProvider from "@/shared/components/GoogleAnalyticsProvider";
 import PostHogProvider from "@/shared/components/PostHogProvider";
 import "@/lib/network/initOutboundProxy"; // Auto-initialize outbound proxy env
 import "@/shared/services/bootstrap"; // Auto-run initializeApp (watchdog, auto-resume tunnel)
@@ -40,13 +41,15 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${ibmPlexSans.variable} font-sans antialiased`}>
-        <PostHogProvider>
-          <ThemeProvider>
-            <RuntimeI18nProvider>
-              {children}
-            </RuntimeI18nProvider>
-          </ThemeProvider>
-        </PostHogProvider>
+        <GoogleAnalyticsProvider>
+          <PostHogProvider>
+            <ThemeProvider>
+              <RuntimeI18nProvider>
+                {children}
+              </RuntimeI18nProvider>
+            </ThemeProvider>
+          </PostHogProvider>
+        </GoogleAnalyticsProvider>
       </body>
     </html>
   );

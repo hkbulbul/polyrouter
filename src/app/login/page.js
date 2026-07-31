@@ -10,10 +10,10 @@ export default function LoginPage() {
   const [retryAfter, setRetryAfter] = useState(0);
   const [loading, setLoading] = useState(false);
   const [hasPassword, setHasPassword] = useState(null);
+  const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false);
   const [authMode, setAuthMode] = useState("password");
   const [oidcConfigured, setOidcConfigured] = useState(false);
   const [oidcLoginLabel, setOidcLoginLabel] = useState("Sign in with OIDC");
-  const [mustChange, setMustChange] = useState(false);
   const [newPassword, setNewPassword] = useState("");
 
   // Countdown for rate-limit
@@ -42,6 +42,7 @@ export default function LoginPage() {
             return;
           }
           setHasPassword(!!data.hasPassword);
+          setNeedsPasswordSetup(data.needsPasswordSetup === true);
           setAuthMode(data.authMode || "password");
           setOidcConfigured(data.oidcConfigured === true);
           setOidcLoginLabel(data.oidcLoginLabel || "Sign in with OIDC");
@@ -57,6 +58,32 @@ export default function LoginPage() {
     checkAuth();
   }, []);
 
+  const handleSetupPassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/setup-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      });
+      if (res.ok) {
+        setNeedsPasswordSetup(false);
+        setHasPassword(true);
+        setNewPassword("");
+        setError("");
+      } else {
+        const data = await res.json();
+        setError(data.error || "Failed to set password");
+      }
+    } catch {
+      setError("An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -71,41 +98,13 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.mustChangePassword) {
-          setMustChange(true);
-          return;
-        }
+        await res.json();
         window.location.assign("/dashboard");
       } else {
         const data = await res.json();
         setError(data.error || "Invalid password");
         if (data.resetHint) setResetHint(data.resetHint);
         if (data.retryAfter) setRetryAfter(Number(data.retryAfter));
-      }
-    } catch (err) {
-      setError("An error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Force a new password before entering the dashboard (default + remote).
-  const handleSetNewPassword = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: password, newPassword }),
-      });
-      if (res.ok) {
-        window.location.assign("/dashboard");
-      } else {
-        const data = await res.json();
-        setError(data.error || "Failed to set password");
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -148,24 +147,25 @@ export default function LoginPage() {
         </div>
 
         <Card>
-          {mustChange ? (
-            <form onSubmit={handleSetNewPassword} className="flex flex-col gap-4">
-              <p className="text-sm text-green-600 dark:text-green-400 text-center">
-                Set a new password before accessing the dashboard remotely.
+          {needsPasswordSetup ? (
+            <form onSubmit={handleSetupPassword} className="flex flex-col gap-4">
+              <p className="text-sm text-text-muted text-center">
+                Create a password to secure this PolyRouter installation.
               </p>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">New password</label>
                 <Input
                   type="password"
-                  placeholder="Enter new password"
+                  placeholder="At least 8 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={8}
                   required
                   autoFocus
                 />
                 {error && <p className="text-xs text-red-500">{error}</p>}
               </div>
-              <Button type="submit" variant="primary" className="w-full" loading={loading} disabled={!newPassword}>
+              <Button type="submit" variant="primary" className="w-full" loading={loading} disabled={newPassword.length < 8}>
                 Set password
               </Button>
             </form>
@@ -211,7 +211,7 @@ export default function LoginPage() {
                   )}
                   {resetHint && (
                     <p className="text-xs text-text-muted">
-                      Forgot password? Open <code className="bg-sidebar px-1 ">polyrouter</code> CLI on the host → <b>Settings</b> → <b>Reset Password to Default</b>.
+                      Forgot password? Open <code className="bg-sidebar px-1 ">polyrouter</code> CLI on the host → <b>Settings</b> → <b>Reset Password</b>.
                     </p>
                   )}
                 </div>
@@ -226,12 +226,9 @@ export default function LoginPage() {
                   {retryAfter > 0 ? `Wait ${retryAfter}s` : "Login"}
                 </Button>
 
-                <p className="text-xs text-center text-text-muted mt-2">
-                  Default password is <code className="bg-sidebar px-1 ">123456</code>
-                </p>
                 {hasPassword === false && (
                   <p className="text-xs text-center text-green-600 dark:text-green-400">
-                    Security risk: no password set. You will be asked to set one when logging in remotely.
+                    Set a password before signing in.
                   </p>
                 )}
               </form>

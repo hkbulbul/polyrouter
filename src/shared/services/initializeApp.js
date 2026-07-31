@@ -51,6 +51,10 @@ const g = global.__appSingleton ??= {
 
 export async function initializeApp() {
   try {
+    import("@/shared/services/installationTelemetry")
+      .then(({ recordStartupTelemetry }) => recordStartupTelemetry())
+      .catch(() => {});
+
     // Register cleanup + exit-respawn callback immediately so signals and
     // unexpected cloudflared exits are handled even during the deferred window.
     if (!g.signalHandlersRegistered) {

@@ -6,8 +6,6 @@ import crypto from "node:crypto";
 import { DATA_DIR } from "@/lib/dataDir";
 import { getSettings } from "@/lib/localDb";
 
-const DEFAULT_PASSWORD = "123456";
-
 function loadJwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
   const file = path.join(DATA_DIR, "jwt-secret");
@@ -76,7 +74,6 @@ export async function verifyDashboardPassword(password) {
   if (typeof password !== "string" || !password) return false;
   const settings = await getSettings();
   const storedHash = settings?.password;
-  if (storedHash) return bcrypt.compare(password, storedHash);
-  const initialPassword = process.env.INITIAL_PASSWORD || DEFAULT_PASSWORD;
-  return password === initialPassword;
+  if (!storedHash) return false;
+  return bcrypt.compare(password, storedHash);
 }

@@ -3,6 +3,8 @@ import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
 import bcrypt from "bcryptjs";
+import { DATA_DIR } from "@/lib/dataDir.js";
+import { DATA_FILE } from "@/lib/db/paths.js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,7 +29,9 @@ export async function GET() {
       ...safeSettings, 
       enableRequestLogs,
       enableTranslator,
-      hasPassword: !!password
+      hasPassword: !!password,
+      dataDir: DATA_DIR,
+      databasePath: DATA_FILE
     }, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
     console.log("Error getting settings:", error);
@@ -57,11 +61,10 @@ export async function PATCH(request) {
           return NextResponse.json({ error: "Invalid current password" }, { status: 401 });
         }
       } else {
-        // First time setting password, no current password needed
-        // Allow empty currentPassword or default "123456"
-        if (body.currentPassword && body.currentPassword !== "123456") {
-           return NextResponse.json({ error: "Invalid current password" }, { status: 401 });
-        }
+        return NextResponse.json(
+          { error: "Use the first-run password setup flow before changing the dashboard password" },
+          { status: 409 }
+        );
       }
 
       const salt = await bcrypt.genSalt(10);

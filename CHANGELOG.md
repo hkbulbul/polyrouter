@@ -1,3 +1,18 @@
+# v1.0.7 (CLI) — 2026-08-01
+
+## Features
+- **Analytics**: add optional GA4 and privacy-conscious PostHog dashboard pageview tracking, plus optional write-only installation lifecycle telemetry through a secured Supabase Edge Function.
+
+## Security
+- **Authentication**: require a local first-run dashboard password instead of a default-password fallback.
+- **Telemetry**: use a persistent random installation UUID and HMAC-hashed login IP only when telemetry is explicitly configured.
+
+## Fixes
+- **Local access**: recognize native and IPv4-mapped IPv6 loopback addresses while continuing to reject proxied and remote requests.
+- **Windows**: ignore Unix-style `DATA_DIR` values and fall back to the standard application-data directory.
+- **SQLite**: add durable installation identity and telemetry queue migration; show the resolved database path in the dashboard.
+- **Release**: embed configured GA4/PostHog public browser settings in npm package builds and improve npm update guidance.
+
 # v1.0.6 (CLI) — 2026-07-30
 
 ## Features

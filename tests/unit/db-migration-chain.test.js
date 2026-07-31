@@ -36,7 +36,18 @@ describe("Schema migrations", () => {
     expect(tables).toEqual(expect.arrayContaining([
       "_meta", "settings", "providerConnections", "providerNodes",
       "proxyPools", "apiKeys", "combos", "kv", "usageHistory", "usageDaily", "requestDetails",
+      "installationIdentity", "installationTelemetryQueue",
     ]));
+  });
+
+  it("creates and reuses one installation identity", async () => {
+    const { getOrCreateInstallationIdentity } = await import("@/lib/db/repos/installationIdentityRepo.js");
+    const first = await getOrCreateInstallationIdentity();
+    const second = await getOrCreateInstallationIdentity();
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.installationId).toBe(first.installationId);
+    expect(second.createdAt).toBe(first.createdAt);
   });
 
   it("existing DB at older schemaVersion → re-applies pending migrations on restart", async () => {

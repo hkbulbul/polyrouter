@@ -1,0 +1,2 @@
+[functions.installation-telemetry]
+verify_jwt = false

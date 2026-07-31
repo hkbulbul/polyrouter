@@ -5,9 +5,8 @@ import { cookies } from "next/headers";
 import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { checkLock, recordFail, recordSuccess, getClientIp } from "@/lib/auth/loginLimiter";
-import { isLocalRequest } from "@/dashboardGuard";
 
-const RESET_HINT = "Forgot password? Reset to default via PolyRouter CLI → Settings → Reset Password to Default.";
+const RESET_HINT = "Forgot password? Reset it locally via PolyRouter CLI → Settings → Reset Password.";
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
 
 function isTunnelRequest(request, settings) {
@@ -36,7 +35,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
     }
 
-    // Default password is '123456' if not set
+    // A password hash is mandatory; first-run setup creates it before login.
     const storedHash = settings.password;
 
     if (settings.authMode === "oidc" && isOidcConfigured(settings)) {
@@ -46,23 +45,21 @@ export async function POST(request) {
     let isValid = false;
     if (storedHash) {
       isValid = await bcrypt.compare(password, storedHash);
-    } else {
-      // Use env var or default
-      const initialPassword = process.env.INITIAL_PASSWORD || "123456";
-      isValid = password === initialPassword;
+    }
+
+    if (!storedHash) {
+      return NextResponse.json({ error: "Set a password before signing in", needsPasswordSetup: true }, { status: 428 });
     }
 
     if (isValid) {
       recordSuccess(ip);
       const cookieStore = await cookies();
       await setDashboardAuthCookie(cookieStore, request);
+      import("@/shared/services/installationTelemetry")
+        .then(({ recordInstallationTelemetry }) => recordInstallationTelemetry("dashboard_login", { ip }))
+        .catch(() => {});
 
-      // Default password still in use on a remote client → force a password
-      // change before the dashboard is exposed remotely (keeps local UX intact).
-      const mustChangePassword =
-        !storedHash && !process.env.INITIAL_PASSWORD && !isLocalRequest(request);
-
-      return NextResponse.json({ success: true, mustChangePassword }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS });
     }
 
     const { remainingBeforeLock } = recordFail(ip);

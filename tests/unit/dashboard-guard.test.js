@@ -227,6 +227,66 @@ describe("dashboard guard local-only access", () => {
     expect(response).toBe(mocks.nextResponse);
   });
 
+  it("allows a local-only route from a native IPv6 loopback peer", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+      "x-9r-real-ip": "::1",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("allows a local-only route from an IPv4-mapped loopback peer", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+      "x-9r-real-ip": "::ffff:127.0.0.1",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("allows bracketed IPv6 loopback Host and Origin without a stamped peer", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
+      host: "[::1]:20128",
+      origin: "http://[::1]:20128",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("rejects a remote IPv6 peer despite localhost headers", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+      "x-9r-real-ip": "2001:db8::1",
+    }));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects a forwarded request even when its socket peer is IPv6 loopback", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+      "x-9r-real-ip": "::1",
+      "x-9r-via-proxy": "1",
+    }));
+
+    expect(response.status).toBe(403);
+  });
+
   it("rejects local-only route from tunnel host even when requireLogin=false", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
@@ -252,6 +312,14 @@ describe("dashboard guard local-only access", () => {
     const response = await proxy(request("/api/mcp/filesystem/sse", {
       host: "router.example.com",
       "x-9r-cli-token": "cli-token",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("allows setup-password through the public API allowlist for route-level checks", async () => {
+    const response = await proxy(request("/api/auth/setup-password", {
+      host: "router.example.com",
     }));
 
     expect(response).toBe(mocks.nextResponse);

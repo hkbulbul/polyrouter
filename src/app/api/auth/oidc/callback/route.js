@@ -10,6 +10,7 @@ import {
   verifyOidcIdToken,
 } from "@/lib/auth/oidc";
 import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
+import { getClientIp } from "@/lib/auth/loginLimiter";
 
 function clearOidcCookies(cookieStore) {
   cookieStore.delete("oidc_state");
@@ -78,6 +79,9 @@ export async function GET(request) {
       oidcEmail: pickOidcEmail(payload) || null,
       oidcName: pickOidcDisplayName(payload),
     });
+    import("@/shared/services/installationTelemetry")
+      .then(({ recordInstallationTelemetry }) => recordInstallationTelemetry("dashboard_login", { ip: getClientIp(request) }))
+      .catch(() => {});
 
     return NextResponse.redirect(new URL("/dashboard", getPublicOrigin(request)));
   } catch (error) {

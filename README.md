@@ -104,14 +104,28 @@ PolyRouter supports 40+ providers through OAuth, API keys, and compatible endpoi
 | Variable | Default | Description |
 |---|---|---|
 | `JWT_SECRET` | Auto-generated | JWT signing secret for dashboard authentication. |
-| `INITIAL_PASSWORD` | `123456` | Initial dashboard password; change it immediately. |
+| `INITIAL_PASSWORD` | unset | Deprecated; on a new installation users create a dashboard password locally before signing in. |
 | `DATA_DIR` | Platform-specific | Writable application-data directory; SQLite lives at `$DATA_DIR/db/data.sqlite`. |
 | `PORT` | `20128` | Local gateway and dashboard port. |
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:20128` | Public base URL used by browser-facing configuration. |
 | `REQUIRE_API_KEY` | `false` | Require a Bearer API key for remote `/v1/*` access. |
 | `ENABLE_REQUEST_LOGS` | `false` | Enable sensitive request/response logs only for troubleshooting. |
+| `INSTALLATION_TELEMETRY_URL` | unset | Optional Supabase Edge Function URL for write-only installation lifecycle telemetry. |
+| `INSTALLATION_TELEMETRY_INGEST_TOKEN` | unset | Opaque token shared only with that Edge Function. |
+| `INSTALLATION_TELEMETRY_IP_SALT` | unset | Server-only salt used to HMAC-hash login IPs before telemetry delivery. |
 
 See [`.env.example`](./.env.example) for the current environment contract.
+
+### Optional Supabase installation telemetry
+
+Telemetry is disabled unless all three `INSTALLATION_TELEMETRY_*` variables are set. It sends a persistent random installation UUID, lifecycle event, timestamp, version, and an HMAC-hashed IP for successful dashboard logins. It never sends dashboard passwords, JWTs, cookies, provider credentials, or raw IP addresses.
+
+1. Apply `supabase/migrations/001_installation_telemetry.sql`, then `supabase/migrations/002_allow_setup_complete.sql`, in the Supabase SQL Editor.
+2. Deploy the Edge Function with `supabase functions deploy installation-telemetry --no-verify-jwt` (the function authenticates its opaque ingest token itself; `supabase/config.toml` records this setting).
+3. Set the function secrets: `INSTALLATION_TELEMETRY_INGEST_TOKEN`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
+4. Configure the app with the deployed function URL, the matching ingest token, and a private `INSTALLATION_TELEMETRY_IP_SALT`.
+
+The telemetry tables have RLS enabled and no browser-read policies. Inspect them only through Supabase SQL/Table Editor with privileged access.
 
 ---
 
@@ -201,14 +215,18 @@ For container persistence and operational detail, see [DOCKER.md](./DOCKER.md).
 
 ## Updating
 
+Stop PolyRouter first, including its tray/background process, then run:
+
 ```bash
-npm install -g polyrouter@latest
+npm install -g polyrouter@latest --prefer-online
 polyrouter
 ```
 
+`--prefer-online` asks npm to revalidate registry metadata instead of relying on a stale cache when possible. It does not bypass permissions, file locks, or registry/network failures. On Windows, an `EBUSY` or `EPERM` error means PolyRouter, Node, a terminal, or security software still has files open in npm's global package directory—close the locking process and retry rather than deleting the installation manually.
+
 ## Security Notes
 
-- Change the default dashboard password immediately.
+- Create a strong dashboard password during first-run setup.
 - Keep PolyRouter bound to localhost unless remote access is intentionally configured.
 - Do not share OAuth tokens, API keys, SQLite databases, logs, or the local application-data directory.
 - Use HTTPS and a secure reverse proxy for intentional remote deployments.

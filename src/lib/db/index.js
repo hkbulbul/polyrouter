@@ -4,7 +4,7 @@ import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
 
 // Settings
 export {
-  getSettings, updateSettings, isCloudEnabled, getCloudUrl, exportSettings,
+  getSettings, updateSettings, setInitialPasswordHash, isCloudEnabled, getCloudUrl, exportSettings,
 } from "./repos/settingsRepo.js";
 
 // Provider connections
@@ -61,6 +61,13 @@ export {
   saveRequestUsage, getUsageHistory, getUsageStats, getChartData,
   appendRequestLog, getRecentLogs,
 } from "./repos/usageRepo.js";
+
+// Installation identity and telemetry queue
+export {
+  getInstallationIdentity, getOrCreateInstallationIdentity,
+  enqueueInstallationTelemetryEvent, getPendingInstallationTelemetryEvents, getNextInstallationTelemetryAttemptAt,
+  acknowledgeInstallationTelemetryEvent, deferInstallationTelemetryEvent, discardInstallationTelemetryEvent,
+} from "./repos/installationIdentityRepo.js";
 
 // Request details
 export {

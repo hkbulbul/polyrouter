@@ -95,6 +95,24 @@ export async function updateSettings(updates) {
   return mergeWithDefaults(next);
 }
 
+// The one-time first-run password setter deliberately checks and writes in one
+// SQLite transaction so concurrent setup requests cannot replace each other.
+export async function setInitialPasswordHash(passwordHash) {
+  const db = await getAdapter();
+  let wasSet = false;
+  db.transaction(() => {
+    const row = db.get(`SELECT data FROM settings WHERE id = 1`);
+    const current = row ? parseJson(row.data, {}) : {};
+    if (current.password) return;
+    db.run(
+      `INSERT INTO settings(id, data) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
+      [stringifyJson({ ...current, password: passwordHash })]
+    );
+    wasSet = true;
+  });
+  return wasSet;
+}
+
 export async function isCloudEnabled() {
   const settings = await getSettings();
   return settings.cloudEnabled === true;
