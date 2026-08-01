@@ -1,2 +1,5 @@
 [functions.installation-telemetry]
 verify_jwt = false
+
+[functions.public-installation-telemetry]
+verify_jwt = false

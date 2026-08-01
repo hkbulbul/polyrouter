@@ -52,6 +52,7 @@ export default function Footer() {
         <div className="border-t border-[#3a2f27] pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-gray-600 text-sm">© 2025 PolyRouter. All rights reserved.</p>
           <div className="flex gap-6">
+            <a className="text-gray-600 hover:text-white text-sm transition-colors" href="/privacy">Privacy Policy</a>
             <a className="text-gray-600 hover:text-white text-sm transition-colors" href="https://github.com/hkbulbul/polyrouter" target="_blank" rel="noopener noreferrer">GitHub</a>
             <a className="text-gray-600 hover:text-white text-sm transition-colors" href="https://www.npmjs.com/package/polyrouter" target="_blank" rel="noopener noreferrer">NPM</a>
           </div>

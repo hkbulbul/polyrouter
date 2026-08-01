@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createPostHogPageviewProperties } from "@/shared/analytics/posthog";
+import { createDashboardOpenProperties, createPostHogPageviewProperties } from "@/shared/analytics/posthog";
+
+describe("createDashboardOpenProperties", () => {
+  it("uses only fixed anonymous dashboard metadata", () => {
+    expect(createDashboardOpenProperties({ appVersion: "1.0.8" })).toEqual({
+      event_source: "local_dashboard",
+      telemetry_identity: "installation",
+      app_version: "1.0.8",
+    });
+  });
+});
 
 describe("createPostHogPageviewProperties", () => {
   it("captures a route without query parameters or fragments", () => {

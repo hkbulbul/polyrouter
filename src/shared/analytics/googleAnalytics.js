@@ -10,6 +10,14 @@ function sanitizeAnalyticsUrl(value, baseUrl) {
   }
 }
 
+export function createGoogleAnalyticsDashboardOpenProperties({ appVersion }) {
+  return {
+    event_source: "local_dashboard",
+    telemetry_identity: "installation",
+    ...(typeof appVersion === "string" && appVersion ? { app_version: appVersion } : {}),
+  };
+}
+
 export function createGoogleAnalyticsPageviewProperties({ pathname, origin, title }) {
   const safePathname = typeof pathname === "string" && pathname.startsWith("/")
     ? pathname

@@ -1,3 +1,9 @@
+# v1.0.8 (CLI) — 2026-08-01
+
+## Features
+- **Analytics**: link official npm dashboard GA4/PostHog activity to the same opaque local installation UUID as anonymous lifecycle telemetry; record dashboard-open events and masked PostHog UI interaction analytics while continuing to exclude gateway API traffic.
+- **Analytics**: add anonymous public installation lifecycle telemetry for official npm releases, with Dashboard/Profile and environment opt-outs, a separate rate-limited Supabase ingest endpoint, and a documented privacy/retention policy.
+
 # v1.0.7 (CLI) — 2026-08-01
 
 ## Features

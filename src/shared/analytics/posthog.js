@@ -10,6 +10,14 @@ function sanitizeAnalyticsUrl(value, baseUrl) {
   }
 }
 
+export function createDashboardOpenProperties({ appVersion }) {
+  return {
+    event_source: "local_dashboard",
+    telemetry_identity: "installation",
+    ...(typeof appVersion === "string" && appVersion ? { app_version: appVersion } : {}),
+  };
+}
+
 export function createPostHogPageviewProperties({ pathname, origin, referrer }) {
   const safePathname = typeof pathname === "string" && pathname.startsWith("/")
     ? pathname

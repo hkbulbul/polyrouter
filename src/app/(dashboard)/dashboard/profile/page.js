@@ -57,6 +57,8 @@ export default function ProfilePage() {
   const [proxyStatus, setProxyStatus] = useState({ type: "", message: "" });
   const [proxyLoading, setProxyLoading] = useState(false);
   const [proxyTestLoading, setProxyTestLoading] = useState(false);
+  const [telemetryLoading, setTelemetryLoading] = useState(false);
+  const [telemetryStatus, setTelemetryStatus] = useState({ type: "", message: "" });
 
   useEffect(() => {
     setLocale(getLocaleFromCookie());
@@ -442,6 +444,31 @@ export default function ProfilePage() {
       setOidcTestStatus({ type: "error", message: "An error occurred" });
     } finally {
       setOidcTestLoading(false);
+    }
+  };
+
+  const updatePublicTelemetryEnabled = async (enabled) => {
+    setTelemetryLoading(true);
+    setTelemetryStatus({ type: "", message: "" });
+    try {
+      const res = await fetch("/api/settings/public-telemetry", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update anonymous telemetry");
+      setSettings((prev) => ({ ...prev, publicTelemetryEnabled: data.publicTelemetryEnabled }));
+      setTelemetryStatus({
+        type: "success",
+        message: enabled
+          ? "Anonymous telemetry enabled for future lifecycle events"
+          : "Anonymous telemetry disabled and queued events removed",
+      });
+    } catch (error) {
+      setTelemetryStatus({ type: "error", message: error.message || "Failed to update anonymous telemetry" });
+    } finally {
+      setTelemetryLoading(false);
     }
   };
 
@@ -1076,6 +1103,37 @@ export default function ProfilePage() {
               </p>
             )}
           </div>
+        </Card>
+
+        {/* Anonymous Telemetry */}
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-blue-500/10 text-blue-500 shrink-0">
+              <span className="material-symbols-outlined text-[20px]">privacy_tip</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-semibold">Anonymous Telemetry</h3>
+          </div>
+          <div className="flex items-start sm:items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm sm:text-base">Share anonymous lifecycle signals</p>
+              <p className="text-xs sm:text-sm text-text-muted">
+                Helps measure installations, startups, password setup, dashboard visits, and successful dashboard logins. Dashboard GA4/PostHog analytics use the same anonymous local installation ID. It never includes prompts, requests, models, providers, credentials, passwords, or raw IP addresses.
+              </p>
+              <a href="/privacy" className="inline-block mt-2 text-xs sm:text-sm text-primary hover:underline">
+                Read the Privacy Policy and opt-out details
+              </a>
+            </div>
+            <Toggle
+              checked={settings.publicTelemetryEnabled !== false}
+              onChange={() => updatePublicTelemetryEnabled(settings.publicTelemetryEnabled === false)}
+              disabled={loading || telemetryLoading}
+            />
+          </div>
+          {telemetryStatus.message && (
+            <p className={`text-xs sm:text-sm mt-3 ${telemetryStatus.type === "error" ? "text-red-500" : "text-green-500"}`}>
+              {telemetryStatus.message}
+            </p>
+          )}
         </Card>
 
         {/* Observability Settings */}

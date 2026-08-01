@@ -42,29 +42,37 @@ export async function getOrCreateInstallationIdentity() {
 export async function enqueueInstallationTelemetryEvent(event) {
   const db = await getAdapter();
   const now = new Date().toISOString();
+  const target = event.target === "public" ? "public" : "private";
 
   db.transaction(() => {
-    // A startup heartbeat represents current liveness; one queued heartbeat is enough.
+    // A startup heartbeat represents current liveness; one queued heartbeat per destination is enough.
     if (event.eventType === "startup") {
-      db.run(`DELETE FROM installationTelemetryQueue WHERE eventType = 'startup'`);
+      db.run(`DELETE FROM installationTelemetryQueue WHERE eventType = 'startup' AND target = ?`, [target]);
     }
     db.run(
-      `INSERT OR IGNORE INTO installationTelemetryQueue(eventId, eventType, occurredAt, ipHash, appVersion, createdAt, attempts, nextAttemptAt)
-       VALUES(?, ?, ?, ?, ?, ?, 0, ?)`,
-      [event.eventId, event.eventType, event.occurredAt, event.ipHash || null, event.appVersion || null, now, now]
+      `INSERT OR IGNORE INTO installationTelemetryQueue(eventId, eventType, occurredAt, ipHash, appVersion, createdAt, attempts, nextAttemptAt, target)
+       VALUES(?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      [event.eventId, event.eventType, event.occurredAt, event.ipHash || null, event.appVersion || null, now, now, target]
     );
   });
 }
 
-export async function getPendingInstallationTelemetryEvents(limit = 20) {
+export async function getPendingInstallationTelemetryEvents(limit = 20, target = null) {
   const db = await getAdapter();
+  const values = [new Date().toISOString()];
+  let targetFilter = "";
+  if (target === "public" || target === "private") {
+    targetFilter = " AND target = ?";
+    values.push(target);
+  }
+  values.push(limit);
   return db.all(
-    `SELECT eventId, eventType, occurredAt, ipHash, appVersion, attempts
+    `SELECT eventId, eventType, occurredAt, ipHash, appVersion, attempts, target
      FROM installationTelemetryQueue
-     WHERE nextAttemptAt <= ?
+     WHERE nextAttemptAt <= ?${targetFilter}
      ORDER BY createdAt ASC
      LIMIT ?`,
-    [new Date().toISOString(), limit]
+    values
   ).map((row) => ({
     eventId: row.eventId,
     eventType: row.eventType,
@@ -72,11 +80,21 @@ export async function getPendingInstallationTelemetryEvents(limit = 20) {
     ipHash: row.ipHash || null,
     appVersion: row.appVersion || null,
     attempts: Number(row.attempts) || 0,
+    target: row.target === "public" ? "public" : "private",
   }));
 }
 
-export async function getNextInstallationTelemetryAttemptAt() {
+export async function discardInstallationTelemetryEventsByTarget(target) {
+  if (target !== "public" && target !== "private") return;
   const db = await getAdapter();
+  db.run(`DELETE FROM installationTelemetryQueue WHERE target = ?`, [target]);
+}
+
+export async function getNextInstallationTelemetryAttemptAt(target = null) {
+  const db = await getAdapter();
+  if (target === "public" || target === "private") {
+    return db.get(`SELECT MIN(nextAttemptAt) AS nextAttemptAt FROM installationTelemetryQueue WHERE target = ?`, [target])?.nextAttemptAt || null;
+  }
   return db.get(`SELECT MIN(nextAttemptAt) AS nextAttemptAt FROM installationTelemetryQueue`)?.nextAttemptAt || null;
 }
 

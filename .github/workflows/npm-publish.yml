@@ -16,6 +16,7 @@ jobs:
       NEXT_PUBLIC_GA_MEASUREMENT_ID: ${{ vars.POLYROUTER_GA_MEASUREMENT_ID }}
       NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.POLYROUTER_POSTHOG_PROJECT_TOKEN }}
       NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.POLYROUTER_POSTHOG_HOST || 'https://us.i.posthog.com' }}
+      PUBLIC_INSTALLATION_TELEMETRY_URL: ${{ vars.POLYROUTER_PUBLIC_INSTALLATION_TELEMETRY_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +38,8 @@ jobs:
         run: |
           test -n "$NEXT_PUBLIC_GA_MEASUREMENT_ID"
           test -n "$NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN"
-          echo "GA4 and PostHog browser analytics are configured for this release."
+          test -n "$PUBLIC_INSTALLATION_TELEMETRY_URL"
+          echo "GA4, PostHog, and public installation telemetry are configured for this release."
 
       - name: Publish to npm
         run: npm publish --access public

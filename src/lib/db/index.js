@@ -67,6 +67,7 @@ export {
   getInstallationIdentity, getOrCreateInstallationIdentity,
   enqueueInstallationTelemetryEvent, getPendingInstallationTelemetryEvents, getNextInstallationTelemetryAttemptAt,
   acknowledgeInstallationTelemetryEvent, deferInstallationTelemetryEvent, discardInstallationTelemetryEvent,
+  discardInstallationTelemetryEventsByTarget,
 } from "./repos/installationIdentityRepo.js";
 
 // Request details

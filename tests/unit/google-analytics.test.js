@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { createGoogleAnalyticsPageviewProperties } from "@/shared/analytics/googleAnalytics";
+import { createGoogleAnalyticsDashboardOpenProperties, createGoogleAnalyticsPageviewProperties } from "@/shared/analytics/googleAnalytics";
+
+describe("createGoogleAnalyticsDashboardOpenProperties", () => {
+  it("uses only fixed anonymous dashboard metadata", () => {
+    expect(createGoogleAnalyticsDashboardOpenProperties({ appVersion: "1.0.8" })).toEqual({
+      event_source: "local_dashboard",
+      telemetry_identity: "installation",
+      app_version: "1.0.8",
+    });
+  });
+});
 
 describe("createGoogleAnalyticsPageviewProperties", () => {
   it("captures a route without query parameters or fragments", () => {

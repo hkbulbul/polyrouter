@@ -24,7 +24,10 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  env: {},
+  env: {
+    // Public endpoint URL only: it is not an authorization credential.
+    PUBLIC_INSTALLATION_TELEMETRY_URL: process.env.PUBLIC_INSTALLATION_TELEMETRY_URL || "",
+  },
   experimental: {
     // #1529/#1572: LLM clients can send long context or base64 image payloads through /v1 rewrites.
     proxyClientMaxBodySize,

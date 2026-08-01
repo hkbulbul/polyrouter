@@ -110,20 +110,28 @@ PolyRouter supports 40+ providers through OAuth, API keys, and compatible endpoi
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:20128` | Public base URL used by browser-facing configuration. |
 | `REQUIRE_API_KEY` | `false` | Require a Bearer API key for remote `/v1/*` access. |
 | `ENABLE_REQUEST_LOGS` | `false` | Enable sensitive request/response logs only for troubleshooting. |
-| `INSTALLATION_TELEMETRY_URL` | unset | Optional Supabase Edge Function URL for write-only installation lifecycle telemetry. |
-| `INSTALLATION_TELEMETRY_INGEST_TOKEN` | unset | Opaque token shared only with that Edge Function. |
-| `INSTALLATION_TELEMETRY_IP_SALT` | unset | Server-only salt used to HMAC-hash login IPs before telemetry delivery. |
+| `PUBLIC_INSTALLATION_TELEMETRY_URL` | unset | Non-secret anonymous lifecycle endpoint embedded only in the official npm release. |
+| `POLYROUTER_PUBLIC_TELEMETRY` | `true` | Set to `false` before startup to opt out of public anonymous lifecycle telemetry. |
+| `INSTALLATION_TELEMETRY_URL` | unset | Optional private/self-hosted Supabase Edge Function URL for write-only lifecycle telemetry. |
+| `INSTALLATION_TELEMETRY_INGEST_TOKEN` | unset | Opaque private-mode token shared only with that Edge Function. |
+| `INSTALLATION_TELEMETRY_IP_SALT` | unset | Private-mode salt used to HMAC-hash successful-login IPs before delivery.
 
 See [`.env.example`](./.env.example) for the current environment contract.
 
-### Optional Supabase installation telemetry
+### Installation telemetry
 
-Telemetry is disabled unless all three `INSTALLATION_TELEMETRY_*` variables are set. It sends a persistent random installation UUID, lifecycle event, timestamp, version, and an HMAC-hashed IP for successful dashboard logins. It never sends dashboard passwords, JWTs, cookies, provider credentials, or raw IP addresses.
+Official npm releases can send minimal anonymous lifecycle telemetry through a public HTTPS endpoint. It sends a random local installation UUID, lifecycle event (`installed`, `startup`, `setup_complete`, or successful `dashboard_login`), timestamp, and app version. It never sends prompts, gateway requests, token counts, models, providers, credentials, passwords, cookies, raw IPs, machine IDs, hostnames, or usernames.
 
-1. Apply `supabase/migrations/001_installation_telemetry.sql`, then `supabase/migrations/002_allow_setup_complete.sql`, in the Supabase SQL Editor.
-2. Deploy the Edge Function with `supabase functions deploy installation-telemetry --no-verify-jwt` (the function authenticates its opaque ingest token itself; `supabase/config.toml` records this setting).
-3. Set the function secrets: `INSTALLATION_TELEMETRY_INGEST_TOKEN`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
-4. Configure the app with the deployed function URL, the matching ingest token, and a private `INSTALLATION_TELEMETRY_IP_SALT`.
+This measurement describes anonymous lifecycle signals—not verified npm downloads. It is enabled by default for the official npm distribution. Disable it in **Dashboard → Profile → Anonymous Telemetry**, or set `POLYROUTER_PUBLIC_TELEMETRY=false` before startup. When GA4/PostHog are configured in an official release, a dashboard browser session uses that same opaque installation UUID for sanitized page views, one `polyrouter_dashboard_opened` event, and PostHog's masked UI interaction analytics. It never tracks gateway `/v1/*` traffic. See the in-app [Privacy Policy](/privacy) for retention and abuse-protection details.
+
+The legacy `INSTALLATION_TELEMETRY_*` variables remain a separate private/self-hosted telemetry mode. When all three are configured, private mode takes precedence over public telemetry and sends its original authenticated payload, including an HMAC-hashed IP only for successful dashboard logins.
+
+To deploy both Supabase modes:
+
+1. Apply `supabase/migrations/001_installation_telemetry.sql`, `002_allow_setup_complete.sql`, and `003_public_installation_telemetry.sql`.
+2. Deploy `installation-telemetry` for private authenticated telemetry and `public-installation-telemetry` for anonymous official-release telemetry, both with `--no-verify-jwt`.
+3. Configure `INSTALLATION_TELEMETRY_INGEST_TOKEN`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` only in the private function environment. Never ship a service-role key or ingest token in the npm package.
+4. Put the public function behind an edge/WAF rate limit and schedule the SQL retention statements documented in migration 003.
 
 The telemetry tables have RLS enabled and no browser-read policies. Inspect them only through Supabase SQL/Table Editor with privileged access.
 

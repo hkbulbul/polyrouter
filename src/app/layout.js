@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
 import GoogleAnalyticsProvider from "@/shared/components/GoogleAnalyticsProvider";
 import PostHogProvider from "@/shared/components/PostHogProvider";
+import DashboardAnalyticsProvider from "@/shared/components/DashboardAnalyticsProvider";
 import "@/lib/network/initOutboundProxy"; // Auto-initialize outbound proxy env
 import "@/shared/services/bootstrap"; // Auto-run initializeApp (watchdog, auto-resume tunnel)
 import { initConsoleLogCapture } from "@/lib/consoleLogBuffer";
@@ -41,15 +42,17 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${ibmPlexSans.variable} font-sans antialiased`}>
-        <GoogleAnalyticsProvider>
-          <PostHogProvider>
-            <ThemeProvider>
-              <RuntimeI18nProvider>
-                {children}
-              </RuntimeI18nProvider>
-            </ThemeProvider>
-          </PostHogProvider>
-        </GoogleAnalyticsProvider>
+        <DashboardAnalyticsProvider>
+          <GoogleAnalyticsProvider>
+            <PostHogProvider>
+              <ThemeProvider>
+                <RuntimeI18nProvider>
+                  {children}
+                </RuntimeI18nProvider>
+              </ThemeProvider>
+            </PostHogProvider>
+          </GoogleAnalyticsProvider>
+        </DashboardAnalyticsProvider>
       </body>
     </html>
   );
