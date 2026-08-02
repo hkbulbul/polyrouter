@@ -1,3 +1,9 @@
+# v1.0.9 (CLI) — 2026-08-03
+
+## Fixes
+- **Kiro streaming**: stream semantic responses immediately by default, while keeping the optional integrity repair gate available when explicitly enabled.
+- **Kiro tools**: sanitize modern JSON Schema definitions, shorten oversized tool names with reversible mappings, and omit unsupported fields from strict upstream payloads.
+
 # v1.0.8 (CLI) — 2026-08-01
 
 ## Features

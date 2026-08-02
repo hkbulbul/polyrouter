@@ -9,11 +9,62 @@ import { FORMATS } from "../../open-sse/translator/formats.js";
 const C2K = (body, credentials = null, model = "claude-sonnet-4.5") =>
   translateRequest(FORMATS.CLAUDE, FORMATS.KIRO, model, body, true, credentials, "kiro");
 
+function expectKiroCompatibleSchema(schema) {
+  if (Array.isArray(schema)) {
+    schema.forEach(expectKiroCompatibleSchema);
+    return;
+  }
+  if (!schema || typeof schema !== "object") return;
+
+  expect(schema).not.toHaveProperty("additionalProperties");
+  if (Array.isArray(schema.required)) expect(schema.required.length).toBeGreaterThan(0);
+  Object.values(schema).forEach(expectKiroCompatibleSchema);
+}
+
 describe("Claude → Kiro (direct route)", () => {
   it("produces a Kiro conversationState payload", () => {
     const out = C2K({ messages: [{ role: "user", content: "hello" }] });
     expect(out.conversationState).toBeTruthy();
     expect(out.conversationState.currentMessage.userInputMessage.content).toContain("hello");
+  });
+
+  it("serializes only Kiro wire fields and normalizes long modern tool definitions", () => {
+    const originalName = `mcp__server__${"very_long_tool_name_".repeat(4)}`;
+    const out = C2K({
+      max_tokens: 100,
+      system: "system instruction",
+      tools: [{
+        name: originalName,
+        description: "Tool",
+        input_schema: {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          anyOf: [{
+            type: "object",
+            properties: {
+              value: { anyOf: [{ type: "string" }, { type: "null" }] },
+            },
+            required: [],
+            additionalProperties: false,
+          }],
+        },
+      }],
+      messages: [{ role: "user", content: "go" }],
+    });
+    const wire = JSON.parse(JSON.stringify(out));
+    const spec = wire.conversationState.currentMessage.userInputMessage
+      .userInputMessageContext.tools[0].toolSpecification;
+
+    expect(Object.keys(wire).sort()).toEqual(["conversationState", "profileArn"]);
+    expect(wire).not.toHaveProperty("agentMode");
+    expect(wire).not.toHaveProperty("systemPrompt");
+    expect(wire).not.toHaveProperty("inferenceConfig");
+    expect(wire.conversationState).not.toHaveProperty("agentContinuationId");
+    expect(spec.name.length).toBeLessThanOrEqual(64);
+    expect(out._kiroToolNameMap[spec.name]).toBe(originalName);
+    expect(spec.inputSchema.json).toEqual({
+      type: "object",
+      properties: { value: { type: "string" } },
+    });
   });
 
   it("keeps conversationId stable from client session headers and replays frozen msg0", () => {
@@ -69,6 +120,92 @@ describe("Claude → Kiro (direct route)", () => {
     // The orphan content survives as text, not as a dangling structured ref.
     expect(cur.content).toContain("salvage me");
     expect(cur.userInputMessageContext?.toolResults?.length ?? 0).toBe(0);
+  });
+
+  it("sanitizes strict tool schemas recursively without mutating the Claude request", () => {
+    const inputSchema = {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        options: {
+          type: "object",
+          properties: {
+            flags: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: { name: { type: "string" } },
+                required: [],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["flags"],
+          additionalProperties: false,
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    };
+    const original = structuredClone(inputSchema);
+
+    const out = C2K({
+      tools: [{ name: "search", description: "Search", input_schema: inputSchema }],
+      messages: [{ role: "user", content: "go" }],
+    });
+    const schema = out.conversationState.currentMessage.userInputMessage
+      .userInputMessageContext.tools[0].toolSpecification.inputSchema.json;
+
+    expectKiroCompatibleSchema(schema);
+    expect(schema.required).toEqual(["query"]);
+    expect(schema.properties.options.required).toEqual(["flags"]);
+    expect(schema.properties.options.properties.flags.items.required).toBeUndefined();
+    expect(inputSchema).toEqual(original);
+  });
+
+  it("normalizes a missing tool schema without adding an empty required array", () => {
+    const out = C2K({
+      tools: [{ name: "list_tasks", description: "List tasks" }],
+      messages: [{ role: "user", content: "go" }],
+    });
+    const schema = out.conversationState.currentMessage.userInputMessage
+      .userInputMessageContext.tools[0].toolSpecification.inputSchema.json;
+
+    expect(schema).toEqual({ type: "object", properties: {} });
+  });
+
+  it("keeps all 42 Claude Code-style tools while sanitizing every schema", () => {
+    const tools = Array.from({ length: 42 }, (_, index) => ({
+      name: `tool_${index}`,
+      description: `Tool ${index}`,
+      input_schema: index % 2 === 0
+        ? {
+            type: "object",
+            properties: {
+              value: { type: "string" },
+              options: {
+                type: "object",
+                properties: {},
+                required: [],
+                additionalProperties: false,
+              },
+            },
+            required: [],
+            additionalProperties: false,
+          }
+        : undefined,
+    }));
+    const out = C2K({
+      tools,
+      messages: [{ role: "user", content: "Use tools" }],
+    });
+    const translatedTools = out.conversationState.currentMessage.userInputMessage
+      .userInputMessageContext.tools;
+
+    expect(translatedTools).toHaveLength(42);
+    for (const tool of translatedTools) {
+      expectKiroCompatibleSchema(tool.toolSpecification.inputSchema.json);
+    }
   });
 
   it("injects thinking_mode tag when model implies thinking", () => {

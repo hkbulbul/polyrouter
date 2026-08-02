@@ -13,6 +13,18 @@ const contentOf = (result) =>
   result.conversationState.currentMessage.userInputMessage.content;
 const systemPromptOf = (result) => result.systemPrompt || "";
 
+function expectKiroCompatibleSchema(schema) {
+  if (Array.isArray(schema)) {
+    schema.forEach(expectKiroCompatibleSchema);
+    return;
+  }
+  if (!schema || typeof schema !== "object") return;
+
+  expect(schema).not.toHaveProperty("additionalProperties");
+  if (Array.isArray(schema.required)) expect(schema.required.length).toBeGreaterThan(0);
+  Object.values(schema).forEach(expectKiroCompatibleSchema);
+}
+
 describe("openaiToKiroRequest", () => {
   describe("basic message conversion", () => {
     it("should convert a simple text message", () => {
@@ -249,6 +261,91 @@ describe("openaiToKiroRequest", () => {
       const allJson = JSON.stringify(cs);
       expect(allJson).toContain("toolUses");
       expect(allJson).not.toContain("[Tool call:");
+    });
+
+    it("sanitizes strict OpenAI tool schemas recursively without mutating them", () => {
+      const parameters = {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          metadata: {
+            type: "object",
+            properties: {
+              labels: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: { value: { type: "string" } },
+                  required: [],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["labels"],
+            additionalProperties: false,
+          },
+        },
+        required: ["path"],
+        additionalProperties: false,
+      };
+      const original = structuredClone(parameters);
+      const body = {
+        messages: [{ role: "user", content: "Read" }],
+        tools: [{
+          type: "function",
+          function: { name: "read_file", description: "Read a file", parameters },
+        }],
+      };
+
+      const result = openaiToKiroRequest("claude-sonnet-4.6", body, true, {});
+      const schema = result.conversationState.currentMessage.userInputMessage
+        .userInputMessageContext.tools[0].toolSpecification.inputSchema.json;
+
+      expectKiroCompatibleSchema(schema);
+      expect(schema.required).toEqual(["path"]);
+      expect(schema.properties.metadata.required).toEqual(["labels"]);
+      expect(parameters).toEqual(original);
+    });
+
+    it("keeps all 42 tools while sanitizing every Kiro input schema", () => {
+      const tools = Array.from({ length: 42 }, (_, index) => ({
+        type: "function",
+        function: {
+          name: `tool_${index}`,
+          description: `Tool ${index}`,
+          parameters: index % 2 === 0
+            ? {
+                type: "object",
+                properties: {
+                  value: { type: "string" },
+                  options: {
+                    type: "object",
+                    properties: {},
+                    required: [],
+                    additionalProperties: false,
+                  },
+                },
+                required: [],
+                additionalProperties: false,
+              }
+            : undefined,
+        },
+      }));
+      const result = openaiToKiroRequest("claude-sonnet-4.6", {
+        messages: [{ role: "user", content: "Use tools" }],
+        tools,
+      }, true, {});
+      const translatedTools = result.conversationState.currentMessage.userInputMessage
+        .userInputMessageContext.tools;
+
+      expect(translatedTools).toHaveLength(42);
+      for (const tool of translatedTools) {
+        expectKiroCompatibleSchema(tool.toolSpecification.inputSchema.json);
+      }
+      expect(translatedTools[1].toolSpecification.inputSchema.json).toEqual({
+        type: "object",
+        properties: {},
+      });
     });
 
     it("should salvage orphaned tool_result content as text instead of discarding it", () => {

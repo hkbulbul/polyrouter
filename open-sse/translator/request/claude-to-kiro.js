@@ -37,6 +37,7 @@ import {
 } from "../../config/kiroConstants.js";
 import { DEFAULT_IMAGE_MIME } from "../schema/index.js";
 import { ROLE, CLAUDE_BLOCK } from "../schema/index.js";
+import { sanitizeKiroToolSchema, shortenKiroToolName } from "../concerns/kiroToolSchema.js";
 
 /** Stringify a tool_use input as a readable line. */
 function toolUseToText(name, input) {
@@ -112,7 +113,7 @@ function flattenClaudeToolInteractions(messages) {
  * Kiro requires alternating user/assistant turns; consecutive same-role
  * messages are merged.
  */
-function convertClaudeMessagesToKiro(messages, tools, model) {
+function convertClaudeMessagesToKiro(messages, tools, model, toolNameMap) {
   const history = [];
   let currentMessage = null;
 
@@ -127,18 +128,15 @@ function convertClaudeMessagesToKiro(messages, tools, model) {
 
   const buildToolSpecs = () =>
     tools.map((t) => {
-      const name = t.name;
-      const description = t.description || `Tool: ${name}`;
-      const schema = t.input_schema || {};
-      const normalizedSchema =
-        Object.keys(schema).length === 0
-          ? { type: "object", properties: {}, required: [] }
-          : { ...schema, required: schema.required ?? [] };
+      const originalName = t.name;
+      const name = shortenKiroToolName(originalName, toolNameMap);
+      const description = t.description || `Tool: ${originalName}`;
+      const inputSchema = sanitizeKiroToolSchema(t.input_schema);
       return {
         toolSpecification: {
           name,
           description,
-          inputSchema: { json: normalizedSchema },
+          inputSchema: { json: inputSchema },
         },
       };
     });
@@ -226,7 +224,7 @@ function convertClaudeMessagesToKiro(messages, tools, model) {
           } else if (block.type === CLAUDE_BLOCK.TOOL_USE) {
             toolUses.push({
               toolUseId: block.id,
-              name: block.name,
+              name: shortenKiroToolName(block.name, toolNameMap),
               input: block.input || {},
             });
           }
@@ -399,10 +397,12 @@ export function claudeToKiroRequest(model, body, stream, credentials) {
     messages = flattenClaudeToolInteractions(messages);
   }
 
+  const toolNameMap = {};
   const { history, currentMessage } = convertClaudeMessagesToKiro(
     messages,
     tools,
-    upstreamModel
+    upstreamModel,
+    toolNameMap
   );
 
   // Guard 2: tools present → reconcile dangling tool_results.
@@ -470,31 +470,41 @@ export function claudeToKiroRequest(model, body, stream, credentials) {
     }),
   };
 
-  const payload = {
-    conversationState: {
+  const conversationState = {
       chatTriggerType: "MANUAL",
       conversationId,
-      agentContinuationId: continuationId,
       agentTaskType: "vibe",
       currentMessage: {
         userInputMessage,
       },
       history: replay.history,
-    },
-    agentMode: "vibe",
+  };
+  const payload = {
+    conversationState,
   };
 
+  // Keep legacy/internal metadata accessible without putting unsupported keys
+  // on Kiro's strict GenerateAssistantResponse wire payload.
+  Object.defineProperties(conversationState, {
+    agentContinuationId: { value: continuationId, enumerable: false },
+  });
+  Object.defineProperties(payload, {
+    agentMode: { value: "vibe", enumerable: false },
+    systemPrompt: { value: systemPrompt, enumerable: false },
+    _kiroToolNameMap: { value: toolNameMap, enumerable: false },
+  });
+
   if (profileArn) payload.profileArn = profileArn;
-  if (systemPrompt) payload.systemPrompt = systemPrompt;
   if (additionalModelRequestFields) {
     payload.additionalModelRequestFields = additionalModelRequestFields;
   }
 
   if (maxTokens || temperature !== undefined || topP !== undefined) {
-    payload.inferenceConfig = {};
-    if (maxTokens) payload.inferenceConfig.maxTokens = maxTokens;
-    if (temperature !== undefined) payload.inferenceConfig.temperature = temperature;
-    if (topP !== undefined) payload.inferenceConfig.topP = topP;
+    const inferenceConfig = {};
+    if (maxTokens) inferenceConfig.maxTokens = maxTokens;
+    if (temperature !== undefined) inferenceConfig.temperature = temperature;
+    if (topP !== undefined) inferenceConfig.topP = topP;
+    Object.defineProperty(payload, "inferenceConfig", { value: inferenceConfig, enumerable: false });
   }
 
   // Non-enumerable hint so the executor can route the upstream model id.

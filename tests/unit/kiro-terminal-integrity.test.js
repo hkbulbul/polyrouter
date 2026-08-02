@@ -136,6 +136,24 @@ afterEach(() => {
 });
 
 describe("Kiro terminal integrity recovery", () => {
+  it("streams semantic output immediately when integrity repair is not explicitly enabled", async () => {
+    const upstream = controlledResponse([
+      frame("assistantResponseEvent", { content: "visible immediately" })
+    ]);
+    fetchMock.mockResolvedValueOnce(upstream.value);
+
+    const result = await execute(new KiroExecutor(), {
+      credentials: { accessToken: "test-token", providerSpecificData: {} }
+    });
+    const reader = result.response.body.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+
+    expect(first).toContain("visible immediately");
+    expect(first).not.toContain("kiro-validation");
+    upstream.close();
+    await reader.cancel();
+  });
+
   it("keeps semantic output private behind a heartbeat until clean EOF", async () => {
     const upstream = controlledResponse([
       frame("assistantResponseEvent", { content: "private until validated" })

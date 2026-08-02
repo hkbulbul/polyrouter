@@ -17,6 +17,7 @@ import {
   usesKiroNativeGptEffort
 } from "../../config/kiroConstants.js";
 import { parseDataUri } from "../concerns/image.js";
+import { sanitizeKiroToolSchema, shortenKiroToolName } from "../concerns/kiroToolSchema.js";
 import { DEFAULT_IMAGE_MIME } from "../schema/index.js";
 import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
 
@@ -176,7 +177,7 @@ function safeJSONParse(str, fallback) {
  *
  * Returns { history, currentMessage }.
  */
-function convertMessages(messages, tools, model) {
+function convertMessages(messages, tools, model, toolNameMap) {
   let history = [];
   let currentMessage = null;
 
@@ -227,24 +228,23 @@ function convertMessages(messages, tools, model) {
           userMsg.userInputMessage.userInputMessageContext = {};
         }
         userMsg.userInputMessage.userInputMessageContext.tools = tools.map(t => {
-          const name = t.function?.name || t.name;
+          const originalName = t.function?.name || t.name;
+          const name = shortenKiroToolName(originalName, toolNameMap);
           let description = t.function?.description || t.description || "";
 
           if (!description.trim()) {
-            description = `Tool: ${name}`;
+            description = `Tool: ${originalName}`;
           }
 
-          const schema = t.function?.parameters || t.parameters || t.input_schema || {};
-          // Normalize schema: Kiro requires required[] and proper type/properties
-          const normalizedSchema = Object.keys(schema).length === 0
-            ? { type: "object", properties: {}, required: [] }
-            : { ...schema, required: schema.required ?? [] };
+          const inputSchema = sanitizeKiroToolSchema(
+            t.function?.parameters || t.parameters || t.input_schema
+          );
 
           return {
             toolSpecification: {
               name,
               description,
-              inputSchema: { json: normalizedSchema }
+              inputSchema: { json: inputSchema }
             }
           };
         });
@@ -381,13 +381,13 @@ function convertMessages(messages, tools, model) {
             if (tc.function) {
               return {
                 toolUseId: tc.id || uuidv4(),
-                name: tc.function.name,
+                name: shortenKiroToolName(tc.function.name, toolNameMap),
                 input: safeJSONParse(tc.function.arguments, {})
               };
             } else {
               return {
                 toolUseId: tc.id || uuidv4(),
-                name: tc.name,
+                name: shortenKiroToolName(tc.name, toolNameMap),
                 input: tc.input || {}
               };
             }
@@ -529,7 +529,8 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
   const additionalModelRequestFields = buildKiroAdditionalModelRequestFieldsForModel(body, upstreamModel);
   const usesNativeGptEffort = usesKiroNativeGptEffort(body, upstreamModel);
 
-  const { history, currentMessage } = convertMessages(messages, tools, upstreamModel);
+  const toolNameMap = {};
+  const { history, currentMessage } = convertMessages(messages, tools, upstreamModel, toolNameMap);
 
   // API-key (headless) auth uses a raw CodeWhisperer credential whose profile is
   // account-specific. Injecting the shared builder-id/social *default* placeholder
@@ -585,11 +586,9 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
   });
   const replayCurrent = replay.currentMessage?.userInputMessage || {};
 
-  const payload = {
-    conversationState: {
+  const conversationState = {
       chatTriggerType: "MANUAL",
       conversationId,
-      agentContinuationId: continuationId,
       agentTaskType: "vibe",
       currentMessage: {
         userInputMessage: {
@@ -605,23 +604,33 @@ export function openaiToKiroRequest(model, body, stream, credentials) {
         }
       },
       history: replay.history
-    },
-    agentMode: "vibe",
   };
+  const payload = {
+    conversationState,
+  };
+
+  Object.defineProperties(conversationState, {
+    agentContinuationId: { value: continuationId, enumerable: false },
+  });
+  Object.defineProperties(payload, {
+    agentMode: { value: "vibe", enumerable: false },
+    systemPrompt: { value: systemPrompt, enumerable: false },
+    _kiroToolNameMap: { value: toolNameMap, enumerable: false },
+  });
 
   if (profileArn) {
     payload.profileArn = profileArn;
   }
-  if (systemPrompt) payload.systemPrompt = systemPrompt;
   if (additionalModelRequestFields) {
     payload.additionalModelRequestFields = additionalModelRequestFields;
   }
 
   if (maxTokens || temperature !== undefined || topP !== undefined) {
-    payload.inferenceConfig = {};
-    if (maxTokens) payload.inferenceConfig.maxTokens = maxTokens;
-    if (temperature !== undefined) payload.inferenceConfig.temperature = temperature;
-    if (topP !== undefined) payload.inferenceConfig.topP = topP;
+    const inferenceConfig = {};
+    if (maxTokens) inferenceConfig.maxTokens = maxTokens;
+    if (temperature !== undefined) inferenceConfig.temperature = temperature;
+    if (topP !== undefined) inferenceConfig.topP = topP;
+    Object.defineProperty(payload, "inferenceConfig", { value: inferenceConfig, enumerable: false });
   }
 
   // Tag payload so the executor can route the upstream model id correctly.

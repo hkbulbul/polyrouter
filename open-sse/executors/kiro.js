@@ -311,8 +311,30 @@ export class KiroExecutor extends BaseExecutor {
    * classify the status, and trigger account fallback/cooldown.
    */
   async execute(args) {
+    const startedAt = Date.now();
+    args.log?.info?.("KIRO", `Dispatching ${args.model}`);
     const result = await super.execute(args);
-    if (result?.response?.ok) this.attachIntegrityGate(result, args);
+    const status = result?.response?.status || 0;
+    args.log?.info?.("KIRO", `Upstream headers ${status} in ${Date.now() - startedAt}ms`);
+
+    if (result?.response?.ok) {
+      const configuredRepair = args.credentials?.providerSpecificData?.kiroToolCallRepair;
+      const integrityGateEnabled = configuredRepair === true ||
+        (configuredRepair !== false && process.env.KIRO_TOOL_CALL_REPAIR === "true");
+
+      if (integrityGateEnabled) {
+        args.log?.info?.("KIRO", "Integrity repair enabled; buffering until validation completes");
+        this.attachIntegrityGate(result, args);
+      } else {
+        // Normal Kiro traffic must remain a real stream. The integrity gate buffers
+        // the complete answer (and may retry it), which makes IDE clients appear
+        // frozen because its heartbeat comments contain no semantic SSE data.
+        result.response = this.transformEventStreamToSSE(result.response, args.model, {
+          toolNameMap: args.body?._kiroToolNameMap,
+        });
+        args.log?.info?.("KIRO", "Streaming upstream response directly");
+      }
+    }
     return result;
   }
 
@@ -322,8 +344,7 @@ export class KiroExecutor extends BaseExecutor {
     const legacyTimeout = envPositiveInt("KIRO_TOOL_CALL_REPAIR_TIMEOUT_MS", STREAM_FIRST_CHUNK_TIMEOUT_MS);
     const ttftTimeoutMs = envPositiveInt("KIRO_TOOL_CALL_REPAIR_TTFT_TIMEOUT_MS", legacyTimeout);
     const stallTimeoutMs = envPositiveInt("KIRO_TOOL_CALL_REPAIR_STALL_TIMEOUT_MS", legacyTimeout);
-    const repairEnabled = args.credentials?.providerSpecificData?.kiroToolCallRepair !== false &&
-      process.env.KIRO_TOOL_CALL_REPAIR !== "false";
+    const repairEnabled = true;
     const forwardAbort = () => abortController.abort(args.signal?.reason);
     args.signal?.addEventListener("abort", forwardAbort, { once: true });
     let open = true;
@@ -348,15 +369,18 @@ export class KiroExecutor extends BaseExecutor {
             maxBytes,
             ttftTimeoutMs,
             stallTimeoutMs,
-            repairEnabled
+            repairEnabled,
+            toolNameMap: args.body?._kiroToolNameMap,
           });
           if (abortController.signal.aborted) throw makeAbortError(abortController.signal.reason);
           controller.enqueue(bytes);
           controller.close();
+          args.log?.info?.("KIRO", "Integrity validation completed");
         } catch (error) {
           if (open && error.name === "AbortError") {
             controller.error(error);
           } else if (open && error.name !== "AbortError") {
+            args.log?.error?.("KIRO", `Integrity validation failed: ${error.message || error}`);
             controller.enqueue(encodeSSEError(
               "kiro_integrity_gate_failed",
               error.message || "Kiro integrity validation failed"
@@ -404,6 +428,11 @@ export class KiroExecutor extends BaseExecutor {
     const repairBody = repairKind
       ? appendRepairInstruction(args.body, repairKind === "invalid_tool" ? "tool" : repairKind)
       : structuredClone(args.body || {});
+
+    args.log?.warn?.(
+      "KIRO",
+      `Integrity validation requested one retry (${repairKind || first.kind})`
+    );
 
     const retry = await BaseExecutor.prototype.execute.call(this, {
       ...args,
@@ -493,6 +522,7 @@ export class KiroExecutor extends BaseExecutor {
     let diagnostics;
     const transformed = this.transformEventStreamToSSE(rawResponse, model, {
       maxToolBytes: Math.max(1, Math.floor(options.maxBytes / 2)),
+      toolNameMap: options.toolNameMap,
       onTerminalState: (value) => {
         diagnostics = value;
       }
@@ -775,7 +805,8 @@ export class KiroExecutor extends BaseExecutor {
         const values = Array.isArray(event.payload) ? event.payload : [event.payload];
         if (!values[0]) throw new Error("Kiro toolUseEvent is empty");
         for (const value of values) {
-          const name = typeof value?.name === "string" ? value.name.trim() : "";
+          const wireName = typeof value?.name === "string" ? value.name.trim() : "";
+          const name = options.toolNameMap?.[wireName] || wireName;
           if (!name) throw new Error("Kiro toolUseEvent is missing a tool name");
           let id;
           if (value.toolUseId == null) {
