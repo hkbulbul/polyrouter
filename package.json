@@ -1,6 +1,6 @@
 {
   "name": "polyrouter-app",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "description": "PolyRouter local AI gateway dashboard and OpenAI-compatible API router",
   "private": true,
   "scripts": {

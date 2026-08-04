@@ -1,3 +1,13 @@
+# v1.0.11 (CLI) — 2026-08-05
+
+## Features
+- **Media APIs**: add image editing, reranking, expanded speech support, and ZenMux provider integration.
+- **Realtime**: add browser audio processing, short-lived tickets, stronger authorization boundaries, and improved realtime protocol handling.
+
+## Fixes
+- **Windows updates**: stop the packaged server from locking its global npm installation directory, add one-click dashboard updates with automatic restart, and keep runtime dependencies outside the replaceable package tree.
+- **Provider validation**: improve suggested-model filtering, model discovery, validation, and test routing across provider types.
+
 # v1.0.9 (CLI) — 2026-08-03
 
 ## Fixes

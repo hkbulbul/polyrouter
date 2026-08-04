@@ -531,6 +531,14 @@ const customServerPath = path.join(standaloneDir, "custom-server.js");
 const serverPath = fs.existsSync(customServerPath)
   ? customServerPath
   : path.join(standaloneDir, "server.js");
+const serverWorkDir = path.join(getAppDataDir(), "runtime", "server-cwd");
+
+try {
+  fs.mkdirSync(serverWorkDir, { recursive: true });
+} catch (error) {
+  console.error(`Error: Could not create runtime directory: ${error.message}`);
+  process.exit(1);
+}
 
 if (!fs.existsSync(serverPath)) {
   console.error("Error: Standalone build not found.");
@@ -613,14 +621,18 @@ function startServer(updatePromise) {
     serverStartTime = Date.now();
     crashLog = [];
     const child = spawn(RUNTIME, ["--dns-result-order=ipv4first", "--max-old-space-size=6144", serverPath], {
-      cwd: standaloneDir,
+      // Never use the npm package as cwd: Windows refuses to rename it during updates.
+      cwd: serverWorkDir,
       stdio: showLog ? "inherit" : ["ignore", "ignore", "pipe"],
       detached: true,
       windowsHide: true,
       env: {
         ...buildEnvWithRuntime(process.env),
         PORT: port.toString(),
-        HOSTNAME: host
+        HOSTNAME: host,
+        APP_PACKAGE_PATH: path.join(standaloneDir, "package.json"),
+        MITM_SERVER_PATH: path.join(standaloneDir, "src", "mitm", "server.js"),
+        UPDATER_SCRIPT_PATH: path.join(standaloneDir, "src", "lib", "updater", "updater.js")
       }
     });
     if (!showLog && child.stderr) {

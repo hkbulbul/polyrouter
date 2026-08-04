@@ -2,6 +2,13 @@
 const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
 
 export const FILTERS = {
+  zenmux: (models) =>
+    models.map((m) => ({
+      id: m.id,
+      name: m.display_name || m.name || m.id,
+      contextLength: m.context_length,
+    })),
+
   "openrouter-free": (models) =>
     models
       .filter(

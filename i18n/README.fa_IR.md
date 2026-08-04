@@ -1433,7 +1433,7 @@ Authorization: Bearer your-api-key
 
 ## 📄 مجوز
 
-مجوز MIT - برای جزئیات به [LICENSE](LICENSE) مراجعه کنید.
+نرم‌افزار اختصاصی - تمامی حقوق محفوظ است. برای جزئیات به [LICENSE](LICENSE) مراجعه کنید.
 
 ---
 

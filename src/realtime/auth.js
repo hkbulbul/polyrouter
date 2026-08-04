@@ -1,9 +1,10 @@
 import { getProviderCredentials } from "@/sse/services/auth.js";
 import { checkAndRefreshToken } from "@/sse/services/tokenRefresh.js";
-import { getSettings } from "@/lib/localDb.js";
+import { getSettings, validateApiKey } from "@/lib/localDb.js";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession.js";
 import { resolveProviderId } from "@/shared/constants/providers.js";
 import { DEFAULT_REALTIME_MODEL, REALTIME_MODELS } from "./protocol.js";
+import { consumeRealtimeTicket } from "./tickets.js";
 
 const REALTIME_PROVIDERS = new Set(["codex", "openai"]);
 const ACCESS_TOKEN_EXPIRY_MARGIN_MS = 5 * 60 * 1000;
@@ -47,23 +48,45 @@ export function originIsLoopback(request) {
   }
 }
 
-export async function authenticateUpgrade(request) {
-  if (!requestIsLoopback(request) || !originIsLoopback(request)) {
-    throw new Error("Realtime is available only from the local dashboard.");
+export function originMatchesHost(request) {
+  const origin = request?.headers?.origin;
+  if (!origin) return requestIsLoopback(request);
+  try {
+    const originUrl = new URL(origin);
+    const host = String(request?.headers?.host || "").trim().toLowerCase();
+    return Boolean(host) && originUrl.host.toLowerCase() === host;
+  } catch {
+    return false;
   }
+}
 
-  const cookieHeader = String(request.headers?.cookie || "");
-  const authToken = cookieHeader
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part.startsWith("auth_token="))
-    ?.slice("auth_token=".length);
-  const session = await getDashboardAuthSession(authToken);
-  const settings = await getSettings();
-  if (settings?.requireLogin !== false && !session) {
+export function validateRealtimeRequestBoundary(request, { requireLogin, hasSession }) {
+  const isLoopback = requestIsLoopback(request);
+  if (!originMatchesHost(request)) {
+    throw new Error("Realtime requests must come from the active dashboard origin.");
+  }
+  // Remote tunnel access remains supported, but it must always carry a valid
+  // dashboard session even when password protection is disabled for localhost.
+  if ((!isLoopback || requireLogin) && !hasSession) {
     throw new Error("Dashboard authentication is required for realtime.");
   }
+}
 
+export function extractRealtimeApiKey(request) {
+  const authorization = String(request?.headers?.authorization || "");
+  if (authorization.startsWith("Bearer ")) return authorization.slice(7).trim();
+  const headerKey = String(request?.headers?.["x-api-key"] || "").trim();
+  if (headerKey) return headerKey;
+  return typeof request?.realtimeApiKey === "string" ? request.realtimeApiKey.trim() : "";
+}
+
+function requireSecureExternalCredential(request) {
+  if (!requestIsLoopback(request) && request.realtimeSecure !== true) {
+    throw new Error("External realtime API-key and ticket connections require WSS.");
+  }
+}
+
+export async function authenticateUpgrade(request) {
   const provider = resolveProviderId(request.realtimeProvider || "codex");
   if (!REALTIME_PROVIDERS.has(provider)) {
     throw new Error("This provider is not enabled for realtime voice.");
@@ -72,6 +95,34 @@ export async function authenticateUpgrade(request) {
   const model = request.realtimeModel || (provider === "openai" ? "gpt-realtime" : DEFAULT_REALTIME_MODEL);
   if (!REALTIME_MODELS.has(model)) {
     throw new Error("This realtime model is not enabled.");
+  }
+
+  if (request.realtimeTicket) {
+    requireSecureExternalCredential(request);
+    consumeRealtimeTicket(request.realtimeTicket, {
+      provider,
+      model,
+      origin: request.headers?.origin,
+    });
+  } else {
+    const apiKey = extractRealtimeApiKey(request);
+    if (apiKey) {
+      requireSecureExternalCredential(request);
+      if (!(await validateApiKey(apiKey))) throw new Error("Invalid PolyRouter API key.");
+    } else {
+      const cookieHeader = String(request.headers?.cookie || "");
+      const authToken = cookieHeader
+        .split(";")
+        .map((part) => part.trim())
+        .find((part) => part.startsWith("auth_token="))
+        ?.slice("auth_token=".length);
+      const session = await getDashboardAuthSession(authToken);
+      const settings = await getSettings();
+      validateRealtimeRequestBoundary(request, {
+        requireLogin: settings?.requireLogin !== false,
+        hasSession: Boolean(session),
+      });
+    }
   }
   // A provider can have several OAuth accounts. One may have an expired or
   // revoked refresh token while another is healthy; realtime setup must not

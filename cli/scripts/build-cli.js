@@ -155,6 +155,20 @@ if (!fs.existsSync(standaloneApp)) {
 }
 copyRecursive(standaloneApp, cliAppDir);
 
+// Next's generated launcher changes cwd into the npm package. On Windows that
+// locks the app directory and makes every global npm update fail with EBUSY.
+const generatedServerPath = path.join(cliAppDir, "server.js");
+if (fs.existsSync(generatedServerPath)) {
+  const generatedServer = fs.readFileSync(generatedServerPath, "utf8");
+  const patchedServer = generatedServer.replace(/process\.chdir\(__dirname\)\s*/, "");
+  if (patchedServer === generatedServer) {
+    console.error("❌ Could not remove process.chdir(__dirname) from standalone server");
+    process.exit(1);
+  }
+  fs.writeFileSync(generatedServerPath, patchedServer);
+  console.log("✅ Removed Windows-locking cwd change from standalone server");
+}
+
 // Older nested-app layout stores traced node_modules at standalone root.
 const standaloneNodeModules = path.join(standaloneRootToUse, "node_modules");
 if (standaloneApp !== standaloneRootToUse && fs.existsSync(standaloneNodeModules)) {

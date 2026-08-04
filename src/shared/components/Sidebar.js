@@ -9,7 +9,7 @@ import { APP_CONFIG, UPDATER_CONFIG } from "@/shared/constants/config";
 import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Button from "./Button";
-import { ConfirmModal } from "./Modal";
+import Modal from "./Modal";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "speechToSpeech"];
@@ -41,11 +41,10 @@ const systemItems = [
 export default function Sidebar({ onClose }) {
   const pathname = usePathname();
   const [mediaOpen, setMediaOpen] = useState(false);
-  const [isDisconnected, setIsDisconnected] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [shutdownCountdown, setShutdownCountdown] = useState(0);
+  const [updateState, setUpdateState] = useState(null);
   const [enableTranslator, setEnableTranslator] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
@@ -73,37 +72,45 @@ export default function Sidebar({ onClose }) {
     return pathname.startsWith(href);
   };
 
-  // Open manual update panel (no countdown yet — user must click Copy to trigger shutdown)
-  const handleUpdate = () => {
+  const startAutomaticUpdate = async () => {
     setShowUpdateModal(false);
     setIsUpdating(true);
-  };
+    setUpdateState({ phase: "starting", logTail: [] });
 
-  // Triggered by Copy button inside ManualUpdatePanel: copy + countdown + shutdown
-  const handleCopyAndShutdown = async () => {
-    try { await navigator.clipboard.writeText(INSTALL_CMD); } catch { /* clipboard blocked */ }
-    copy(INSTALL_CMD);
-    let remaining = UPDATER_CONFIG.shutdownCountdownSec;
-    setShutdownCountdown(remaining);
-    const timer = setInterval(() => {
-      remaining -= 1;
-      setShutdownCountdown(remaining);
-      if (remaining <= 0) {
-        clearInterval(timer);
-        fetch("/api/version/shutdown", { method: "POST" }).catch(() => {});
-        setIsDisconnected(true);
+    try {
+      const response = await fetch("/api/version/update", { method: "POST" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.message || "Could not start the updater");
       }
-    }, 1000);
+
+      const statusUrl = `http://127.0.0.1:${UPDATER_CONFIG.statusPort}/update/status`;
+      const deadline = Date.now() + 120000;
+      while (Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, UPDATER_CONFIG.statusPollIntervalMs));
+        try {
+          const statusResponse = await fetch(statusUrl, { cache: "no-store" });
+          if (!statusResponse.ok) continue;
+          const status = await statusResponse.json();
+          setUpdateState(status);
+          if (status.done) return;
+        } catch {
+          // The updater needs a moment to start after the app server exits.
+        }
+      }
+      throw new Error("The updater did not report completion. Use the manual command below.");
+    } catch (error) {
+      setUpdateState({ phase: "error", done: true, success: false, error: error.message, logTail: [] });
+    }
   };
 
-  const handleCancelUpdate = () => {
-    setIsUpdating(false);
-    setShutdownCountdown(0);
-  };
-
-  // Note: legacy updater poll removed. New flow: copy install cmd + shutdown server,
-  // user runs the command manually in another terminal.
-
+  const updatePhaseLabel = {
+    starting: "Preparing update...",
+    waitingForExit: "Closing PolyRouter...",
+    installing: "Installing the latest version...",
+    done: "Update complete. Restarting PolyRouter...",
+    error: "Automatic update failed",
+  }[updateState?.phase] || "Updating PolyRouter...";
 
   return (
     <>
@@ -119,30 +126,6 @@ export default function Sidebar({ onClose }) {
               <span className="text-xs text-text-muted">v{APP_CONFIG.version}</span>
             </div>
           </Link>
-          {updateInfo && (
-            <div className="flex flex-col gap-1.5 p-1 -m-1">
-              <span className="text-xs font-semibold text-green-600 dark:text-green-500">
-                ↑ New version available: v{updateInfo.latestVersion}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowUpdateModal(true)}
-                  className="px-2 py-1 bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 text-white text-[11px] font-semibold transition-colors cursor-pointer"
-                >
-                  Update now
-                </button>
-                <button
-                  onClick={() => copy(INSTALL_CMD)}
-                  title="Copy install command"
-                  className="flex-1 text-left hover:opacity-80 transition-opacity cursor-pointer min-w-0"
-                >
-                  <code className="block text-[10px] text-green-600/80 dark:text-green-400/70 font-mono truncate">
-                    {copied ? "✓ copied!" : INSTALL_CMD}
-                  </code>
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Navigation */}
@@ -304,46 +287,122 @@ export default function Sidebar({ onClose }) {
           </div>
         </nav>
 
-      </aside>
-
-
-      {/* Update Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showUpdateModal}
-        onClose={() => setShowUpdateModal(false)}
-        onConfirm={handleUpdate}
-        title="Update PolyRouter"
-        message={`Show install command for v${updateInfo?.latestVersion || ""}? You can copy it and shutdown to install manually.`}
-        confirmText="Show Command"
-        cancelText="Cancel"
-        variant="primary"
-      />
-
-      {/* Disconnected / Updating Overlay */}
-      {(isDisconnected || isUpdating) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6">
-          {isUpdating ? (
-            <ManualUpdatePanel
-              latestVersion={updateInfo?.latestVersion}
-              installCmd={INSTALL_CMD}
-              copied={copied}
-              onCopyAndShutdown={handleCopyAndShutdown}
-              onCancel={handleCancelUpdate}
-              countdown={shutdownCountdown}
-              isDisconnected={isDisconnected}
-            />
-          ) : (
-            <div className="text-center p-8">
-              <div className="flex items-center justify-center size-16 rounded-full bg-red-500/20 text-red-500 mx-auto mb-4">
-                <span className="material-symbols-outlined text-[32px]">power_off</span>
+        {updateInfo && (
+          <div className="shrink-0 border-t border-border-subtle px-4 py-4">
+            <div className="border border-brand-500/20 bg-brand-500/[0.07] px-3 py-3">
+              <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined mt-0.5 text-[18px] text-brand-500">
+                  system_update_alt
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-text-main">Update available</p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-text-muted">
+                    v{updateInfo.currentVersion} to v{updateInfo.latestVersion}
+                  </p>
+                </div>
               </div>
-              <h2 className="text-xl font-semibold text-white mb-2">Server Disconnected</h2>
-              <p className="text-text-muted mb-6">The proxy server has been stopped.</p>
-              <Button variant="secondary" onClick={() => globalThis.location.reload()}>
-                Reload Page
+              <Button
+                type="button"
+                size="sm"
+                fullWidth
+                icon="upgrade"
+                className="mt-3"
+                onClick={() => setShowUpdateModal(true)}
+              >
+                Update PolyRouter
               </Button>
             </div>
-          )}
+          </div>
+        )}
+
+      </aside>
+
+      <Modal
+        isOpen={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        title="Update PolyRouter"
+        size="md"
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center bg-brand-500/10 text-brand-500">
+            <span className="material-symbols-outlined text-[22px]">terminal</span>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-text-main">
+              Install v{updateInfo?.latestVersion}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-text-muted">
+              PolyRouter will close, install v{updateInfo?.latestVersion}, and restart automatically.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          fullWidth
+          icon="upgrade"
+          className="mt-5"
+          onClick={startAutomaticUpdate}
+        >
+          Update and restart
+        </Button>
+
+        <div className="mt-3 border border-border-subtle bg-surface-2 p-3">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+            Manual fallback
+          </p>
+          <code className="block break-all font-mono text-xs leading-5 text-text-main">
+            {INSTALL_CMD}
+          </code>
+        </div>
+
+        <Button
+          type="button"
+          fullWidth
+          variant={copied === "update-command" ? "success" : "primary"}
+          icon={copied === "update-command" ? "check" : "content_copy"}
+          className="mt-4"
+          onClick={() => copy(INSTALL_CMD, "update-command")}
+        >
+          {copied === "update-command" ? "Command copied" : "Copy update command"}
+        </Button>
+      </Modal>
+
+      {isUpdating && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-md border border-white/10 bg-neutral-950 p-6 text-white shadow-2xl">
+            <div className="flex items-center gap-3">
+              <span className={cn(
+                "material-symbols-outlined text-2xl",
+                updateState?.phase === "error" ? "text-red-400" :
+                  updateState?.phase === "done" ? "text-green-400" : "animate-spin text-brand-400"
+              )}>
+                {updateState?.phase === "error" ? "error" : updateState?.phase === "done" ? "check_circle" : "progress_activity"}
+              </span>
+              <div>
+                <h2 className="font-semibold">{updatePhaseLabel}</h2>
+                <p className="mt-1 text-xs text-white/60">Keep this window open while the update finishes.</p>
+              </div>
+            </div>
+
+            {updateState?.logTail?.length > 0 && (
+              <pre className="mt-5 max-h-36 overflow-auto whitespace-pre-wrap border border-white/10 bg-black p-3 text-[11px] leading-5 text-white/65">
+                {updateState.logTail.join("\n")}
+              </pre>
+            )}
+
+            {updateState?.phase === "error" && (
+              <>
+                <p className="mt-4 text-xs leading-5 text-red-300">{updateState.error}</p>
+                <code className="mt-3 block break-all border border-white/10 bg-black p-3 text-xs text-green-400">
+                  {INSTALL_CMD}
+                </code>
+                <Button fullWidth variant="secondary" className="mt-4" onClick={() => setIsUpdating(false)}>
+                  Close
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </>
@@ -352,63 +411,4 @@ export default function Sidebar({ onClose }) {
 
 Sidebar.propTypes = {
   onClose: PropTypes.func,
-};
-
-function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdown, onCancel, countdown, isDisconnected }) {
-  const isCountingDown = countdown > 0;
-  return (
-    <div className="w-full max-w-lg bg-neutral-900/95 border border-white/10 p-6 text-white">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center justify-center size-11 rounded-full bg-green-500/20 text-green-400">
-          <span className="material-symbols-outlined text-[24px]">content_copy</span>
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold">Update PolyRouter{latestVersion ? ` to v${latestVersion}` : ""}</h2>
-          <p className="text-xs text-white/60">
-            {isDisconnected
-              ? "Server stopped. Paste the command into a terminal to install."
-              : isCountingDown
-                ? `Command copied. Server will stop in ${countdown}s...`
-                : "Click the button below to copy the install command and shutdown."}
-          </p>
-        </div>
-      </div>
-
-      <p className="text-sm text-white/80 mb-2">Install command:</p>
-      <div className="w-full px-3 py-2 bg-white/5 mb-4">
-        <code className="text-xs font-mono text-green-400 break-all">{installCmd}</code>
-      </div>
-
-      <ol className="text-xs text-white/70 space-y-1 list-decimal list-inside mb-4">
-        <li>Click <strong>Copy & Shutdown</strong> below.</li>
-        <li>Paste the command into your terminal and press Enter.</li>
-        <li>Run <code className="px-1 bg-white/10 text-green-400">polyrouter</code> again after install.</li>
-      </ol>
-
-      {isDisconnected ? (
-        <Button variant="secondary" fullWidth onClick={() => globalThis.location.reload()}>
-          Reload Page
-        </Button>
-      ) : (
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onCancel} disabled={isCountingDown}>
-            Cancel
-          </Button>
-          <Button variant="primary" fullWidth onClick={onCopyAndShutdown} disabled={isCountingDown}>
-            {copied ? "✓ Copied — shutting down..." : isCountingDown ? `Shutting down in ${countdown}s` : "Copy & Shutdown"}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-ManualUpdatePanel.propTypes = {
-  latestVersion: PropTypes.string,
-  installCmd: PropTypes.string.isRequired,
-  copied: PropTypes.bool,
-  onCopyAndShutdown: PropTypes.func.isRequired,
-  onCancel: PropTypes.func.isRequired,
-  countdown: PropTypes.number,
-  isDisconnected: PropTypes.bool,
 };

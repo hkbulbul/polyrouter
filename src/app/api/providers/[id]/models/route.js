@@ -26,6 +26,21 @@ const parseOpenAIStyleModels = (data) => {
   return data?.data || data?.models || data?.results || [];
 };
 
+export const parseZenMuxModels = (data) => parseOpenAIStyleModels(data).map((model) => {
+  const outputs = Array.isArray(model.output_modalities) ? model.output_modalities : [];
+  let kind = "llm";
+  if (outputs.includes("embeddings")) kind = "embedding";
+  else if (outputs.includes("transcription")) kind = "stt";
+  else if (outputs.includes("audio")) kind = "tts";
+  else if (outputs.includes("image")) kind = "image";
+  return {
+    ...model,
+    id: model.id,
+    name: model.display_name || model.name || model.id,
+    kind,
+  };
+});
+
 const parseGeminiCliModels = (data) => {
   if (Array.isArray(data?.models)) {
     return data.models
@@ -218,6 +233,10 @@ const PROVIDER_MODELS_CONFIG = {
   },
   openai: createOpenAIModelsConfig("https://api.openai.com/v1/models"),
   openrouter: createOpenAIModelsConfig("https://openrouter.ai/api/v1/models"),
+  zenmux: {
+    ...createOpenAIModelsConfig("https://zenmux.ai/api/v1/models"),
+    parseResponse: parseZenMuxModels,
+  },
   anthropic: {
     url: "https://api.anthropic.com/v1/models",
     method: "GET",

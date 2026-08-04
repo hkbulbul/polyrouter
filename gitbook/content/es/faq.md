@@ -52,7 +52,7 @@ Enruta inteligentemente las solicitudes a través de múltiples proveedores de I
 
 ## ¿PolyRouter es gratis?
 
-**Sí, PolyRouter en sí es 100% gratis y open source.**
+**PolyRouter es software propietario de código cerrado.** El CLI y el panel precompilados son de uso gratuito para usuarios autorizados.
 
 **Proveedores de nivel gratis disponibles:**
 - **Gemini CLI** - 180K completados/mes (cuenta Google GRATIS)
@@ -257,10 +257,9 @@ Consulta la [guía de despliegue](getting-started/installation.md#deployment) pa
 - Sin analítica
 - Sin phone-home
 
-**Open source:**
-- Código fuente completo disponible en GitHub
-- Audita la seguridad tú mismo
-- Revisado por la comunidad
+**Software propietario:**
+- El código fuente NO está disponible públicamente
+- Todos los derechos reservados
 
 **Mejores prácticas:**
 - Cambia `JWT_SECRET` en producción

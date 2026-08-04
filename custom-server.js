@@ -1,6 +1,7 @@
 const http = require("http");
 const crypto = require("crypto");
 const fs = require("fs");
+const path = require("path");
 
 // Shared only with the in-process Next route used by the WebSocket bridge.
 // It is intentionally never exposed to browser JavaScript.
@@ -22,6 +23,7 @@ function stampSocketIp(req) {
   const socketIp = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "";
   const xff = req.headers["x-forwarded-for"];
   const xRealIp = req.headers["x-real-ip"];
+  const xForwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim().toLowerCase();
   const viaProxy = !!(xff || xRealIp);
   const isLoopbackProxy = socketIp === "127.0.0.1" || socketIp === "::1" || socketIp === "::ffff:127.0.0.1";
   const proxyIp = xRealIp || (xff ? String(xff).split(",")[0].trim() : "");
@@ -29,8 +31,12 @@ function stampSocketIp(req) {
   delete req.headers["x-9r-real-ip"];
   delete req.headers["x-forwarded-for"];
   delete req.headers["x-9r-via-proxy"];
+  delete req.headers["x-9r-secure"];
   req.headers["x-9r-real-ip"] = ip;
   if (viaProxy) req.headers["x-9r-via-proxy"] = "1";
+  if (req.socket?.encrypted === true || (isLoopbackProxy && viaProxy && xForwardedProto === "https")) {
+    req.headers["x-9r-secure"] = "1";
+  }
 }
 
 function getRealtimeRuntime() {
@@ -81,8 +87,9 @@ http.createServer = (...args) => {
   return server;
 };
 
-if (fs.existsSync("./server.js")) {
-  require("./server.js");
+const standaloneServer = path.join(__dirname, "server.js");
+if (fs.existsSync(standaloneServer)) {
+  require(standaloneServer);
 } else {
   // Development fallback: `next dev` does not create standalone/server.js,
   // but it can still share this HTTP server and its websocket upgrade hook.

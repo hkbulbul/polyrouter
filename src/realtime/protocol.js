@@ -1,17 +1,20 @@
+import {
+  DEFAULT_REALTIME_MODEL,
+  DEFAULT_REALTIME_SAMPLE_RATE,
+  DEFAULT_REALTIME_VOICE,
+  REALTIME_MODELS,
+} from "./constants.js";
+
 const MAX_EVENT_BYTES = 256 * 1024;
 
 export const REALTIME_PATH = "/v1/realtime";
 export const REALTIME_PROTOCOL = "polyrouter.realtime.voice.v1";
 // ChatGPT/Codex OAuth accounts use the realtime model exposed by the
 // reference OAuth bridge. Keep the public API model names as fallbacks.
-export const DEFAULT_REALTIME_MODEL = "gpt-realtime-2";
-export const DEFAULT_REALTIME_VOICE = "alloy";
-export const DEFAULT_REALTIME_SAMPLE_RATE = 24000;
+export { DEFAULT_REALTIME_MODEL, DEFAULT_REALTIME_SAMPLE_RATE, DEFAULT_REALTIME_VOICE, REALTIME_MODELS };
 
 export const MAX_PENDING_BYTES = 1024 * 1024;
 export const MAX_BUFFERED_BYTES = 1024 * 1024;
-
-export const REALTIME_MODELS = new Set(["gpt-realtime-2", "gpt-realtime", "gpt-realtime-mini"]);
 
 const KNOWN_CLIENT_EVENTS = new Set([
   "session.update",
@@ -80,6 +83,7 @@ export function buildInitialSession({ model, voice } = {}) {
       audio: {
         input: {
           format: { type: "audio/pcm", rate: DEFAULT_REALTIME_SAMPLE_RATE },
+          transcription: { model: "gpt-4o-mini-transcribe" },
           turn_detection: {
             type: "server_vad",
             create_response: true,

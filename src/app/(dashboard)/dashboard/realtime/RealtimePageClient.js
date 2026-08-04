@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { float32ToPcm16Bytes, resampleFloat32 } from "@/realtime/audio.js";
+import { releaseRealtimeMediaResources } from "@/realtime/browserMedia.js";
+import {
+  DEFAULT_REALTIME_MODEL,
+  DEFAULT_REALTIME_SAMPLE_RATE,
+  REALTIME_MODEL_OPTIONS,
+} from "@/realtime/constants.js";
 
-const SAMPLE_RATE = 24000;
 const PROCESSOR_BUFFER_SIZE = 4096;
-const REALTIME_MODELS = [
-  { id: "gpt-realtime-2", name: "GPT Realtime 2" },
-  { id: "gpt-realtime", name: "GPT Realtime" },
-  { id: "gpt-realtime-mini", name: "GPT Realtime Mini" },
-];
+const AUDIO_WORKLET_URL = "/realtime-audio-processor.js";
 
 function bytesToBase64(bytes) {
   let binary = "";
@@ -26,19 +28,12 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
-export function float32ToPcm16(samples) {
-  const pcm = new Int16Array(samples.length);
-  for (let i = 0; i < samples.length; i += 1) {
-    const sample = Math.max(-1, Math.min(1, samples[i]));
-    pcm[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-  }
-  return new Uint8Array(pcm.buffer);
-}
+export const float32ToPcm16 = float32ToPcm16Bytes;
 
 function pcm16ToAudioBuffer(context, base64) {
   const bytes = base64ToBytes(base64);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const audio = context.createBuffer(1, Math.floor(bytes.byteLength / 2), SAMPLE_RATE);
+  const audio = context.createBuffer(1, Math.floor(bytes.byteLength / 2), DEFAULT_REALTIME_SAMPLE_RATE);
   const channel = audio.getChannelData(0);
   for (let i = 0; i < channel.length; i += 1) channel[i] = view.getInt16(i * 2, true) / 0x8000;
   return audio;
@@ -48,16 +43,18 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
   const socketRef = useRef(null);
   const streamRef = useRef(null);
   const contextRef = useRef(null);
-  const processorRef = useRef(null);
+  const captureNodeRef = useRef(null);
   const sourceRef = useRef(null);
+  const monitorGainRef = useRef(null);
   const nextPlaybackTime = useRef(0);
   const outputSources = useRef(new Set());
   const [status, setStatus] = useState("Idle");
   const [error, setError] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [inputTranscript, setInputTranscript] = useState("");
   const [outputTranscript, setOutputTranscript] = useState("");
-  const [model, setModel] = useState("gpt-realtime-2");
+  const [model, setModel] = useState(DEFAULT_REALTIME_MODEL);
 
   const stopPlayback = useCallback(() => {
     for (const source of outputSources.current) {
@@ -67,19 +64,30 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
     nextPlaybackTime.current = 0;
   }, []);
 
-  const stop = useCallback(() => {
-    setIsRecording(false);
-    processorRef.current?.disconnect();
-    sourceRef.current?.disconnect();
-    processorRef.current = null;
+  const releaseMedia = useCallback(({ closeSocket = true } = {}) => {
+    releaseRealtimeMediaResources({
+      captureNode: captureNodeRef.current,
+      source: sourceRef.current,
+      monitorGain: monitorGainRef.current,
+      stream: streamRef.current,
+    });
+    captureNodeRef.current = null;
     sourceRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    monitorGainRef.current = null;
     streamRef.current = null;
-    if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) socketRef.current.close();
-    socketRef.current = null;
+    if (closeSocket) {
+      if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) socketRef.current.close();
+      socketRef.current = null;
+    }
     stopPlayback();
-    setStatus("Stopped");
   }, [stopPlayback]);
+
+  const stop = useCallback(() => {
+    releaseMedia();
+    setIsConnecting(false);
+    setIsRecording(false);
+    setStatus("Stopped");
+  }, [releaseMedia]);
 
   const scheduleAudio = useCallback((base64) => {
     const context = contextRef.current;
@@ -95,7 +103,8 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
   }, []);
 
   const start = useCallback(async () => {
-    if (isRecording) return;
+    if (isRecording || isConnecting) return;
+    setIsConnecting(true);
     setError("");
     setInputTranscript("");
     setOutputTranscript("");
@@ -103,7 +112,7 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      const context = contextRef.current || new AudioContextClass({ sampleRate: SAMPLE_RATE });
+      const context = contextRef.current || new AudioContextClass({ sampleRate: DEFAULT_REALTIME_SAMPLE_RATE });
       contextRef.current = context;
       await context.resume();
       streamRef.current = stream;
@@ -114,23 +123,54 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
       socket.onopen = () => {
         if (socketRef.current !== socket) return;
         const source = context.createMediaStreamSource(stream);
-        const processor = context.createScriptProcessor(PROCESSOR_BUFFER_SIZE, 1, 1);
-        source.connect(processor);
-        processor.connect(context.destination);
-        processor.onaudioprocess = (event) => {
+        const sendSamples = (samples) => {
           if (socket.readyState !== WebSocket.OPEN) return;
-          const pcm = float32ToPcm16(event.inputBuffer.getChannelData(0));
+          const resampled = resampleFloat32(samples, context.sampleRate, DEFAULT_REALTIME_SAMPLE_RATE);
+          const pcm = float32ToPcm16Bytes(resampled);
           socket.send(JSON.stringify({ type: "input_audio_buffer.append", audio: bytesToBase64(pcm) }));
         };
         sourceRef.current = source;
-        processorRef.current = processor;
+
+        const attachFallbackProcessor = () => {
+          const processor = context.createScriptProcessor(PROCESSOR_BUFFER_SIZE, 1, 1);
+          const monitorGain = context.createGain();
+          monitorGain.gain.value = 0;
+          processor.onaudioprocess = (event) => sendSamples(event.inputBuffer.getChannelData(0));
+          source.connect(processor);
+          processor.connect(monitorGain);
+          monitorGain.connect(context.destination);
+          captureNodeRef.current = processor;
+          monitorGainRef.current = monitorGain;
+        };
+
+        void (async () => {
+          try {
+            if (!context.audioWorklet || typeof window.AudioWorkletNode !== "function") throw new Error("AudioWorklet unavailable");
+            await context.audioWorklet.addModule(AUDIO_WORKLET_URL);
+            if (socketRef.current !== socket || socket.readyState !== WebSocket.OPEN) return;
+            const worklet = new window.AudioWorkletNode(context, "polyrouter-realtime-capture", {
+              numberOfInputs: 1,
+              numberOfOutputs: 0,
+              channelCount: 1,
+            });
+            worklet.port.onmessage = (event) => sendSamples(event.data);
+            source.connect(worklet);
+            captureNodeRef.current = worklet;
+          } catch {
+            if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) attachFallbackProcessor();
+          }
+        })();
+        setIsConnecting(false);
         setIsRecording(true);
         setStatus("Listening");
       };
       socket.onmessage = ({ data }) => {
         let event;
         try { event = JSON.parse(data); } catch { return; }
-        if ((event.type === "response.output_audio.delta" || event.type === "response.audio.delta") && event.delta) scheduleAudio(event.delta);
+        if ((event.type === "response.output_audio.delta" || event.type === "response.audio.delta") && event.delta) {
+          scheduleAudio(event.delta);
+          setStatus("Speaking");
+        }
         if ((event.type === "response.output_audio_transcript.delta" || event.type === "response.audio_transcript.delta") && event.delta) setOutputTranscript((text) => text + event.delta);
         if (event.type === "conversation.item.input_audio_transcription.completed" && event.transcript) setInputTranscript(event.transcript);
         if (event.type === "input_audio_buffer.speech_started") {
@@ -140,10 +180,19 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
         if (event.type === "response.audio.done" || event.type === "response.done") setStatus("Listening");
         if (event.type === "error") setError(event.error?.message || "Realtime connection failed.");
       };
-      socket.onerror = () => setError("Unable to connect to the local realtime service.");
+      socket.onerror = () => {
+        if (socketRef.current !== socket) return;
+        setError("Unable to connect to the local realtime service.");
+        releaseMedia();
+        setIsConnecting(false);
+        setIsRecording(false);
+        setStatus("Disconnected");
+      };
       socket.onclose = () => {
         if (socketRef.current === socket) {
           socketRef.current = null;
+          releaseMedia({ closeSocket: false });
+          setIsConnecting(false);
           setIsRecording(false);
           setStatus("Disconnected");
         }
@@ -152,12 +201,12 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
       setError(reason?.name === "NotAllowedError" ? "Microphone permission was denied." : (reason?.message || "Could not start the microphone."));
       stop();
     }
-  }, [isRecording, model, providerId, scheduleAudio, stop, stopPlayback]);
+  }, [isConnecting, isRecording, model, providerId, releaseMedia, scheduleAudio, stop, stopPlayback]);
 
   useEffect(() => () => {
-    stop();
+    releaseMedia();
     contextRef.current?.close().catch(() => {});
-  }, [stop]);
+  }, [releaseMedia]);
 
   const cancelResponse = () => {
     socketRef.current?.send(JSON.stringify({ type: "response.cancel" }));
@@ -177,14 +226,21 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
             <select
               value={model}
               onChange={(event) => setModel(event.target.value)}
-              disabled={isRecording}
+              disabled={isRecording || isConnecting}
               className="px-3 py-2 text-sm border border-border-subtle bg-background text-text-main"
               aria-label="Realtime model"
             >
-              {REALTIME_MODELS.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+              {REALTIME_MODEL_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
             </select>
             {isRecording && <button type="button" onClick={cancelResponse} className="px-4 py-2 text-sm border border-border-subtle hover:bg-surface-2">Interrupt</button>}
-            <button type="button" onClick={isRecording ? stop : start} className="px-4 py-2 text-sm font-medium bg-primary text-white hover:opacity-90">{isRecording ? "Stop" : "Start talking"}</button>
+            <button
+              type="button"
+              onClick={isRecording ? stop : start}
+              disabled={isConnecting}
+              className="px-4 py-2 text-sm font-medium bg-primary text-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+            >
+              {isRecording ? "Stop" : isConnecting ? "Connecting..." : "Start talking"}
+            </button>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">

@@ -1301,7 +1301,7 @@ Cảm ơn đặc biệt đến **CLIProxyAPI** - bản triển khai Go gốc đ�
 
 ## 📄 Giấy phép
 
-Giấy phép MIT - xem [LICENSE](../LICENSE) để biết chi tiết.
+Phần mềm độc quyền - Đã đăng ký bản quyền. Xem [LICENSE](../LICENSE) để biết chi tiết.
 
 ---
 

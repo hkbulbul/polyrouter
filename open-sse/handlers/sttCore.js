@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createErrorResult } from "../utils/error.js";
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
+import { proxyAwareFetch } from "../utils/proxyFetch.js";
 
 // Build auth headers from sttConfig + token
 function buildAuthHeaders(cfg, token) {
@@ -152,6 +153,41 @@ async function transcribeOpenAICompatible(cfg, file, model, token, formData) {
   return { success: true, response: new Response(txt, { status: 200, headers: { "Content-Type": ct, "Access-Control-Allow-Origin": "*" } }) };
 }
 
+function resolveAudioFormat(file) {
+  const name = typeof file.name === "string" ? file.name.toLowerCase() : "";
+  const ext = name.includes(".") ? name.split(".").pop() : "";
+  if (["wav", "mp3", "flac", "m4a", "ogg", "webm", "aac"].includes(ext)) return ext;
+  const mime = (file.type || "").toLowerCase();
+  const byMime = {
+    "audio/wav": "wav", "audio/x-wav": "wav", "audio/mpeg": "mp3",
+    "audio/flac": "flac", "audio/mp4": "m4a", "audio/ogg": "ogg",
+    "audio/webm": "webm", "audio/aac": "aac",
+  };
+  return byMime[mime] || "wav";
+}
+
+// ZenMux transcription accepts JSON with inline base64 audio, not multipart data.
+async function transcribeZenMux(cfg, file, model, token, formData, proxyOptions) {
+  const audio = Buffer.from(await file.arrayBuffer()).toString("base64");
+  const body = {
+    model,
+    input_audio: { data: audio, format: resolveAudioFormat(file) },
+    stream: false,
+  };
+  for (const key of ["language", "prompt"]) {
+    const value = formData.get(key);
+    if (typeof value === "string" && value.trim()) body[key] = value.trim();
+  }
+  const res = await proxyAwareFetch(cfg.baseUrl, {
+    method: "POST",
+    headers: { ...buildAuthHeaders(cfg, token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }, proxyOptions);
+  if (!res.ok) return upstreamError(res);
+  const data = await res.json();
+  return jsonResponse(data);
+}
+
 function jsonResponse(obj) {
   return {
     success: true,
@@ -185,6 +221,7 @@ export async function handleSttCore({ provider, model, formData, credentials, st
       case "nvidia-asr":      return await transcribeNvidia(cfg, file, model, token);
       case "huggingface-asr": return await transcribeHuggingFace(cfg, file, model, token);
       case "gemini-stt":      return await transcribeGemini(cfg, file, model, token, formData);
+      case "zenmux":          return await transcribeZenMux(cfg, file, model, token, formData, credentials?.providerSpecificData);
       default:                return await transcribeOpenAICompatible(cfg, file, model, token, formData);
     }
   } catch (err) {

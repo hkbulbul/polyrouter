@@ -11,12 +11,25 @@ export async function POST(request) {
   }
   try {
     const body = await request.json();
+    const clientIp = request.headers.get("x-9r-realtime-client-ip") || "";
+    const clientOrigin = request.headers.get("x-9r-realtime-client-origin") || "";
+    const clientHost = request.headers.get("x-9r-realtime-client-host") || "";
     const auth = await authenticateUpgrade({
-      headers: Object.fromEntries(request.headers.entries()),
-      socket: { remoteAddress: "127.0.0.1" },
+      headers: {
+        cookie: request.headers.get("cookie") || "",
+        host: clientHost,
+        origin: clientOrigin,
+        "x-9r-real-ip": clientIp,
+        authorization: request.headers.get("x-9r-realtime-client-authorization") || "",
+        "x-api-key": request.headers.get("x-9r-realtime-client-api-key") || "",
+      },
+      socket: { remoteAddress: clientIp },
       realtimeModel: body?.model || null,
       realtimeProvider: body?.provider || null,
       realtimeVoice: body?.voice || null,
+      realtimeApiKey: body?.apiKey || null,
+      realtimeTicket: body?.ticket || null,
+      realtimeSecure: request.headers.get("x-9r-realtime-client-secure") === "1",
     });
     return NextResponse.json(auth);
   } catch (error) {

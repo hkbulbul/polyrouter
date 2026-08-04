@@ -52,7 +52,7 @@ It intelligently routes requests across multiple AI providers using a 3-tier fal
 
 ## Is PolyRouter free?
 
-**Yes, PolyRouter itself is 100% free and open source.**
+**PolyRouter is proprietary, closed-source software.** The pre-built CLI and dashboard are free to use for authorized users.
 
 **Free tier providers available:**
 - **Gemini CLI** - 180K completions/month (FREE Google account)
@@ -257,10 +257,9 @@ See [deployment guide](getting-started/installation.md#deployment) for details.
 - No analytics
 - No phone-home
 
-**Open source:**
-- Full source code available on GitHub
-- Audit security yourself
-- Community-reviewed
+**Proprietary software:**
+- Source code is NOT publicly available
+- All rights reserved
 
 **Best practices:**
 - Change `JWT_SECRET` in production

@@ -1302,7 +1302,7 @@ OPENAI_API_KEY="your-cloud-key" bash tester/security/test-cloud-openai-compatibl
 
 ## 📄 Лицензия
 
-Лицензия MIT — см. [LICENSE](../LICENSE) для деталей.
+Проприетарное ПО — Все права защищены. Подробнее см. [LICENSE](../LICENSE).
 
 ---
 

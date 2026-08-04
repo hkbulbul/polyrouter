@@ -295,6 +295,24 @@ export async function POST(request) {
           isValid = openrouterRes.ok;
           break;
 
+        case "zenmux": {
+          const testModel = body.defaultModel || providerSpecificData?.testModel || "deepseek/deepseek-v4-flash-free";
+          const zenmuxRes = await fetch("https://zenmux.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: testModel,
+              messages: [{ role: "user", content: "ping" }],
+              max_tokens: 1,
+              stream: false,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          // The models endpoint is public, so only an authenticated inference probe can validate a key.
+          isValid = zenmuxRes.status !== 401 && zenmuxRes.status !== 403;
+          break;
+        }
+
         case "glm":
         case "glm-cn":
         case "kimi":

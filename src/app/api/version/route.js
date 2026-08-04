@@ -30,16 +30,6 @@ function fetchLatestVersion() {
   });
 }
 
-function compareVersions(a, b) {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if (pa[i] > pb[i]) return 1;
-    if (pa[i] < pb[i]) return -1;
-  }
-  return 0;
-}
-
 async function getLatestVersionCached() {
   if (versionCache.value && Date.now() - versionCache.fetchedAt < VERSION_CACHE_TTL_MS) {
     return versionCache.value;
@@ -55,7 +45,7 @@ async function getLatestVersionCached() {
 export async function GET() {
   const latestVersion = await getLatestVersionCached();
   const currentVersion = pkg.version;
-  const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
+  const hasUpdate = latestVersion ? latestVersion !== currentVersion : false;
 
   return Response.json({ currentVersion, latestVersion, hasUpdate });
 }

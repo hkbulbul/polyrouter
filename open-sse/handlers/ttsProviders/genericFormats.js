@@ -2,6 +2,7 @@
 // Each handler accepts { baseUrl, apiKey, text, modelId, voiceId } and returns { base64, format }.
 import { responseToBase64, throwUpstreamError } from "./_base.js";
 import minimaxTts from "./minimax.js";
+import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 
 // Hyperbolic: POST { text } → { audio: base64 }
 async function hyperbolic({ baseUrl, apiKey, text }) {
@@ -153,6 +154,26 @@ async function openaiCompat({ baseUrl, apiKey, text, modelId, voiceId }) {
   return responseToBase64(res, "mp3");
 }
 
+// ZenMux returns JSON with base64 audio instead of an OpenAI-style binary body.
+async function zenmux({ baseUrl, apiKey, text, modelId, voiceId, audioFormat, proxyOptions }) {
+  const requestBody = {
+    model: modelId,
+    input: text,
+    voice: voiceId || "alloy",
+    stream: false,
+  };
+  if (audioFormat) requestBody.response_format = audioFormat;
+  const res = await proxyAwareFetch(baseUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify(requestBody),
+  }, proxyOptions);
+  if (!res.ok) await throwUpstreamError(res);
+  const data = await res.json();
+  if (!data.audio) throw new Error("ZenMux TTS returned no audio data");
+  return { base64: data.audio, format: data.format || audioFormat || "pcm" };
+}
+
 // format → handler dispatcher
 export const FORMAT_HANDLERS = {
   hyperbolic,
@@ -165,5 +186,6 @@ export const FORMAT_HANDLERS = {
   coqui,
   tortoise,
   openai: openaiCompat,
+  zenmux,
   "minimax-tts": minimaxTts,
 };

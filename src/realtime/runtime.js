@@ -6,25 +6,36 @@ import {
   makeError,
   validateClientEvent,
 } from "./protocol.js";
+export function getInternalAuthHost(host) {
+  if (host === "0.0.0.0") return "127.0.0.1";
+  if (host === "::" || host === "::1") return "[::1]";
+  return host || "localhost";
+}
+
 async function authenticateUpgrade(request, host) {
   const url = new URL(request.url || "/", `http://${host}`);
-  // Always use 127.0.0.1 for the in-process auth hop — it is reachable
-  // regardless of whether the server binds 0.0.0.0, localhost, ::, or ::1.
-  // `localhost` is ambiguous on Windows (resolves to IPv6 ::1, unreachable
-  // when the server binds IPv4-only 0.0.0.0).
-  const internalHost = (host === "0.0.0.0" || host === "::" || host === "localhost" || host === "::1")
-    ? "127.0.0.1" : host;
+  // Keep the in-process auth hop on the same address family as the server.
+  // Windows commonly binds `localhost` to IPv6 only.
+  const internalHost = getInternalAuthHost(host);
   const response = await fetch(`http://${internalHost}:${process.env.PORT || 20128}/api/realtime/authorize`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "cookie": request.headers.cookie || "",
       "x-9r-realtime-internal": process.env.REALTIME_INTERNAL_SECRET || "",
+      "x-9r-realtime-client-ip": request.headers["x-9r-real-ip"] || request.socket?.remoteAddress || "",
+      "x-9r-realtime-client-origin": request.headers.origin || "",
+      "x-9r-realtime-client-host": request.headers.host || "",
+      "x-9r-realtime-client-secure": request.headers["x-9r-secure"] || (request.socket?.encrypted === true ? "1" : ""),
+      "x-9r-realtime-client-authorization": request.headers.authorization || "",
+      "x-9r-realtime-client-api-key": request.headers["x-api-key"] || "",
     },
     body: JSON.stringify({
       model: url.searchParams.get("model"),
       provider: url.searchParams.get("provider"),
       voice: url.searchParams.get("voice"),
+      apiKey: url.searchParams.get("api_key") || url.searchParams.get("key"),
+      ticket: url.searchParams.get("ticket"),
     }),
   });
   const payload = await response.json().catch(() => ({}));

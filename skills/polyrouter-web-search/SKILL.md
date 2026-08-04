@@ -35,7 +35,7 @@ IDs end in `/search` (e.g. `tavily/search`). Combos (`owned_by:"combo"`) chain p
 curl -X POST $POLYROUTER_URL/v1/search \
   -H "Authorization: Bearer $POLYROUTER_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"model":"tavily","query":"PolyRouter open source","max_results":5}'
+  -d '{"model":"tavily","query":"PolyRouter AI router","max_results":5}'
 ```
 
 JS:
@@ -54,7 +54,7 @@ console.log(await r.json());
 ```json
 {
   "provider": "tavily",
-  "query": "PolyRouter open source",
+  "query": "PolyRouter AI router",
   "results": [
     {
       "title": "...", "url": "https://...", "display_url": "github.com/...",

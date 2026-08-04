@@ -25,6 +25,7 @@ const MEDIA_KEYS = new Set([
   "imageConfig", "imageToTextConfig", "videoConfig", "musicConfig",
   "searchViaChat", "searchConfig", "fetchConfig",
   "modelsFetcher", "mediaPriority", "hiddenKinds", "speechToSpeechConfig",
+  "imageEditConfig", "rerankConfig",
 ]);
 
 export const PROVIDERS = {};

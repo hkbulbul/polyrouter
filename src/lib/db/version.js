@@ -6,7 +6,7 @@ let cachedVersion = null;
 export function getAppVersion() {
   if (cachedVersion) return cachedVersion;
   try {
-    const pkgPath = path.join(process.cwd(), "package.json");
+    const pkgPath = process.env.APP_PACKAGE_PATH || path.join(process.cwd(), "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     cachedVersion = pkg.version || "0.0.0";
   } catch {

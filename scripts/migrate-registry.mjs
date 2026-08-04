@@ -38,6 +38,7 @@ const MEDIA_WHITELIST = new Set([
   "serviceKinds",
   "ttsConfig", "sttConfig", "embeddingConfig",
   "imageConfig", "imageToTextConfig", "videoConfig", "musicConfig",
+  "imageEditConfig", "rerankConfig",
   "searchViaChat", "searchConfig", "fetchConfig",
   "modelsFetcher", "hasProviderSpecificData", "passthroughModels",
   "mediaPriority", "hiddenKinds",
@@ -99,7 +100,7 @@ function migrateEntry(entry, filename) {
 
   // 6. Other top-level fields not in TRANSPORT_KEYS and not media (e.g. features, oauth, usage in transport)
   const SKIP = new Set([...TRANSPORT_KEYS, "models", "media", ...Object.keys(CFG_KIND),
-    "serviceKinds", "searchViaChat", "searchConfig", "fetchConfig",
+    "serviceKinds", "searchViaChat", "searchConfig", "fetchConfig", "imageEditConfig", "rerankConfig",
     "modelsFetcher", "passthroughModels", "mediaPriority"]);
   for (const [k, v] of Object.entries(entry)) {
     if (!SKIP.has(k)) out[k] = v;
@@ -175,7 +176,7 @@ function formatEntry(entry, imports = "") {
     // media fields
     "serviceKinds",
     "ttsConfig", "sttConfig", "embeddingConfig",
-    "imageConfig", "imageToTextConfig", "videoConfig", "musicConfig",
+    "imageConfig", "imageToTextConfig", "videoConfig", "musicConfig", "imageEditConfig", "rerankConfig",
     "searchViaChat", "searchConfig", "fetchConfig", "modelsFetcher",
     "passthroughModels", "mediaPriority",
     // other
