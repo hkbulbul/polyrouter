@@ -2,6 +2,12 @@
 const KNOWN_FREE_OPENCODE_MODELS = ["big-pickle"];
 
 export const FILTERS = {
+  freemodel: (models) =>
+    models.map((m) => ({
+      id: m.id,
+      name: m.name || m.id,
+    })),
+
   zenmux: (models) =>
     models.map((m) => ({
       id: m.id,

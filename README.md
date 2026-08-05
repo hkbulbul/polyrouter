@@ -96,7 +96,7 @@ PolyRouter works with tools that support an OpenAI-compatible API or configurabl
 PolyRouter supports 40+ providers through OAuth, API keys, and compatible endpoints.
 
 - **OAuth providers:** Claude Code, Codex, GitHub Copilot, Cursor, Antigravity, Kimchi, and more.
-- **API-key providers:** OpenAI, Anthropic, Gemini, DeepSeek, Groq, xAI, Mistral, Perplexity, Together AI, Fireworks, Cerebras, Cohere, NVIDIA, GLM, Kimi, MiniMax, OpenRouter, SiliconFlow, Nebius, Chutes, Hyperbolic, and more.
+- **API-key providers:** OpenAI, Anthropic, Gemini, DeepSeek, Groq, xAI, Mistral, Perplexity, Together AI, Fireworks, Cerebras, Cohere, NVIDIA, GLM, Kimi, MiniMax, OpenRouter, FreeModel, SiliconFlow, Nebius, Chutes, Hyperbolic, and more.
 - **Free and subscription workflows:** Use configured supported accounts in model combos with ordered fallback.
 
 ## Environment Variables

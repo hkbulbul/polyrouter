@@ -1,3 +1,8 @@
+# v1.0.12 (CLI) — 2026-08-05
+
+## Features
+- **FreeModel provider**: add first-class API-key integration with native OpenAI Chat Completions, Responses, and Anthropic Messages routing, dynamic model discovery, API-key validation, aliases, and official branding.
+
 # v1.0.11 (CLI) — 2026-08-05
 
 ## Features
