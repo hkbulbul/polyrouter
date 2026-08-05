@@ -295,6 +295,24 @@ export async function POST(request) {
           isValid = openrouterRes.ok;
           break;
 
+        case "freemodel": {
+          const testModel = body.defaultModel || providerSpecificData?.testModel || "auto";
+          const freemodelRes = await fetch("https://api.freemodel.dev/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: testModel,
+              messages: [{ role: "user", content: "ping" }],
+              max_tokens: 1,
+              stream: false,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          // FreeModel's models endpoint is public, so validate credentials with inference.
+          isValid = freemodelRes.status !== 401 && freemodelRes.status !== 403;
+          break;
+        }
+
         case "zenmux": {
           const testModel = body.defaultModel || providerSpecificData?.testModel || "deepseek/deepseek-v4-flash-free";
           const zenmuxRes = await fetch("https://zenmux.ai/api/v1/chat/completions", {

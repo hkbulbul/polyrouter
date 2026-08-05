@@ -93,7 +93,10 @@
     "polly": "aws-polly",
     "aws-polly": "aws-polly",
     "bb": "blackbox",
-    "blackbox": "blackbox"
+    "blackbox": "blackbox",
+    "fm": "freemodel",
+    "freemodel": "freemodel",
+    "free-model": "freemodel"
   },
   "idToAlias": {
     "alicode": "alicode",
@@ -120,6 +123,7 @@
     "deepseek": "deepseek",
     "featherless": "featherless",
     "fireworks": "fireworks",
+    "freemodel": "fm",
     "gemini": "gemini",
     "gemini-cli": "gc",
     "github": "gh",
@@ -193,6 +197,7 @@
     "fal-ai",
     "featherless",
     "fireworks",
+    "fm",
     "gc",
     "gcli",
     "gemini",

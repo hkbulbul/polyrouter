@@ -233,6 +233,7 @@ const PROVIDER_MODELS_CONFIG = {
   },
   openai: createOpenAIModelsConfig("https://api.openai.com/v1/models"),
   openrouter: createOpenAIModelsConfig("https://openrouter.ai/api/v1/models"),
+  freemodel: createOpenAIModelsConfig("https://api.freemodel.dev/v1/models"),
   zenmux: {
     ...createOpenAIModelsConfig("https://zenmux.ai/api/v1/models"),
     parseResponse: parseZenMuxModels,

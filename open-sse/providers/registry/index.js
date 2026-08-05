@@ -100,6 +100,7 @@ import p97 from "./xiaomi-tokenplan.js";
 import p98 from "./youcom.js";
 import p99 from "./alims-intl.js";
 import p100 from "./zenmux.js";
+import p101 from "./freemodel.js";
 
 export default [
   p0,
@@ -203,4 +204,5 @@ export default [
   p98,
   p99,
   p100,
+  p101,
 ];
