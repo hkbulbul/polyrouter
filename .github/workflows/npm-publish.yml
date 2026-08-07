@@ -1,4 +1,4 @@
-name: Publish CLI to npm
+﻿name: Publish CLI to npm
 
 on:
   push:
@@ -41,6 +41,21 @@ jobs:
           test -n "$PUBLIC_INSTALLATION_TELEMETRY_URL"
           echo "GA4, PostHog, and public installation telemetry are configured for this release."
 
+      - name: Check if package version already published
+        id: check
+        run: |
+          pkg=$(node -p "require('./package.json').name")
+          ver=$(node -p "require('./package.json').version")
+          latest=$(npm view "$pkg" version --registry https://registry.npmjs.org/ 2>/dev/null || echo "")
+          echo "pkg=$pkg, local version=$ver, remote latest=$latest"
+          if [ "$latest" = "$ver" ]; then
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          fi
+        working-directory: cli
+
       - name: Publish to npm
+        if: steps.check.outputs.should_publish == 'true'
         run: npm publish --access public
         working-directory: cli
