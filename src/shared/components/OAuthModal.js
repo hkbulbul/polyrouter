@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import PropTypes from "prop-types";
@@ -177,8 +177,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         "kimi-coding",
         "kilocode",
         "codebuddy-cn",
-        "qoder",
-        "grok-cli",
+          "qoder",
+          "grok-cli",
       ];
       if (deviceCodeProviders.includes(provider)) {
         setIsDeviceCode(true);
@@ -203,7 +203,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (verifyUrl) window.open(verifyUrl, "_blank", "noopener,noreferrer");
 
         // Pass extraData for Kiro (contains _clientId, _clientSecret) and
-        // Qoder (contains _qoderMachineId / _qoderNonce — needed so mapTokens
+        // Qoder (contains _qoderMachineId / _qoderNonce â€” needed so mapTokens
         // can persist the machine id alongside the token).
         const extraData = provider === "kiro"
           ? {
@@ -517,7 +517,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
       const input = callbackUrl.trim();
 
-      // Detect raw JWT access token (starts with eyJ) — skip URL parsing
+      // Detect raw JWT access token (starts with eyJ) â€” skip URL parsing
       if (input.startsWith("eyJ") && input.includes(".")) {
         await exchangeTokens(input, null);
         return;
@@ -571,8 +571,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   }, [onClose, provider]);
 
   if (!provider || !providerInfo) return null;
-  const isXaiProvider = provider === "xai";
-  const isKimchiProvider = provider === "kimchi";
+    const isXaiProvider = provider === "xai";
+    const isKimchiProvider = provider === "kimchi";
   const deviceLoginUrl = deviceData?.verification_uri_complete || deviceData?.verification_uri || "";
   const modalTitle = isXaiProvider ? "Connect Grok Build OAuth" : `Connect ${providerInfo.name}`;
   const manualPlaceholder = isXaiProvider
@@ -593,7 +593,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                 progress_activity
               </span>
               <span className="text-sm">
-                {isXaiProvider ? "Waiting for Grok Build OAuth…" : "Waiting for popup authorization…"}
+                {isXaiProvider ? "Waiting for Grok Build OAuthâ€¦" : "Waiting for popup authorizationâ€¦"}
               </span>
             </div>
 
@@ -678,18 +678,20 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                   </Button>
                 </div>
               </div>
-              <div className="bg-primary/10 p-4 ">
-                <p className="text-xs text-text-muted mb-1">Your Code</p>
-                <div className="flex items-center justify-center gap-2">
-                  <p className="text-2xl font-mono font-bold text-primary">{deviceData.user_code}</p>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={copied === "user_code" ? "check" : "content_copy"}
-                    onClick={() => copy(deviceData.user_code, "user_code")}
-                  />
+              {deviceData.user_code && (
+                <div className="bg-primary/10 p-4 ">
+                  <p className="text-xs text-text-muted mb-1">Your Code</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <p className="text-2xl font-mono font-bold text-primary">{deviceData.user_code}</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={copied === "user_code" ? "check" : "content_copy"}
+                      onClick={() => copy(deviceData.user_code, "user_code")}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             {polling && (
               <div className="flex items-center justify-center gap-2 text-sm text-text-muted">

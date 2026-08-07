@@ -1,3 +1,5 @@
-# Taste (Continuously Learned by [CommandCode][cmd])
-
-[cmd]: https://commandcode.ai/
+- Works on Windows and uses PowerShell as the primary terminal/shell. Confidence: 0.90
+- Prefers to bump the project version before committing and pushing code to GitHub. Confidence: 0.85
+- Security-conscious: prefers hashing sensitive user data (emails, passwords) and favors read‑only or write‑only database access for public repositories. Confidence: 0.80
+- Prefers clear, step‑by‑step instructions when asking for guidance. Confidence: 0.80
+- Uses Supabase as backend infrastructure. Confidence: 0.70

@@ -1,5 +1,5 @@
-/**
- * OAuth Configuration Constants — static data lives in registry, re-exported here for consumers.
+﻿/**
+ * OAuth Configuration Constants â€” static data lives in registry, re-exported here for consumers.
  */
 import { platform, arch } from "os";
 import { ANTIGRAVITY_OAUTH_CLIENT, GOOGLE_OAUTH_CLIENT } from "open-sse/providers/shared.js";
@@ -25,7 +25,7 @@ export const CLAUDE_CONFIG = { ...PROVIDER_OAUTH["claude"] };
 export const CODEX_CONFIG = { ...PROVIDER_OAUTH["codex"] };
 
 // Gemini (Google) OAuth Configuration (Standard OAuth2)
-// clientId/clientSecret from GOOGLE_OAUTH_CLIENT (shared.js) — not stored in registry
+// clientId/clientSecret from GOOGLE_OAUTH_CLIENT (shared.js) â€” not stored in registry
 export const GEMINI_CONFIG = { ...GOOGLE_OAUTH_CLIENT, ...PROVIDER_OAUTH["gemini-cli"] };
 
 // Qwen OAuth Configuration (Device Code Flow with PKCE)
@@ -34,7 +34,7 @@ export const QWEN_CONFIG = { ...PROVIDER_OAUTH["qwen"] };
 // Qoder OAuth Configuration (Device Token Flow with PKCE).
 // Device tokens are long-lived (~30 days for access, ~360 for refresh).
 // The upstream refresh endpoint at center.qoder.sh returns 403 for our
-// flow — we accept that and surface it to the user as "re-login" instead
+// flow â€” we accept that and surface it to the user as "re-login" instead
 // of attempting to silently rotate.
 export const QODER_CONFIG = { ...PROVIDER_OAUTH["qoder"] };
 
@@ -42,7 +42,7 @@ export const QODER_CONFIG = { ...PROVIDER_OAUTH["qoder"] };
 export const IFLOW_CONFIG = { ...PROVIDER_OAUTH["iflow"] };
 
 // Antigravity OAuth Configuration (Standard OAuth2 with Google)
-// clientId/clientSecret from ANTIGRAVITY_OAUTH_CLIENT (shared.js) — not stored in registry
+// clientId/clientSecret from ANTIGRAVITY_OAUTH_CLIENT (shared.js) â€” not stored in registry
 // loadCodeAssistClientMetadata is dynamic (runtime platform detection)
 export const ANTIGRAVITY_CONFIG = {
   ...ANTIGRAVITY_OAUTH_CLIENT,
@@ -67,7 +67,7 @@ export const GITHUB_CONFIG = { ...PROVIDER_OAUTH["github"] };
 // Kiro OAuth Configuration (multi-method: AWS Builder ID / IDC / Social / Import Token)
 export const KIRO_CONFIG = { ...PROVIDER_OAUTH["kiro"] };
 
-// AWS region allowlist pattern — prevents SSRF via region injection into upstream URLs (GHSA-6mwv-4mrm-5p3m)
+// AWS region allowlist pattern â€” prevents SSRF via region injection into upstream URLs (GHSA-6mwv-4mrm-5p3m)
 export const AWS_REGION_PATTERN = /^[a-z]{2}-[a-z]+-\d{1,2}$/;
 
 // Reject any region that is not a valid AWS region before interpolating it into a URL
@@ -89,7 +89,7 @@ export const CURSOR_CONFIG = {
   },
 };
 
-// Kimi Code OAuth (Device Code Flow) — merged into provider id `kimi` (dual auth)
+// Kimi Code OAuth (Device Code Flow) â€” merged into provider id `kimi` (dual auth)
 // clientId: registry first, env override for forks
 export const KIMI_CONFIG = {
   ...PROVIDER_OAUTH["kimi"],
@@ -121,8 +121,10 @@ export const CODEBUDDY_CONFIG = { ...PROVIDER_OAUTH["codebuddy-cn"] };
 export const KIMCHI_CONFIG = { ...PROVIDER_OAUTH["kimchi"] };
 
 // Grok CLI / Grok Build OAuth Configuration (Device Code Flow)
-// Endpoint: cli-chat-proxy.grok.com — same client_id as xai, different flow + scopes
+// Endpoint: cli-chat-proxy.grok.com â€” same client_id as xai, different flow + scopes
 export const GROK_CLI_CONFIG = { ...PROVIDER_OAUTH["grok-cli"] };
+// Muse Code OAuth Configuration (Device Code Flow)
+export const MUSE_CODE_CONFIG = { ...PROVIDER_OAUTH["muse-code"] };
 
 // OAuth timeout (5 minutes)
 export const OAUTH_TIMEOUT = 300000;
