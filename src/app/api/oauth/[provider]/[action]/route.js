@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { 
   getProvider, 
   generateAuthData, 
@@ -179,6 +179,7 @@ export async function GET(request, { params }) {
         "kilocode",
         "codebuddy-cn",
         "qoder",
+        "muse-code",
         "grok-cli",
       ];
       let deviceData;
@@ -300,7 +301,9 @@ export async function POST(request, { params }) {
       }
 
       // Providers that don't use PKCE for device code
-      const noPkceProviders = ["github", "kimi", "kimi-coding", "kilocode", "codebuddy-cn"];
+      const noPkceProviders = ["github", "kimi", "kimi-coding", "kilocode", "codebuddy-cn",
+        "muse-code",
+        "grok-cli"];
       let result;
       if (noPkceProviders.includes(provider)) {
         // kimi needs extraData._kimiDeviceId for stable X-Msh-Device-Id (CLIProxyAPI parity)
@@ -325,7 +328,7 @@ export async function POST(request, { params }) {
       }
 
       if (result.success) {
-        // Save to database (legacy kimi-coding OAuth → dual-auth kimi)
+        // Save to database (legacy kimi-coding OAuth â†’ dual-auth kimi)
         const providerId = provider === "kimi-coding" ? "kimi" : provider;
         const connection = await createProviderConnection({
           provider: providerId,

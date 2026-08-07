@@ -1,4 +1,4 @@
-// Auto-generated: static imports for all registry entries
+﻿// Auto-generated: static imports for all registry entries
 import p0 from "./alicode-intl.js";
 import p1 from "./alicode.js";
 import p2 from "./anthropic.js";
@@ -101,6 +101,7 @@ import p98 from "./youcom.js";
 import p99 from "./alims-intl.js";
 import p100 from "./zenmux.js";
 import p101 from "./freemodel.js";
+import p102 from "./meta.js";
 
 export default [
   p0,
@@ -205,4 +206,5 @@ export default [
   p99,
   p100,
   p101,
+  p102,
 ];

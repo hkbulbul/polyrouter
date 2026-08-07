@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Export all services
  */
 
@@ -14,4 +14,5 @@ export { OpenAIService } from "./openai.js";
 export { GitHubService } from "./github.js";
 export { KiroService } from "./kiro.js";
 export { CursorService } from "./cursor.js";
+export { MuseCodeService } from "./muse-code.js";
 

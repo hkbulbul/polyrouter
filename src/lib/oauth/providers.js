@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OAuth Provider Configurations and Handlers
  * Centralized DRY approach for all OAuth providers
  */
@@ -259,7 +259,7 @@ const PROVIDERS = {
     },
   },
 
-  // Grok CLI / Grok Build — device code flow to auth.x.ai, inference on cli-chat-proxy.grok.com
+  // Grok CLI / Grok Build â€” device code flow to auth.x.ai, inference on cli-chat-proxy.grok.com
   "grok-cli": {
     config: GROK_CLI_CONFIG,
     flowType: "device_code",
@@ -338,7 +338,7 @@ const PROVIDERS = {
       }
       return { user: null };
     },
-    mapTokens: (tokens, extra) => {
+    mapTokens: (tokens) => {
       const email =
         decodeXaiIdTokenEmail(tokens.id_token) ||
         extractEmailFromAccessToken(tokens.access_token) ||
@@ -385,7 +385,9 @@ const PROVIDERS = {
     },
   },
 
-  "gemini-cli": {
+
+  // Muse Code (Meta) â€” Device Code flow to auth.meta.com, inference on api.meta.ai
+    "gemini-cli": {
     config: GEMINI_CONFIG,
     flowType: "authorization_code",
     buildAuthUrl: (config, redirectUri, state) => {
@@ -457,7 +459,7 @@ const PROVIDERS = {
 
       return { userInfo, projectId };
     },
-    mapTokens: (tokens, extra) => ({
+    mapTokens: (tokens) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -551,7 +553,7 @@ const PROVIDERS = {
         console.log("Failed to load code assist:", e);
       }
 
-      // Fire-and-forget onboarding — does not block DB save
+      // Fire-and-forget onboarding â€” does not block DB save
       if (projectId) {
         const doOnboard = async () => {
           for (let i = 0; i < 10; i++) {
@@ -576,7 +578,7 @@ const PROVIDERS = {
 
       return { userInfo, projectId };
     },
-    mapTokens: (tokens, extra) => ({
+    mapTokens: (tokens) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -664,7 +666,7 @@ const PROVIDERS = {
       
       return { userInfo };
     },
-    mapTokens: (tokens, extra) => ({
+    mapTokens: (tokens) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -903,7 +905,7 @@ const PROVIDERS = {
 
       return { copilotToken, userInfo };
     },
-    mapTokens: (tokens, extra) => ({
+    mapTokens: (tokens) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -1395,7 +1397,7 @@ const PROVIDERS = {
   },
 
   // CodeBuddy (Tencent) - Browser OAuth Polling Flow
-  // 1. POST stateUrl → get { state, authUrl }
+  // 1. POST stateUrl â†’ get { state, authUrl }
   // 2. Open authUrl in browser
   // 3. Poll tokenUrl with state until success (code 0) or timeout
   "codebuddy-cn": {
@@ -1431,7 +1433,7 @@ const PROVIDERS = {
     },
     pollToken: async (config, deviceCode) => {
       // CodeBuddy polls the token endpoint via GET with the state as a query
-      // param (not POST/body) — matches the official CLI's /v2/plugin/auth/token?state=...
+      // param (not POST/body) â€” matches the official CLI's /v2/plugin/auth/token?state=...
       const response = await fetch(`${config.tokenUrl}?state=${encodeURIComponent(deviceCode)}`, {
         method: "GET",
         headers: {
@@ -1548,7 +1550,7 @@ const PROVIDERS = {
  * Get provider handler
  */
 export function getProvider(name) {
-  // Legacy kimi-coding → kimi (dual-auth merge)
+  // Legacy kimi-coding â†’ kimi (dual-auth merge)
   const key = name === "kimi-coding" ? "kimi" : name;
   const provider = PROVIDERS[key];
   if (!provider) {
