@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/providerIcon";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, ChatGPTWebCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS } from "@/shared/constants/providers";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { getThinkingLevels } from "open-sse/providers/thinkingLevels.js";
@@ -45,6 +45,7 @@ export default function ProviderDetailPage() {
   const [proxyPools, setProxyPools] = useState([]);
   const [showOAuthModal, setShowOAuthModal] = useState(false);
   const [showIFlowCookieModal, setShowIFlowCookieModal] = useState(false);
+  const [showChatGPTWebCookieModal, setShowChatGPTWebCookieModal] = useState(false);
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [addConnectionError, setAddConnectionError] = useState("");
   const [showBulkImportCodex, setShowBulkImportCodex] = useState(false);
@@ -754,6 +755,11 @@ export default function ProviderDetailPage() {
   const handleIFlowCookieSuccess = () => {
     fetchConnections();
     setShowIFlowCookieModal(false);
+  };
+
+  const handleChatGPTWebCookieSuccess = () => {
+    fetchConnections();
+    setShowChatGPTWebCookieModal(false);
   };
 
   const handleSaveApiKey = async (formData) => {
@@ -1518,6 +1524,11 @@ export default function ProviderDetailPage() {
                   </>
                 ) : (
                   <>
+                    {!isCompatible && providerId === "chatgpt-web" && (
+                      <Button size="sm" icon="cookie" variant="secondary" onClick={() => setShowChatGPTWebCookieModal(true)}>
+                        Auto Connect
+                      </Button>
+                    )}
                     {!isCompatible && providerId === "iflow" && (
                       <Button size="sm" icon="cookie" variant="secondary" onClick={() => setShowIFlowCookieModal(true)}>
                         Cookie
@@ -1573,7 +1584,19 @@ export default function ProviderDetailPage() {
               {connectionsList}
               {!isCompatible && (
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:flex">
-                  {providerId === "iflow" && (
+                            {providerId === "chatgpt-web" && (
+                    <Button
+                      size="sm"
+                      icon="cookie"
+                      variant="secondary"
+                      onClick={() => setShowChatGPTWebCookieModal(true)}
+                      title="Auto-extract ChatGPT session cookie via browser"
+                      className="w-full sm:w-auto"
+                    >
+                      Auto Connect
+                    </Button>
+                  )}
+        {providerId === "iflow" && (
                     <Button
                       size="sm"
                       icon="cookie"
@@ -1714,11 +1737,23 @@ export default function ProviderDetailPage() {
           onClose={() => setShowOAuthModal(false)}
         />
       )}
-      {providerId === "iflow" && (
+      {providerId === "chatgpt-web" && (
+          <Button size="sm" icon="cookie" variant="secondary" onClick={() => setShowChatGPTWebCookieModal(true)}>
+            Auto Connect
+          </Button>
+        )}
+        {providerId === "iflow" && (
         <IFlowCookieModal
           isOpen={showIFlowCookieModal}
           onSuccess={handleIFlowCookieSuccess}
           onClose={() => setShowIFlowCookieModal(false)}
+        />
+      )}
+      {providerId === "chatgpt-web" && (
+        <ChatGPTWebCookieModal
+          isOpen={showChatGPTWebCookieModal}
+          onSuccess={handleChatGPTWebCookieSuccess}
+          onClose={() => setShowChatGPTWebCookieModal(false)}
         />
       )}
       <AddApiKeyModal

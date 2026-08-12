@@ -1,5 +1,5 @@
 // Guards the deduped Antigravity OAuth client: same values across all 3 sources after refactor.
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 const EXPECTED = {
   clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
@@ -11,6 +11,11 @@ const GOOGLE = {
 };
 
 describe("antigravity oauth client (deduped)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it("shared source holds the canonical credentials", async () => {
     const { ANTIGRAVITY_OAUTH_CLIENT } = await import("../../open-sse/providers/shared.js");
     expect(ANTIGRAVITY_OAUTH_CLIENT).toEqual(EXPECTED);
@@ -46,5 +51,58 @@ describe("antigravity oauth client (deduped)", () => {
     expect(src).toContain('PROVIDER_OAUTH["gemini-cli"]');
     expect(src).not.toContain(EXPECTED.clientSecret); // antigravity secret no longer hardcoded here
     expect(src).not.toContain(GOOGLE.clientSecret);   // gemini secret no longer hardcoded here
+  });
+
+  it("maps post-exchange identity and project data", async () => {
+    // Import first: providers installs its proxy-aware fetch wrapper at module load.
+    const { exchangeTokens } = await import("../../src/lib/oauth/providers.js");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: "ag-access-token",
+          refresh_token: "ag-refresh-token",
+          expires_in: 3600,
+          scope: "openid email",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ email: "user@example.com" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ cloudaicompanionProject: { id: "project-123" } }),
+      })
+      .mockResolvedValue({ ok: true, json: async () => ({ done: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await exchangeTokens(
+      "antigravity",
+      "authorization-code",
+      "http://localhost:20128/callback",
+      "unused-verifier",
+    );
+
+    expect(result).toMatchObject({
+      accessToken: "ag-access-token",
+      refreshToken: "ag-refresh-token",
+      expiresIn: 3600,
+      email: "user@example.com",
+      projectId: "project-123",
+    });
+  }, 15_000);
+
+  it("declares post-exchange data in every mapper that reads it", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const here = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(join(here, "../../src/lib/oauth/providers.js"), "utf8");
+
+    const invalidMappers = src.match(
+      /mapTokens:\s*\(tokens\)\s*=>(?:(?!mapTokens:)[\s\S])*?extra\?\./g,
+    );
+    expect(invalidMappers).toBeNull();
   });
 });

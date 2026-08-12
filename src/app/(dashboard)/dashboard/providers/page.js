@@ -549,8 +549,8 @@ export default function ProvidersPage() {
       </div>
       )}
 
-      {/* Web Cookie Providers — use browser subscription cookie instead of API key */}
-      {/* <div className="flex flex-col gap-4">
+      {/* Web Cookie Providers */}
+      <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             Web Cookie Providers{" "}
@@ -565,10 +565,11 @@ export default function ProvidersPage() {
               stats={getProviderStats(key, "apikey")}
               authType="apikey"
               onToggle={(active) => handleToggleProvider(key, "apikey", active)}
+              disabled
             />
           ))}
         </div>
-      </div> */}
+      </div>
 
       <AddCompatibleModal
         variant="openai"
@@ -736,6 +737,7 @@ function ApiKeyProviderCard({
   stats,
   authType,
   onToggle,
+  disabled = false,
 }) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
   const isCompatible = providerId.startsWith(OPENAI_COMPATIBLE_PREFIX);
@@ -765,12 +767,15 @@ function ApiKeyProviderCard({
     return getProviderIconSrc(provider.id);
   };
 
-  return (
-    <Link href={`/dashboard/providers/${providerId}`} className="group min-w-0">
-      <Card
-        padding="xs"
-        className={`h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}
-      >
+  const card = (
+    <Card
+      padding="xs"
+      className={`h-full transition-colors ${
+        disabled
+          ? "cursor-not-allowed opacity-60"
+          : "cursor-pointer hover:bg-black/[0.01] dark:hover:bg-white/[0.01]"
+      } ${!disabled && allDisabled ? "opacity-50" : ""}`}
+    >
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
@@ -793,7 +798,11 @@ function ApiKeyProviderCard({
             <div className="min-w-0">
               <h3 className="truncate font-semibold">{provider.name}</h3>
               <div className="flex min-w-0 items-center gap-1.5 text-xs flex-wrap">
-                {allDisabled ? (
+                {disabled ? (
+                  <Badge variant="default" size="sm">
+                    Temporarily unavailable
+                  </Badge>
+                ) : allDisabled ? (
                   <Badge variant="default" size="sm">
                     <span className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">
@@ -826,7 +835,7 @@ function ApiKeyProviderCard({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {stats.total > 0 && (
+            {!disabled && stats.total > 0 && (
               <div
                 className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                 onClick={(e) => {
@@ -845,7 +854,24 @@ function ApiKeyProviderCard({
             )}
           </div>
         </div>
-      </Card>
+    </Card>
+  );
+
+  if (disabled) {
+    return (
+      <div
+        className="group min-w-0"
+        aria-disabled="true"
+        title="This provider is temporarily unavailable"
+      >
+        {card}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/dashboard/providers/${providerId}`} className="group min-w-0">
+      {card}
     </Link>
   );
 }
@@ -867,6 +893,7 @@ ApiKeyProviderCard.propTypes = {
   }).isRequired,
   authType: PropTypes.string,
   onToggle: PropTypes.func,
+  disabled: PropTypes.bool,
 };
 
 function ProviderTestResultsView({ results }) {

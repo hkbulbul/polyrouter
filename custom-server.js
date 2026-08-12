@@ -95,6 +95,8 @@ if (fs.existsSync(standaloneServer)) {
   // but it can still share this HTTP server and its websocket upgrade hook.
   process.env.NODE_ENV ||= "development";
   process.env.PORT ||= "20127";
+  // Keep development manifests separate from the production standalone build.
+  process.env.NEXT_DIST_DIR ||= ".next-dev";
   const next = require("next");
   const devApp = next({
     dev: true,

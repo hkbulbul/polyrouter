@@ -1,15 +1,16 @@
 {
   "name": "polyrouter-app",
-  "version": "1.0.12",
+  "version": "1.0.14",
   "description": "PolyRouter local AI gateway dashboard and OpenAI-compatible API router",
   "private": true,
   "scripts": {
     "dev": "node custom-server.js",
     "dev:webpack": "next dev --webpack --port 20127",
-    "build": "next build --webpack",
+    "build": "npm run build:extension && next build --webpack",
     "start": "next start --port 20127",
     "dev:bun": "bun --bun next dev --webpack --port 20127",
-    "build:bun": "bun --bun next build --webpack",
+    "build:bun": "bun run build:extension && bun --bun next build --webpack",
+    "build:extension": "node scripts/build-polyrouter-extension.mjs",
     "start:bun": "bun ./.next/standalone/server.js",
     "cli:pack": "npm --prefix cli run pack:cli",
     "cli:publish": "npm --prefix cli run publish:cli"
@@ -34,6 +35,7 @@
     "node-machine-id": "^1.1.12",
     "open": "^11.0.0",
     "ora": "^9.1.0",
+    "playwright-core": "^1.62.0",
     "posthog-js": "^1.408.2",
     "prop-types": "^15.8.1",
     "react": "19.2.4",

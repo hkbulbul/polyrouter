@@ -338,7 +338,7 @@ const PROVIDERS = {
       }
       return { user: null };
     },
-    mapTokens: (tokens) => {
+    mapTokens: (tokens, extra) => {
       const email =
         decodeXaiIdTokenEmail(tokens.id_token) ||
         extractEmailFromAccessToken(tokens.access_token) ||
@@ -459,7 +459,7 @@ const PROVIDERS = {
 
       return { userInfo, projectId };
     },
-    mapTokens: (tokens) => ({
+    mapTokens: (tokens, extra) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -578,7 +578,7 @@ const PROVIDERS = {
 
       return { userInfo, projectId };
     },
-    mapTokens: (tokens) => ({
+    mapTokens: (tokens, extra) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -666,7 +666,7 @@ const PROVIDERS = {
       
       return { userInfo };
     },
-    mapTokens: (tokens) => ({
+    mapTokens: (tokens, extra) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,
@@ -905,7 +905,7 @@ const PROVIDERS = {
 
       return { copilotToken, userInfo };
     },
-    mapTokens: (tokens) => ({
+    mapTokens: (tokens, extra) => ({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresIn: tokens.expires_in,

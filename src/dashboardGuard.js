@@ -31,6 +31,7 @@ const PUBLIC_API_PATHS = [
   "/api/version",
   "/api/settings/require-login",
   "/api/realtime/tickets",
+  "/api/mcp/chatgpt-web",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
@@ -187,9 +188,14 @@ function isPublicApi(pathname) {
   return PUBLIC_API_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function isPublicChatGptWebMcp(pathname) {
+  return pathname === "/api/mcp/chatgpt-web" || pathname.startsWith("/api/mcp/chatgpt-web/");
+}
+
 export const __test__ = {
   isLocalRequest,
   isPublicLlmApi,
+  isPublicChatGptWebMcp,
   extractApiKey,
   canAccessPublicLlmApi,
   canAccessLocalOnlyRoute,
@@ -199,7 +205,7 @@ export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
   // Local-only gate for spawn-capable / host-secret routes.
-  if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
+  if (!isPublicChatGptWebMcp(pathname) && LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
     if (!(await canAccessLocalOnlyRoute(request))) {
       return NextResponse.json({ error: "Local only: CLI token required" }, { status: 403 });
     }

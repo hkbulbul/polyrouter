@@ -1,5 +1,3 @@
-import { CLAUDE_API_HEADERS } from "../shared.js";
-
 const API_BASE = "https://api.freemodel.dev/v1";
 
 export default {
@@ -15,7 +13,7 @@ export default {
     textIcon: "FM",
     website: "https://freemodel.dev",
     notice: {
-      text: "One API with automatic routing across frontier models. Supports OpenAI Chat Completions, Responses, and Anthropic Messages.",
+      text: "One API with automatic routing across frontier models. Supports OpenAI Chat Completions and Responses; Claude requests are translated by PolyRouter.",
       apiKeyUrl: "https://freemodel.dev",
     },
   },
@@ -37,12 +35,6 @@ export default {
       format: "openai-responses",
       baseUrl: `${API_BASE}/responses`,
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
-    },
-    {
-      format: "claude",
-      baseUrl: `${API_BASE}/messages`,
-      headers: { ...CLAUDE_API_HEADERS },
-      auth: { combined: true, header: "x-api-key", scheme: "raw" },
     },
   ],
   models: [

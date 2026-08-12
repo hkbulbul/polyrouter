@@ -253,6 +253,8 @@ export function initState(sourceFormat) {
       funcArgsBuf: {},
       funcNames: {},
       funcCallIds: {},
+      funcFreeform: {},
+      funcInputEmitted: {},
       funcArgsDone: {},
       funcItemDone: {},
       completedSent: false

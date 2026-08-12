@@ -1,3 +1,12 @@
+# v1.0.14 (CLI) - 2026-08-12
+
+## Features
+- **ChatGPT Web provider**: add browser-extension connectivity, cookie authentication, dashboard setup, and OpenAI-compatible chat routing through ChatGPT Web.
+- **Responses API**: expand custom-tool request and response translation for browser-backed providers.
+
+## Improvements
+- **Provider reliability**: harden OAuth validation, streaming/non-streaming handling, dashboard access, and Cloudflare tunnel behavior.
+
 # v1.0.12 (CLI) — 2026-08-05
 
 ## Features

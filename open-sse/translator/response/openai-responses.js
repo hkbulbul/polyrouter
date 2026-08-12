@@ -258,12 +258,23 @@ function closeMessage(state, emit, idx) {
   }
 }
 
+function customToolInput(argumentsText) {
+  try {
+    const parsed = JSON.parse(argumentsText || "{}");
+    return typeof parsed?.input === "string" ? parsed.input : argumentsText || "";
+  } catch {
+    return argumentsText || "";
+  }
+}
+
 function emitToolCall(state, emit, tc) {
   const tcIdx = tc.index ?? 0;
   const newCallId = tc.id;
   const funcName = tc.function?.name;
+  const freeform = tc._polyrouterFreeform === true || state.funcFreeform[tcIdx] === true;
 
   if (funcName) state.funcNames[tcIdx] = funcName;
+  if (freeform) state.funcFreeform[tcIdx] = true;
 
   if (!state.funcCallIds[tcIdx] && newCallId) {
     state.funcCallIds[tcIdx] = newCallId;
@@ -272,11 +283,12 @@ function emitToolCall(state, emit, tc) {
       type: "response.output_item.added",
       output_index: tcIdx,
       item: {
-        id: `fc_${newCallId}`,
-        type: RESPONSES_ITEM.FUNCTION_CALL,
-        arguments: "",
+        id: `${freeform ? "ctc" : "fc"}_${newCallId}`,
+        type: freeform ? "custom_tool_call" : RESPONSES_ITEM.FUNCTION_CALL,
+        ...(freeform ? { input: "" } : { arguments: "" }),
         call_id: newCallId,
-        name: state.funcNames[tcIdx] || ""
+        name: state.funcNames[tcIdx] || "",
+        status: "in_progress"
       }
     });
   }
@@ -286,14 +298,29 @@ function emitToolCall(state, emit, tc) {
   if (tc.function?.arguments) {
     const refCallId = state.funcCallIds[tcIdx] || newCallId;
     if (refCallId) {
-      emit("response.function_call_arguments.delta", {
-        type: "response.function_call_arguments.delta",
-        item_id: `fc_${refCallId}`,
-        output_index: tcIdx,
-        delta: tc.function.arguments
-      });
+      if (!freeform) {
+        emit("response.function_call_arguments.delta", {
+          type: "response.function_call_arguments.delta",
+          item_id: `fc_${refCallId}`,
+          output_index: tcIdx,
+          delta: tc.function.arguments
+        });
+      }
     }
     state.funcArgsBuf[tcIdx] += tc.function.arguments;
+    if (freeform && refCallId) {
+      const input = customToolInput(state.funcArgsBuf[tcIdx]);
+      const emitted = state.funcInputEmitted[tcIdx] || "";
+      if (input.startsWith(emitted) && input.length > emitted.length) {
+        emit("response.custom_tool_call_input.delta", {
+          type: "response.custom_tool_call_input.delta",
+          item_id: `ctc_${refCallId}`,
+          output_index: tcIdx,
+          delta: input.slice(emitted.length)
+        });
+        state.funcInputEmitted[tcIdx] = input;
+      }
+    }
   }
 }
 
@@ -301,23 +328,35 @@ function closeToolCall(state, emit, idx) {
   const callId = state.funcCallIds[idx];
   if (callId && !state.funcItemDone[idx]) {
     const args = state.funcArgsBuf[idx] || "{}";
-    
-    emit("response.function_call_arguments.done", {
-      type: "response.function_call_arguments.done",
-      item_id: `fc_${callId}`,
-      output_index: parseInt(idx),
-      arguments: args
-    });
+    const freeform = state.funcFreeform[idx] === true;
+    const input = freeform ? customToolInput(args) : null;
+
+    if (freeform) {
+      emit("response.custom_tool_call_input.done", {
+        type: "response.custom_tool_call_input.done",
+        item_id: `ctc_${callId}`,
+        output_index: parseInt(idx),
+        input
+      });
+    } else {
+      emit("response.function_call_arguments.done", {
+        type: "response.function_call_arguments.done",
+        item_id: `fc_${callId}`,
+        output_index: parseInt(idx),
+        arguments: args
+      });
+    }
 
     emit("response.output_item.done", {
       type: "response.output_item.done",
       output_index: parseInt(idx),
       item: {
-        id: `fc_${callId}`,
-        type: RESPONSES_ITEM.FUNCTION_CALL,
-        arguments: args,
+        id: `${freeform ? "ctc" : "fc"}_${callId}`,
+        type: freeform ? "custom_tool_call" : RESPONSES_ITEM.FUNCTION_CALL,
+        ...(freeform ? { input } : { arguments: args }),
         call_id: callId,
-        name: state.funcNames[idx] || ""
+        name: state.funcNames[idx] || "",
+        status: "completed"
       }
     });
 

@@ -31,7 +31,14 @@ function throwIfCancelled(token) {
   if (token.cancelled) throw new Error("tunnel cancelled");
 }
 
-export async function enableTunnel(localPort = 20128) {
+function defaultLocalPort() {
+  const configuredPort = Number.parseInt(process.env.PORT || "", 10);
+  return Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
+    ? configuredPort
+    : 20128;
+}
+
+export async function enableTunnel(localPort = defaultLocalPort()) {
   console.log(`[Tunnel] enable start (port=${localPort})`);
   svc.cancelToken = { cancelled: false };
   svc.activeLocalPort = localPort;

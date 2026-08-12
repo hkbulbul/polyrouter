@@ -96,7 +96,11 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
       }
       result.messages.push(msg);
     }
-    else if (itemType === RESPONSES_ITEM.FUNCTION_CALL) {
+    else if (
+      itemType === RESPONSES_ITEM.FUNCTION_CALL ||
+      itemType === RESPONSES_ITEM.CUSTOM_TOOL_CALL
+    ) {
+      const isCustom = itemType === RESPONSES_ITEM.CUSTOM_TOOL_CALL;
       // Start or append to assistant message with tool_calls
       if (!currentAssistantMsg) {
         currentAssistantMsg = {
@@ -111,13 +115,19 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
       currentAssistantMsg.tool_calls.push({
         id: item.call_id,
         type: OPENAI_BLOCK.FUNCTION,
+        ...(isCustom ? { _polyrouterFreeform: true } : {}),
         function: {
           name: item.name,
-          arguments: item.arguments
+          arguments: isCustom
+            ? JSON.stringify({ input: typeof item.input === "string" ? item.input : "" })
+            : item.arguments
         }
       });
     }
-    else if (itemType === RESPONSES_ITEM.FUNCTION_CALL_OUTPUT) {
+    else if (
+      itemType === RESPONSES_ITEM.FUNCTION_CALL_OUTPUT ||
+      itemType === RESPONSES_ITEM.CUSTOM_TOOL_CALL_OUTPUT
+    ) {
       // Flush assistant message first if exists
       if (currentAssistantMsg) {
         result.messages.push(currentAssistantMsg);
@@ -175,14 +185,25 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
         // Only convert when a non-empty name is present; skip hosted tools without one.
         const name = tool.name;
         if (!name || typeof name !== "string" || name.trim() === "") return null;
+        const isCustom = tool.type === "custom";
         return {
           type: OPENAI_BLOCK.FUNCTION,
           function: {
             name,
             description: String(tool.description || ""),
-            parameters: normalizeToolParameters(tool.parameters),
+            parameters: isCustom
+              ? {
+                  type: "object",
+                  properties: {
+                    input: { type: "string", description: "Freeform input for this custom tool." }
+                  },
+                  required: ["input"],
+                  additionalProperties: false
+                }
+              : normalizeToolParameters(tool.parameters),
             strict: tool.strict
-          }
+          },
+          ...(isCustom ? { _polyrouterOriginalType: "custom", _polyrouterFormat: tool.format } : {})
         };
       })
       .filter(Boolean);

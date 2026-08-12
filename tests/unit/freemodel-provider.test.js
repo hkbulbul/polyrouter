@@ -6,7 +6,7 @@ vi.mock("@/models", () => ({
 
 import REGISTRY from "../../open-sse/providers/registry/index.js";
 import { PROVIDERS, PROVIDER_MEDIA, PROVIDER_MODELS } from "../../open-sse/providers/index.js";
-import { resolveTransport } from "../../open-sse/services/provider.js";
+import { getTargetFormat, resolveTransport } from "../../open-sse/services/provider.js";
 import { POST as validateProvider } from "@/app/api/providers/validate/route.js";
 
 const originalFetch = global.fetch;
@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe("FreeModel provider registry", () => {
-  it("registers FreeModel as an LLM API-key provider with native compatible routes", () => {
+  it("registers FreeModel as an LLM API-key provider with OpenAI-native routes", () => {
     const freemodel = REGISTRY.find((entry) => entry.id === "freemodel");
 
     expect(freemodel).toMatchObject({
@@ -40,10 +40,10 @@ describe("FreeModel provider registry", () => {
       baseUrl: "https://api.freemodel.dev/v1/responses",
       auth: { header: "Authorization", scheme: "bearer" },
     });
-    expect(resolveTransport("freemodel", "claude")).toMatchObject({
-      baseUrl: "https://api.freemodel.dev/v1/messages",
-      auth: { header: "x-api-key", scheme: "raw" },
-    });
+    // FreeModel does not expose /v1/messages. Returning no native Claude
+    // transport makes PolyRouter translate the request to Chat Completions.
+    expect(resolveTransport("freemodel", "claude")).toBeNull();
+    expect(getTargetFormat("freemodel")).toBe("openai");
     expect(PROVIDER_MODELS.fm.map((model) => model.id)).toEqual([
       "auto",
       "FreeModel",

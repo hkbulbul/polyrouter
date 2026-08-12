@@ -102,6 +102,7 @@ import p99 from "./alims-intl.js";
 import p100 from "./zenmux.js";
 import p101 from "./freemodel.js";
 import p102 from "./meta.js";
+import p103 from "./chatgpt-web.js";
 
 export default [
   p0,
@@ -207,4 +208,5 @@ export default [
   p100,
   p101,
   p102,
+  p103,
 ];

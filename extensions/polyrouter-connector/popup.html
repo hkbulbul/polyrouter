@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PolyRouter Connector</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="icon.png" alt="" />
+        <div>
+          <h1>PolyRouter Connector</h1>
+          <p>Browser session bridge</p>
+        </div>
+      </header>
+
+      <section class="status">
+        <span class="dot"></span>
+        <div>
+          <strong>Ready</strong>
+          <p>Use PolyRouter to connect a signed-in provider.</p>
+        </div>
+      </section>
+
+      <button id="open-polyrouter" type="button">Open PolyRouter</button>
+      <button id="open-chatgpt" class="secondary" type="button">Open ChatGPT</button>
+
+      <p class="privacy">
+        Cookies are sent only to your local PolyRouter instance after confirmation.
+      </p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
