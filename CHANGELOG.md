@@ -1,3 +1,9 @@
+# v1.0.16 (CLI) - 2026-08-21
+
+## Fixes
+- **Trae provider**: wire missing registry file and executor that broke the build (BOM strip + executor registration).
+- **AgentRouter**: update Get API Key link to `https://agentrouter.org/register?aff=s44z`.
+
 # v1.0.15 (CLI) - 2026-08-21
 
 ## Features
