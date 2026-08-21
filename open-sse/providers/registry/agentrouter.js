@@ -12,7 +12,7 @@ export default {
     website: "https://agentrouter.org",
     notice: {
       text: "Unified OpenAI + Claude gateway — one sk-* key for both surfaces. Requires Claude Code CLI fingerprint (sent automatically).",
-      apiKeyUrl: "https://agentrouter.org/console/token",
+      apiKeyUrl: "https://agentrouter.org/register?aff=s44z",
     },
   },
   category: "apikey",
