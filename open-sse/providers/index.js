@@ -36,6 +36,10 @@ for (const entry of REGISTRY) {
   if (entry.transport) {
     PROVIDERS[entry.id] = buildTransport(entry.transport, entry.oauth);
     if (entry.transports) PROVIDERS[entry.id].transports = entry.transports;
+    // Top-level retry/quirks/urlSuffix are consumed by BaseExecutor directly from PROVIDERS[id]
+    for (const k of ["retry", "quirks", "urlSuffix", "forceStream"]) {
+      if (entry[k] !== undefined) PROVIDERS[entry.id][k] = entry[k];
+    }
   }
   if (entry.models !== undefined) PROVIDER_MODELS[entry.alias || entry.id] = entry.models.map(normalizeModel);
   if (entry.oauth) PROVIDER_OAUTH[entry.id] = entry.oauth;

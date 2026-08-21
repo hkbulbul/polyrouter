@@ -238,6 +238,7 @@ const PROVIDER_MODELS_CONFIG = {
     ...createOpenAIModelsConfig("https://zenmux.ai/api/v1/models"),
     parseResponse: parseZenMuxModels,
   },
+  agentrouter: createOpenAIModelsConfig("https://agentrouter.org/v1/models"),
   anthropic: {
     url: "https://api.anthropic.com/v1/models",
     method: "GET",

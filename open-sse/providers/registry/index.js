@@ -103,6 +103,8 @@ import p100 from "./zenmux.js";
 import p101 from "./freemodel.js";
 import p102 from "./meta.js";
 import p103 from "./chatgpt-web.js";
+import p104 from "./trae.js";
+import p105 from "./agentrouter.js";
 
 export default [
   p0,
@@ -209,4 +211,6 @@ export default [
   p101,
   p102,
   p103,
+  p104,
+  p105,
 ];

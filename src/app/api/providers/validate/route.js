@@ -331,6 +331,33 @@ export async function POST(request) {
           break;
         }
 
+        case "agentrouter": {
+          {
+            const cfg = PROVIDERS[provider];
+            const probeOne = async ({ baseUrl, headers }) => {
+              const testModel = getDefaultModel(provider) || "claude-opus-4-8";
+              return fetch(baseUrl, {
+                method: "POST",
+                headers: { "content-type": "application/json", ...headers },
+                body: JSON.stringify({ model: testModel, max_tokens: 1, messages: [{ role: "user", content: "test" }] }),
+              });
+            };
+            const openaiTrans = cfg?.transports?.find((t) => t.format === "openai");
+            const claudeTrans = cfg?.transports?.find((t) => t.format === "claude");
+            const probes = [];
+            // AgentRouter gates on full Claude CLI fingerprint — probes must
+            // carry ...transports[].headers or they 401 as "unauthorized_client"
+            // even with a valid key.
+            if (openaiTrans) probes.push(probeOne({ baseUrl: openaiTrans.baseUrl, headers: { "Authorization": `Bearer ${apiKey}`, ...(openaiTrans.headers || {}) } }));
+            if (claudeTrans) probes.push(probeOne({ baseUrl: claudeTrans.baseUrl, headers: { "x-api-key": apiKey, ...(claudeTrans.headers || {}) } }));
+            if (!probes.length) probes.push(probeOne({ baseUrl: cfg.baseUrl, headers: { "Authorization": `Bearer ${apiKey}`, ...(cfg.headers || {}) } }));
+            const results = await Promise.all(probes);
+            // Transient 503 "无可用渠道" (no channel for this model in group default)
+            // means auth passed — only 401/403 proves the key is bad.
+            isValid = results.some((r) => r.status !== 401 && r.status !== 403);
+            break;
+          }
+        }
         case "glm":
         case "glm-cn":
         case "kimi":
@@ -338,8 +365,7 @@ export async function POST(request) {
         case "minimax-cn":
         case "alicode-intl":
         case "alims-intl":
-        case "alicode":
-        case "agentrouter": {
+        case "alicode": {
           // Use baseUrl from PROVIDERS (DRY); separate openai-format vs claude-format flow
           const cfg = PROVIDERS[provider];
           const isOpenAiFormat = provider === "glm-cn" || provider === "alicode" || provider === "alicode-intl" || provider === "alims-intl";
@@ -364,7 +390,7 @@ export async function POST(request) {
               },
               body: JSON.stringify({ model: testModel, max_tokens: 1, messages: [{ role: "user", content: "test" }] }),
             });
-            // 400 = model resolution error but auth passed (e.g. agentrouter "no available channel")
+            // 400 = model resolution error but auth passed (e.g. quota/route error still proves key auth)
             isValid = res.status !== 401 && res.status !== 403;
           }
           break;
