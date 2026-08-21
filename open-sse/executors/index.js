@@ -21,6 +21,7 @@ import { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 import { MimoFreeExecutor } from "./mimo-free.js";
 import { ChatGptWebExecutor } from "./chatgpt-web.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
+import { TraeExecutor } from "./trae.js";
 import { DefaultExecutor } from "./default.js";
 
 const executors = {
@@ -52,6 +53,8 @@ const executors = {
   "chatgpt-web": new ChatGptWebExecutor(),
   mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),
+  trae: new TraeExecutor(),
+  tr: new TraeExecutor(),
 };
 
 const defaultCache = new Map();
@@ -90,4 +93,5 @@ export { CommandCodeExecutor } from "./commandcode.js";
 export { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 export { MimoFreeExecutor } from "./mimo-free.js";
 export { ChatGptWebExecutor } from "./chatgpt-web.js";
+export { TraeExecutor } from "./trae.js";
 export { CodeBuddyExecutor } from "./codebuddy-cn.js";
