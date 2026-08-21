@@ -1,3 +1,8 @@
+# v1.0.15 (CLI) - 2026-08-21
+
+## Features
+- **AgentRouter provider**: add unified OpenAI + Claude gateway (agentrouter.org) — one sk-* key for both surfaces, dual transports with Claude CLI fingerprint, transient 503 retry, and dashboard/API-key integration.
+
 # v1.0.14 (CLI) - 2026-08-12
 
 ## Features
