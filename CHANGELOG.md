@@ -1,3 +1,13 @@
+# v1.0.17 (CLI) - 2026-08-23
+
+## Features
+- **Tunnels**: add optional ngrok backend and stable Cloudflare worker registration.
+- **Providers**: add Nara provider integration.
+
+## Fixes
+- **Antigravity/Gemini**: improve OAuth project handling, retries, request translation, and terminal stream errors.
+- **Auth/DB**: improve credential refresh locking, database retry recovery, and callback handling.
+
 # v1.0.16 (CLI) - 2026-08-21
 
 ## Fixes
