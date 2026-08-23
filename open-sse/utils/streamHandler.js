@@ -95,7 +95,7 @@ export function createStreamController({ onDisconnect, onError, log, provider, m
  * for long periods while raw bytes still flow (e.g. Kiro EventStream
  * binary frames buffering, Claude reasoning streams).
  */
-export function createDisconnectAwareStream(transformStream, streamController, onAbortTerminal = null) {
+export function createDisconnectAwareStream(transformStream, streamController, onAbortTerminal = null, onStreamAbort = null) {
   const reader = transformStream.readable.getReader();
   const writer = transformStream.writable.getWriter();
   let terminalEmitted = false;
@@ -149,7 +149,22 @@ export function createDisconnectAwareStream(transformStream, streamController, o
           code === "ECONNRESET" ||
           code === "ETIMEDOUT" ||
           code === "EPIPE" ||
-          code === "UND_ERR_SOCKET";
+          code === "UND_ERR_SOCKET" ||
+          // undici's own read deadlines. Its defaults (300s) are *below* the app
+          // stall watchdog, so in practice these are the codes a silent upstream
+          // actually produces — they were missing from this list entirely.
+          code === "UND_ERR_BODY_TIMEOUT" ||
+          code === "UND_ERR_HEADERS_TIMEOUT";
+
+        // Penalize the account only for a genuine upstream fault. `wasConnected` is
+        // the discriminator: both handleDisconnect (client pressed stop) and the
+        // stall watchdog's handleError set disconnected=true *before* aborting, so
+        // the AbortError they cause arrives here with wasConnected === false. A real
+        // ECONNRESET from upstream arrives with it still true. Without this gate,
+        // stopping a generation would cool down your own account every time.
+        if (wasConnected && isNetworkClose) {
+          try { onStreamAbort?.(error); } catch { /* never let reporting break teardown */ }
+        }
 
         // Graceful close on network/abort, or when a structured terminal is available
         // (Responses passthrough prefers response.failed + [DONE] over a raw transport error)
@@ -166,8 +181,11 @@ export function createDisconnectAwareStream(transformStream, streamController, o
 
     cancel(reason) {
       streamController.handleDisconnect(reason || "cancelled");
-      reader.cancel();
-      writer.abort();
+      // Both can reject (already-errored source, closed writer). Unhandled here
+      // means an unhandledRejection on a path that is otherwise entirely normal —
+      // the client just pressed stop.
+      reader.cancel().catch(() => {});
+      writer.abort().catch(() => {});
     }
   });
 }
@@ -187,8 +205,12 @@ export function createDisconnectAwareStream(transformStream, streamController, o
  * @param {Response} providerResponse - Response from provider
  * @param {TransformStream} transformStream - Transform stream for SSE
  * @param {object} streamController - Stream controller from createStreamController
+ * @param {function|null} onStreamAbort - Called once when the upstream dies while the
+ *   client was still connected. Deliberately NOT called for a stall timeout: 360s of
+ *   silence is ambiguous (long-thinking models go quiet), and the cooldown it would
+ *   trigger persists in the DB.
  */
-export function pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal = null, stallTimeoutMs = STREAM_STALL_TIMEOUT_MS) {
+export function pipeWithDisconnect(providerResponse, transformStream, streamController, onAbortTerminal = null, stallTimeoutMs = STREAM_STALL_TIMEOUT_MS, onStreamAbort = null) {
   let stallTimer = null;
   let chunkCount = 0;
   let totalBytes = 0;
@@ -248,7 +270,8 @@ export function pipeWithDisconnect(providerResponse, transformStream, streamCont
   return createDisconnectAwareStream(
     { readable: transformedBody, writable: { getWriter: () => ({ abort: () => Promise.resolve() }) } },
     wrappedController,
-    onAbortTerminal
+    onAbortTerminal,
+    onStreamAbort
   );
 }
 

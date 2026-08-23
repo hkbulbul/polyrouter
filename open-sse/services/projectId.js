@@ -7,7 +7,13 @@
  * This significantly reduces the risk of being flagged by Google's anti-abuse systems.
  */
 
-import { CLOUD_CODE_API, LOAD_CODE_ASSIST_HEADERS, LOAD_CODE_ASSIST_METADATA } from "../config/appConstants.js";
+import {
+    CLOUD_CODE_API,
+    LOAD_CODE_ASSIST_HEADERS,
+    LOAD_CODE_ASSIST_METADATA,
+    ANTIGRAVITY_LOAD_CODE_ASSIST_HEADERS,
+    ANTIGRAVITY_LOAD_CODE_ASSIST_METADATA,
+} from "../config/appConstants.js";
 
 // ─── Cache ────────────────────────────────────────────────────────────────────
 // connectionId -> { projectId: string, fetchedAt: number }
@@ -22,6 +28,9 @@ const pendingFetches = new Map();
 
 /** Abort and evict a pending fetch that has been running longer than this (2 min). */
 const PENDING_TTL_MS = 2 * 60 * 1000;
+
+/** Per-call deadline for loadCodeAssist. Mirrors onboardUser's per-attempt 30s. */
+const LOAD_CODE_ASSIST_TIMEOUT_MS = 30_000;
 
 // ─── Periodic cleanup ────────────────────────────────────────────────────────
 /** How often the background sweep runs (10 min). */
@@ -73,6 +82,23 @@ export function stopCacheCleanup() {
 // Start automatically when the module is first imported
 startCacheCleanup();
 
+// ─── BYOP (Bring Your Own Project) terminal state ─────────────────────────────
+// Google no longer auto-creates a Cloud Code project for standard-tier/personal
+// accounts: onboardUser returns done:true with no `cloudaicompanionProject`. That
+// is a terminal state, not a transient failure — cache it per-connection for the
+// process lifetime so we stop burning an ~18s onboard round-trip on every request
+// (OmniRoute parity, tracked upstream as #8491).
+const requiresManualProjectCache = new Set();
+
+// Internal sentinel returned by fetchProjectId → getProjectIdForConnection to
+// distinguish "Google requires a user-defined project" from "transient failure".
+const ANTIGRAVITY_REQUIRES_MANUAL_PROJECT = "__REQUIRES_GCP_PROJECT__";
+
+/** True when Google told us this connection must supply its own GCP project id. */
+export function requiresManualGcpProject(connectionId) {
+    return !!connectionId && requiresManualProjectCache.has(connectionId);
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -83,8 +109,16 @@ startCacheCleanup();
  * @param {string} accessToken  - Valid OAuth access token
  * @returns {Promise<string|null>} Real project ID or null
  */
-export async function getProjectIdForConnection(connectionId, accessToken) {
+/** Sentinel re-export for executor BYOP branching. */
+export { ANTIGRAVITY_REQUIRES_MANUAL_PROJECT };
+
+export async function getProjectIdForConnection(connectionId, accessToken, provider = "antigravity") {
     if (!connectionId || !accessToken) return null;
+
+    // BYOP terminal state: fail fast without a network round-trip.
+    if (connectionId && requiresManualProjectCache.has(connectionId)) {
+        return ANTIGRAVITY_REQUIRES_MANUAL_PROJECT;
+    }
 
     // Return cached value if still fresh
     const cached = projectIdCache.get(connectionId);
@@ -102,7 +136,12 @@ export async function getProjectIdForConnection(connectionId, accessToken) {
 
     const promise = (async () => {
         try {
-            const projectId = await fetchProjectId(accessToken, controller.signal);
+            const projectId = await fetchProjectId(accessToken, controller.signal, provider);
+            if (projectId === ANTIGRAVITY_REQUIRES_MANUAL_PROJECT) {
+                requiresManualProjectCache.add(connectionId);
+                console.warn("[ProjectId] BYOP required for connection", connectionId.slice(0, 8), "— Google requires a user-supplied GCP project");
+                return ANTIGRAVITY_REQUIRES_MANUAL_PROJECT;
+            }
             if (projectId) {
                 projectIdCache.set(connectionId, {projectId, fetchedAt: Date.now()});
                 return projectId;
@@ -126,6 +165,7 @@ export async function getProjectIdForConnection(connectionId, accessToken) {
  * Call this when a connection's credentials are fully revoked or refreshed.
  */
 export function invalidateProjectId(connectionId) {
+    // Do not clear requiresManualProjectCache here — BYOP is terminal, not transient
     projectIdCache.delete(connectionId);
 }
 
@@ -137,6 +177,7 @@ export function invalidateProjectId(connectionId) {
  */
 export function removeConnection(connectionId) {
     if (!connectionId) return;
+    requiresManualProjectCache.delete(connectionId);
     projectIdCache.delete(connectionId);
     const pending = pendingFetches.get(connectionId);
     if (pending) {
@@ -155,13 +196,37 @@ export function removeConnection(connectionId) {
  * @param {AbortSignal} signal
  * @returns {Promise<string|null>}
  */
-async function fetchProjectId(accessToken, signal) {
-    const response = await fetch(CLOUD_CODE_API.loadCodeAssist, {
-        method: "POST",
-        headers: { ...LOAD_CODE_ASSIST_HEADERS, "Authorization": `Bearer ${accessToken}` },
-        body: JSON.stringify({ metadata: LOAD_CODE_ASSIST_METADATA }),
-        signal
-    });
+async function fetchProjectId(accessToken, signal, provider = "antigravity") {
+    const isAntigravity = provider === "antigravity";
+    const headers = isAntigravity ? ANTIGRAVITY_LOAD_CODE_ASSIST_HEADERS : LOAD_CODE_ASSIST_HEADERS;
+    const metadata = isAntigravity ? ANTIGRAVITY_LOAD_CODE_ASSIST_METADATA : LOAD_CODE_ASSIST_METADATA;
+
+    // `signal` comes from a caller-owned AbortController that only fires on
+    // removeConnection() or the 2-minute PENDING_TTL_MS sweep — and that sweep only
+    // runs every CLEANUP_INTERVAL_MS, so a silent endpoint could leave this
+    // connection's pendingFetches entry (and therefore every later request for it,
+    // via the dedupe check in getProjectId) stuck for up to ~12 minutes. Bounding
+    // the call directly cuts that to seconds and makes the caller's `finally` the
+    // normal path rather than the sweeper. onboardUser below already does this for
+    // each of its attempts; this matches it.
+    const localCtrl = new AbortController();
+    const timeoutId = setTimeout(() => localCtrl.abort(), LOAD_CODE_ASSIST_TIMEOUT_MS);
+    timeoutId.unref?.();
+    const forwardAbort = () => localCtrl.abort();
+    signal?.addEventListener("abort", forwardAbort, { once: true });
+
+    let response;
+    try {
+        response = await fetch(CLOUD_CODE_API.loadCodeAssist, {
+            method: "POST",
+            headers: { ...headers, "Authorization": `Bearer ${accessToken}` },
+            body: JSON.stringify({ metadata }),
+            signal: localCtrl.signal
+        });
+    } finally {
+        clearTimeout(timeoutId);
+        signal?.removeEventListener("abort", forwardAbort);
+    }
 
     if (!response.ok) {
         const errorText = await response.text().catch(() => "");
@@ -185,7 +250,7 @@ async function fetchProjectId(accessToken, signal) {
         }
     }
 
-    return onboardUser(accessToken, tierID, signal);
+    return onboardUser(accessToken, tierID, signal, provider);
 }
 
 /**
@@ -196,10 +261,13 @@ async function fetchProjectId(accessToken, signal) {
  * @param {AbortSignal} externalSignal  – propagated from the connection's AbortController
  * @returns {Promise<string|null>}
  */
-async function onboardUser(accessToken, tierID, externalSignal) {
+async function onboardUser(accessToken, tierID, externalSignal, provider = "antigravity") {
     console.log(`[ProjectId] Onboarding user with tier: ${tierID}`);
 
-    const reqBody = { tierId: tierID, metadata: LOAD_CODE_ASSIST_METADATA };
+    const isAntigravity = provider === "antigravity";
+    const headers = isAntigravity ? ANTIGRAVITY_LOAD_CODE_ASSIST_HEADERS : LOAD_CODE_ASSIST_HEADERS;
+    const metadata = isAntigravity ? ANTIGRAVITY_LOAD_CODE_ASSIST_METADATA : LOAD_CODE_ASSIST_METADATA;
+    const reqBody = { tier_id: tierID, metadata };
     const MAX_ATTEMPTS = 5;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -215,7 +283,7 @@ async function onboardUser(accessToken, tierID, externalSignal) {
         try {
             const response = await fetch(CLOUD_CODE_API.onboardUser, {
                 method: "POST",
-                headers: { ...LOAD_CODE_ASSIST_HEADERS, "Authorization": `Bearer ${accessToken}` },
+                headers: { ...headers, "Authorization": `Bearer ${accessToken}` },
                 body: JSON.stringify(reqBody),
                 signal: localCtrl.signal
             });
@@ -235,7 +303,12 @@ async function onboardUser(accessToken, tierID, externalSignal) {
                     console.log(`[ProjectId] Successfully onboarded, project ID: ${projectId}`);
                     return projectId;
                 }
-                throw new Error("onboardUser done but no project_id in response");
+                // BYOP terminal state: Google completed onboarding but did not create a
+                // project (standard-tier/personal account). Cache per-connection so we
+                // stop burning ~18s on every request and let the executor surface the
+                // actionable gcp_project_required 422 instead of generic missing_project_id.
+                // OmniRoute parity (#8491).
+                return ANTIGRAVITY_REQUIRES_MANUAL_PROJECT;
             }
 
             // Server not done yet – wait and retry

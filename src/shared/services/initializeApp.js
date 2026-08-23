@@ -7,7 +7,8 @@ import {
   enableTunnel, enableTailscale,
   isTunnelManuallyDisabled, isTunnelReconnecting, isTailscaleReconnecting,
   getTunnelService, getTailscaleService, setTunnelUnexpectedExitCallback,
-  killCloudflared, isCloudflaredRunning, ensureCloudflared,
+  killCloudflared, isTunnelProcessAlive, ensureCloudflared, normalizeProvider,
+  stopNgrokListener,
   isTailscaleRunning, isTailscaleRunningStrict, isDaemonAlive, startFunnel,
   checkInternet,
   RESTART_COOLDOWN_MS, NETWORK_SETTLE_MS,
@@ -58,10 +59,16 @@ export async function initializeApp() {
     // Register cleanup + exit-respawn callback immediately so signals and
     // unexpected cloudflared exits are handled even during the deferred window.
     if (!g.signalHandlersRegistered) {
-      const cleanup = () => {
+      const cleanup = async () => {
         try { removeAllDNSEntriesSync(); } catch { /* best effort */ }
         try { killAllBridges(); } catch { /* best effort */ }
         killCloudflared();
+        // Close the ngrok endpoint politely (free tier allows only one at a time,
+        // so a hard exit can make the next start collide). Bounded — never hang exit.
+        await Promise.race([
+          stopNgrokListener().catch(() => {}),
+          new Promise((r) => setTimeout(r, 1500)),
+        ]);
         process.exit();
       };
       process.on("SIGINT", cleanup);
@@ -101,7 +108,10 @@ async function runHeavyStartup() {
     safeRestartTailscale("startup").catch((e) => console.log("[InitApp] Tailscale resume failed:", e.message));
   }
 
-  if (settings.tunnelEnabled) ensureCloudflared().catch(() => {});
+  // Prefetch the cloudflared binary only when it's the active backend.
+  if (settings.tunnelEnabled && normalizeProvider(settings.tunnelProvider) === "cloudflare") {
+    ensureCloudflared().catch(() => {});
+  }
 
   if (settings.mitmEnabled) {
     // Sync mitmAlias DB → JSON cache so standalone MITM server can read it.
@@ -163,17 +173,19 @@ const FORCE_RESTART_REASONS = /^(startup|netchange|sleep|sleep\+netchange|online
 // ─── Safe restart (4 guards: spawn / cooldown / alive / internet) ────────────
 
 async function safeRestartTunnel(reason) {
-  const svc = getTunnelService();
   const settings = await getSettings();
   if (!settings.tunnelEnabled) return;
+  const provider = normalizeProvider(settings.tunnelProvider);
+  const svc = getTunnelService(provider);
   if (svc.cancelToken.cancelled) return;
   if (svc.spawnInProgress) return;
 
   const force = FORCE_RESTART_REASONS.test(reason);
 
-  // Process alive = trust cloudflared (self-reconnects via --retries 99, keeps same URL).
-  // Killing a live process on network change drops the tunnel and rotates the quick-tunnel URL.
-  if (isCloudflaredRunning()) return;
+  // Process alive = trust the backend (cloudflared self-reconnects via --retries 99 and
+  // keeps its URL; the ngrok agent reconnects too). Killing a live one drops the tunnel
+  // and rotates the URL for nothing.
+  if (isTunnelProcessAlive(provider)) return;
 
   if (!force && Date.now() - svc.lastRestartAt < RESTART_COOLDOWN_MS) {
     console.log(`[Tunnel] degraded but cooldown active, skip (${reason})`);

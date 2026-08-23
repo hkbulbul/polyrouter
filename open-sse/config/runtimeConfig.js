@@ -50,6 +50,16 @@ export const SEARXNG_URL = envUrl("SEARXNG_URL", "http://localhost:8888/search")
 
 // Inter-chunk stall timeout (once tokens are flowing). Generous headroom so
 // slow reasoning models aren't aborted mid-stream. Env: STREAM_STALL_TIMEOUT_MS.
+//
+// ponytail: the EFFECTIVE ceiling is undici's bodyTimeout default (300s), not this
+// 360s — no global dispatcher is installed, so undici always fires first and this
+// watchdog is unreachable at its default value. Left as-is deliberately: lowering
+// it below 300s would abort slow reasoning models *sooner* than today, and raising
+// undici's limit means setGlobalDispatcher on every request path. The failure is at
+// least handled cleanly now — UND_ERR_BODY_TIMEOUT is classified as a network close
+// in utils/streamHandler.js, so it produces a terminal error frame rather than a raw
+// transport break. Revisit by installing a dispatcher with bodyTimeout > this value
+// if a provider genuinely needs a >300s inter-chunk gap.
 export const STREAM_STALL_TIMEOUT_MS = envMs("STREAM_STALL_TIMEOUT_MS", 360 * 1000);
 
 // Time-to-first-token timeout (prompt prefill). Env: STREAM_FIRST_CHUNK_TIMEOUT_MS.
@@ -60,6 +70,18 @@ export const FETCH_CONNECT_TIMEOUT_MS = envMs("FETCH_CONNECT_TIMEOUT_MS", 60 * 1
 
 // Gemini native TTS fetch timeout: abort if Google does not return response headers in time.
 export const GEMINI_NATIVE_TTS_FETCH_TIMEOUT_MS = envMs("GEMINI_NATIVE_TTS_FETCH_TIMEOUT_MS", 45 * 1000);
+
+// OAuth token-refresh timeout. These calls sit inline in the request hot path
+// (chat.js awaits checkAndRefreshToken before touching the upstream), and every
+// one of them is wrapped in a singleflight map — so an unbounded refresh doesn't
+// just stall one request, it pins the in-flight entry and blocks every later
+// refresh for that provider until the process restarts. Env: TOKEN_REFRESH_TIMEOUT_MS.
+export const TOKEN_REFRESH_TIMEOUT_MS = envMs("TOKEN_REFRESH_TIMEOUT_MS", 30 * 1000);
+
+// Grace period on top of TOKEN_REFRESH_TIMEOUT_MS after which a singleflight
+// entry is treated as stale and re-attempted, even if its own timeout somehow
+// didn't fire. Belt and braces: the signal releases the socket, this releases the map.
+export const TOKEN_REFRESH_INFLIGHT_TTL_MS = TOKEN_REFRESH_TIMEOUT_MS + 5_000;
 
 // Default token limits
 export const DEFAULT_MAX_TOKENS = 64000;

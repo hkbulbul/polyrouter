@@ -213,6 +213,15 @@ ensureModuleInBundle("sql.js");
 // The realtime bridge is loaded by custom-server.js, so it is not visible to
 // Next's output tracer and must be carried explicitly by the CLI bundle.
 ensureModuleInBundle("ws");
+// @ngrok/ngrok is an optionalDependency reached only through a lazy dynamic
+// import() in src/lib/tunnel/ngrok/ngrok.js, so the tracer never sees it either.
+// Copy the whole scope: the wrapper plus whichever platform-native subpackage npm
+// installed for this host (@ngrok/ngrok-win32-x64-msvc, -darwin-arm64, -linux-x64-gnu…).
+// ponytail: bundles only the publishing host's binary, so ngrok works on that
+// platform alone; other platforms hit ngrok.js's fail-open "not installed" error and
+// fall back to cloudflare/tailscale. Add a per-platform hydrate step if ngrok needs
+// to work on every published target.
+ensureModuleInBundle("@ngrok");
 const betterDir = path.join(cliAppDir, "node_modules", "better-sqlite3");
 if (fs.existsSync(betterDir)) {
   fs.rmSync(betterDir, { recursive: true, force: true });

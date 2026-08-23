@@ -19,9 +19,10 @@ const PROTECTED_SETTING_KEYS = ["password", "mitmSudoEncrypted"];
 export async function GET() {
   try {
     const settings = await getSettings();
-    const { password, oidcClientSecret, ...safeSettings } = settings;
+    const { password, oidcClientSecret, ngrokAuthtoken, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
-    
+    safeSettings.ngrokConfigured = !!(ngrokAuthtoken || process.env.NGROK_AUTHTOKEN);
+
     const enableRequestLogs = process.env.ENABLE_REQUEST_LOGS === "true";
     const enableTranslator = process.env.ENABLE_TRANSLATOR === "true";
     
@@ -73,9 +74,10 @@ export async function PATCH(request) {
       delete body.currentPassword;
     }
 
-    if (Object.prototype.hasOwnProperty.call(body, "oidcClientSecret")) {
-      if (!body.oidcClientSecret || !String(body.oidcClientSecret).trim()) {
-        delete body.oidcClientSecret;
+    // Blank secret fields mean "unchanged" — never let an empty form clobber a stored secret
+    for (const key of ["oidcClientSecret", "ngrokAuthtoken"]) {
+      if (Object.prototype.hasOwnProperty.call(body, key) && !String(body[key] || "").trim()) {
+        delete body[key];
       }
     }
 
@@ -111,8 +113,9 @@ export async function PATCH(request) {
         .catch((error) => console.warn("[AutoPing] settings update failed:", error.message));
     }
 
-    const { password, oidcClientSecret, ...safeSettings } = settings;
+    const { password, oidcClientSecret, ngrokAuthtoken, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
+    safeSettings.ngrokConfigured = !!(ngrokAuthtoken || process.env.NGROK_AUTHTOKEN);
     return NextResponse.json(safeSettings, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {
     console.log("Error updating settings:", error);

@@ -21,8 +21,14 @@ import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
-import { getProjectIdForConnection } from "open-sse/services/projectId.js";
-import { isToolSchemaValidationError } from "open-sse/services/accountFallback.js";
+import {
+  getProjectIdForConnection,
+  ANTIGRAVITY_REQUIRES_MANUAL_PROJECT,
+} from "open-sse/services/projectId.js";
+import {
+  isToolSchemaValidationError,
+  isAccountValidationRequiredError,
+} from "open-sse/services/accountFallback.js";
 
 /**
  * Handle chat completion request
@@ -218,10 +224,18 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // Account selection shown in the unified "▶" line (acc:...)
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 
-    // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
-    if ((provider === "antigravity" || provider === "gemini-cli") && !refreshedCredentials.projectId) {
+    // Ensure a real project ID is available for providers that need it (P0 fix: cold miss).
+    // Never promote the internal BYOP sentinel into credentials/SQLite.
+    const hasByopSentinel = refreshedCredentials.projectId === ANTIGRAVITY_REQUIRES_MANUAL_PROJECT;
+    if ((provider === "antigravity" || provider === "gemini-cli") && (!refreshedCredentials.projectId || hasByopSentinel)) {
+      if (hasByopSentinel) {
+        refreshedCredentials.projectId = null;
+        updateProviderCredentials(credentials.connectionId, { projectId: null }).catch(() => {});
+      }
       const pid = await getProjectIdForConnection(credentials.connectionId, refreshedCredentials.accessToken);
-      if (pid) {
+      if (pid === ANTIGRAVITY_REQUIRES_MANUAL_PROJECT) {
+        refreshedCredentials.projectId = null;
+      } else if (pid) {
         refreshedCredentials.projectId = pid;
         // Persist to DB in background so subsequent requests have it immediately
         updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => { });
@@ -267,14 +281,39 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       },
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
+      },
+      // Fires only when the upstream body dies while the client was still
+      // connected — never on a client "stop generating", never on our own stall
+      // abort (streamHandler gates on `wasConnected`). By this point the response
+      // headers are long gone, so we cannot fall back or retry; all we can do is
+      // stop handing this account to the next request.
+      //
+      // 502 with a fixed message deliberately matches no ERROR_RULES entry, so
+      // checkFallbackError lands on TRANSIENT_COOLDOWN_MS (30s) rather than
+      // exponential backoff. The raw transport code goes to the log, not into the
+      // classifier — an upstream string containing "overloaded"/"capacity" would
+      // otherwise escalate a plain socket reset into a minutes-long cooldown.
+      onStreamAbort: (err) => {
+        log.errorLine?.("", "✗", `MID-STREAM ABORT · ${provider}/${model} · ACC:${credentials.connectionName} · ${err?.code || err?.name || ""} ${err?.message || err}`);
+        markAccountUnavailable(
+          credentials.connectionId,
+          502,
+          "mid-stream upstream disconnect",
+          provider,
+          model
+        ).catch((e) => log.warn("CHAT", `markAccountUnavailable after mid-stream abort failed: ${e?.message || e}`));
       }
     });
 
     if (result.success) return result.response;
 
-    // A rejected tool schema is deterministic for this request, not an account failure.
+    // Deterministic/action-required failures are not account/model health failures.
     if (isToolSchemaValidationError(result.status, result.error)) {
       log.warn("CHAT", `[${provider}/${model}] tool schema validation failed; preserving account availability`);
+      return result.response;
+    }
+    if (isAccountValidationRequiredError(result.status, result.error)) {
+      log.warn("CHAT", `[${provider}/${model}] Google account verification required; preserving account availability`);
       return result.response;
     }
 

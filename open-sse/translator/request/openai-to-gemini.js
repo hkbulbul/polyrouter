@@ -366,21 +366,20 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     }
   }
 
-  // Cloud Code accepts Gemini's functionDeclarations wrapper, then forwards
-  // declarations to its Claude backend. Preserve both schema field names:
-  // parameters satisfies Cloud Code while input_schema satisfies Anthropic.
+  // Preserve the source schema here; the executor converts it to Cloud Code's
+  // protobuf `parameters` representation for Claude-backed models.
   if (claudeRequest.tools && Array.isArray(claudeRequest.tools)) {
     const functionDeclarations = [];
     for (const tool of claudeRequest.tools) {
       if (!tool?.name) continue;
-      const schema = cleanJSONSchemaForAntigravity(
-        structuredClone(tool.input_schema || { type: "object", properties: {} })
+      // Preserve standard JSON Schema until the executor boundary.
+      const schema = structuredClone(
+        tool.input_schema || { type: "object", properties: {} }
       );
       functionDeclarations.push({
         name: sanitizeGeminiFunctionName(tool.name),
         description: tool.description || "",
         parameters: schema,
-        input_schema: structuredClone(schema),
       });
     }
     if (functionDeclarations.length > 0) {

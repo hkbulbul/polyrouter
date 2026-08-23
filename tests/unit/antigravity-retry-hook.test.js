@@ -52,8 +52,8 @@ describe("antigravity computeRetryDelay hook (D3)", () => {
     expect(await ag.computeRetryDelay(r, 1)).toBe(false);
   });
 
-  it("deduplicates sanitized tool names", () => {
-    const out = ag.transformRequest("claude-opus-4-6-thinking", {
+  it("deduplicates sanitized tool names", async () => {
+    const out = await ag.transformRequest("claude-opus-4-6-thinking", {
       request: {
         contents: [{ role: "user", parts: [{ text: "hi" }] }],
         tools: [{ functionDeclarations: [
@@ -68,23 +68,29 @@ describe("antigravity computeRetryDelay hook (D3)", () => {
   });
 
   it("registry uses the official IDE cloudcode host and user agent", () => {
-    expect(antigravity.transport.baseUrls).toEqual(["https://cloudcode-pa.googleapis.com"]);
+    expect(antigravity.transport.baseUrls).toEqual([
+      "https://daily-cloudcode-pa.googleapis.com",
+      "https://cloudcode-pa.googleapis.com",
+    ]);
     expect(antigravity.transport.headers["User-Agent"]).toBe("antigravity/ide/2.1.1 darwin/arm64");
   });
 
-  it("buildHeaders matches official IDE stream headers", () => {
-    ag._lastSessionId = "sess-123";
+  it("buildHeaders matches official IDE stream headers", async () => {
+    await ag.transformRequest("claude-opus-4-6-thinking", {
+      request: { contents: [{ role: "user", parts: [{ text: "hi" }] }] },
+    }, true, { projectId: "project-1", connectionId: "conn-1" });
     const h = ag.buildHeaders({ accessToken: "tok" }, true);
     expect(h["User-Agent"]).toBe("antigravity/ide/2.1.1 darwin/arm64");
     expect(h["Content-Type"]).toBe("application/json");
+    expect(h).not.toHaveProperty("x-goog-user-project");
     expect(h["Authorization"]).toBe("Bearer tok");
+    expect(h["Accept"]).toBe("text/event-stream");
     expect(h).not.toHaveProperty("X-Machine-Session-Id");
     expect(h).not.toHaveProperty("x-request-source");
-    expect(h).not.toHaveProperty("Accept");
   });
 
-  it("transforms chat requests with official IDE requestId shape and 64000 token cap", () => {
-    const out = ag.transformRequest("claude-opus-4-6-thinking", {
+  it("transforms chat requests with official IDE requestId shape and 64000 token cap", async () => {
+    const out = await ag.transformRequest("claude-opus-4-6-thinking", {
       request: {
         contents: [
           { role: "user", parts: [{ text: "hi" }] },

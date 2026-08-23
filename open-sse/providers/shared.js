@@ -59,6 +59,10 @@ export const ANTHROPIC_COMPAT_BASE = "https://api.anthropic.com/v1";
 // intentionally matching the IDE client, not the server host.
 export const ANTIGRAVITY_IDE_VERSION = "2.1.1";
 export const ANTIGRAVITY_IDE_BASE_URL = "https://cloudcode-pa.googleapis.com";
+// The `daily-` host is the primary runtime endpoint the native Antigravity desktop
+// client actually hits; `cloudcode-pa` is the stable fallback. Order matters — the
+// executor walks baseUrls in order and falls back on failure (OmniRoute parity).
+export const ANTIGRAVITY_IDE_DAILY_BASE_URL = "https://daily-cloudcode-pa.googleapis.com";
 export const ANTIGRAVITY_IDE_USER_AGENT = `antigravity/ide/${ANTIGRAVITY_IDE_VERSION} darwin/arm64`;
 
 // Antigravity OAuth client credentials (public CLI client — duplicated in usage.js + src/lib/oauth)

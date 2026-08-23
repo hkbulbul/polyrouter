@@ -125,8 +125,14 @@ export class BaseExecutor {
 
     for (let urlIndex = 0; urlIndex < fallbackCount; urlIndex++) {
       const url = this.buildUrl(model, stream, urlIndex, credentials);
-      const transformedBody = this.transformRequest(model, body, stream, credentials);
+      const transformedBody = await this.transformRequest(model, body, stream, credentials);
       const headers = this.buildHeaders(credentials, stream);
+
+      // A subclass (e.g. antigravity) can fail fast by returning a bare Response
+      // from transformRequest — forward it unchanged instead of trying to fetch.
+      if (transformedBody instanceof Response) {
+        return { response: transformedBody, url, headers, transformedBody: null };
+      }
 
       if (!retryAttemptsByUrl[urlIndex]) retryAttemptsByUrl[urlIndex] = 0;
 

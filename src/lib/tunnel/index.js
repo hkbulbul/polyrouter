@@ -1,13 +1,18 @@
-// Cloudflare service
+// Tunnel service — provider-dispatched (cloudflare | ngrok)
 export {
   enableTunnel,
   disableTunnel,
   getTunnelStatus,
   isTunnelManuallyDisabled,
   isTunnelReconnecting,
+  isTunnelProcessAlive,
   getTunnelService,
   setTunnelUnexpectedExitCallback,
-} from "./cloudflare/manager.js";
+  normalizeProvider,
+  TUNNEL_PROVIDERS,
+} from "./dispatch.js";
+
+// Cloudflare-specific (binary management)
 export {
   killCloudflared,
   isCloudflaredRunning,
@@ -15,6 +20,9 @@ export {
   getDownloadStatus,
 } from "./cloudflare/cloudflared.js";
 export { probeUrlAlive as probeCloudflareAlive } from "./cloudflare/healthCheck.js";
+
+// ngrok-specific (in-process listener)
+export { isNgrokRunning, stopNgrokListener } from "./ngrok/ngrok.js";
 
 // Tailscale service
 export {

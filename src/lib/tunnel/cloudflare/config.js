@@ -5,5 +5,3 @@ export const HEALTH_CHECK = {
   fetchTimeoutMs: 5000,
   dnsTimeoutMs: 2000,
 };
-
-export const WORKER_URL = process.env.TUNNEL_WORKER_URL || "https://abc-tunnel.us";

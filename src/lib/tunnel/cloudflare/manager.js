@@ -2,7 +2,8 @@ import { loadState, saveState, generateShortId } from "../shared/state.js";
 import { spawnQuickTunnel, killCloudflared, isCloudflaredRunning, setUnexpectedExitHandler } from "./cloudflared.js";
 import { clearPid } from "./pid.js";
 import { waitForHealth, probeUrlAlive } from "./healthCheck.js";
-import { WORKER_URL } from "./config.js";
+import { publicUrlFor, registerTunnelUrl } from "../shared/workerRegister.js";
+import { defaultLocalPort } from "../shared/localPort.js";
 import { getSettings, updateSettings } from "@/lib/localDb";
 
 const svc = {
@@ -19,23 +20,8 @@ export function isTunnelReconnecting() { return svc.spawnInProgress; }
 let onUnexpectedExit = null;
 export function setTunnelUnexpectedExitCallback(cb) { onUnexpectedExit = cb; }
 
-async function registerTunnelUrl(shortId, tunnelUrl) {
-  await fetch(`${WORKER_URL}/api/tunnel/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ shortId, tunnelUrl })
-  });
-}
-
 function throwIfCancelled(token) {
   if (token.cancelled) throw new Error("tunnel cancelled");
-}
-
-function defaultLocalPort() {
-  const configuredPort = Number.parseInt(process.env.PORT || "", 10);
-  return Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
-    ? configuredPort
-    : 20128;
 }
 
 export async function enableTunnel(localPort = defaultLocalPort()) {
@@ -49,7 +35,7 @@ export async function enableTunnel(localPort = defaultLocalPort()) {
     if (isCloudflaredRunning()) {
       const existing = loadState();
       if (existing?.tunnelUrl && existing?.shortId) {
-        const publicUrl = `https://r${existing.shortId}.abc-tunnel.us`;
+        const publicUrl = publicUrlFor(existing.shortId);
         // Reuse only if BOTH direct + public URL alive (avoid stale socket after network change)
         const [directOk, publicOk] = await Promise.all([
           probeUrlAlive(existing.tunnelUrl),
@@ -88,7 +74,7 @@ export async function enableTunnel(localPort = defaultLocalPort()) {
     console.log(`[Tunnel] spawned: ${tunnelUrl}`);
     throwIfCancelled(token);
 
-    const publicUrl = `https://r${shortId}.abc-tunnel.us`;
+    const publicUrl = publicUrlFor(shortId);
     await registerTunnelUrl(shortId, tunnelUrl);
     saveState({ shortId, tunnelUrl });
     await updateSettings({ tunnelEnabled: true, tunnelUrl });
@@ -141,7 +127,7 @@ export async function getTunnelStatus() {
   const settingsEnabled = settings.tunnelEnabled === true;
   const state = loadState();
   const shortId = state?.shortId || "";
-  const publicUrl = shortId ? `https://r${shortId}.abc-tunnel.us` : "";
+  const publicUrl = publicUrlFor(shortId);
   const tunnelUrl = state?.tunnelUrl || "";
 
   // Lazy: skip PID probe entirely when user disabled tunnel
@@ -150,6 +136,7 @@ export async function getTunnelStatus() {
   return {
     enabled: settingsEnabled && running,
     settingsEnabled,
+    provider: "cloudflare",
     tunnelUrl,
     shortId,
     publicUrl,

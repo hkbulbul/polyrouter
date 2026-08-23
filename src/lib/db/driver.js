@@ -1,4 +1,5 @@
 import { ensureDirs, DATA_FILE } from "./paths.js";
+import { appendErrorLog } from "@/sse/utils/errorLog.js";
 
 // Use global to survive Next.js dev hot-reload (module state resets on reload)
 if (!global._dbAdapter) global._dbAdapter = { instance: null, initPromise: null, logged: false };
@@ -73,9 +74,34 @@ async function initAdapter() {
   return adapter;
 }
 
+// A failed init used to be cached forever: `state.initPromise` held the rejected
+// promise, so every later getAdapter() re-threw the same error and only a restart
+// could recover — even once the real cause (locked file, transient EPERM, a
+// driver that had since become loadable) had cleared. Worse, it was silent.
+// Now a failure clears the cache so the next call retries, throttled so a
+// genuinely broken file isn't re-probed through the whole driver chain on every
+// single request.
+const INIT_RETRY_BACKOFF_MS = 5_000;
+
 export async function getAdapter() {
   if (state.instance) return state.instance;
-  if (!state.initPromise) state.initPromise = initAdapter().then((a) => { state.instance = a; return a; });
+
+  if (state.initFailedAt && Date.now() - state.initFailedAt < INIT_RETRY_BACKOFF_MS) {
+    throw state.initError;
+  }
+
+  if (!state.initPromise) {
+    state.initPromise = initAdapter()
+      .then((a) => { state.instance = a; return a; })
+      .catch((e) => {
+        state.initPromise = null;
+        state.initFailedAt = Date.now();
+        state.initError = e;
+        console.error(`[DB] init failed (retrying in ${INIT_RETRY_BACKOFF_MS}ms): ${e?.message || e}`);
+        appendErrorLog(`ERROR [DB] init failed: ${e?.stack || e?.message || e}`);
+        throw e;
+      });
+  }
   return state.initPromise;
 }
 

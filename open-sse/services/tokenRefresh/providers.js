@@ -1,8 +1,29 @@
 import { PROVIDERS, PROVIDER_OAUTH } from "../../config/providers.js";
 import { OAUTH_ENDPOINTS, GITHUB_COPILOT, buildKimiHeaders } from "../../config/appConstants.js";
+import { TOKEN_REFRESH_TIMEOUT_MS } from "../../config/runtimeConfig.js";
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { dedupRefresh } from "./dedup.js";
 import { buildExternalIdpRefreshParams } from "../../../src/lib/oauth/kiroExternalIdp.js";
+
+/**
+ * fetch with a hard deadline, for token-refresh calls only.
+ *
+ * Every refresh below runs inside dedupRefresh(), which pins an in-flight promise
+ * under the provider+token key. None of these calls used to pass a signal, so a
+ * token endpoint that accepted the connection and then went silent left the fetch
+ * pending forever — and with it the singleflight entry, which meant every later
+ * refresh for that provider returned the same dead promise. Restarting the
+ * process was the only way out.
+ *
+ * The three Kiro call sites go through proxyAwareFetch (which takes proxyOptions
+ * as a third argument), so they apply `refreshSignal()` to their own options
+ * object instead of routing through this wrapper.
+ */
+const refreshSignal = () => AbortSignal.timeout(TOKEN_REFRESH_TIMEOUT_MS);
+
+function refreshFetch(url, init = {}) {
+  return fetch(url, { ...init, signal: init.signal ?? refreshSignal() });
+}
 
 let _xaiServiceSingleton = null;
 export async function refreshXaiToken(refreshToken, log) {
@@ -46,7 +67,7 @@ export async function refreshAccessToken(provider, refreshToken, credentials, lo
 
   return dedupRefresh(provider, refreshToken, async () => {
   try {
-    const response = await fetch(config.refreshUrl, {
+    const response = await refreshFetch(config.refreshUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -107,7 +128,7 @@ export async function refreshKimiToken(refreshToken, credentials, log) {
         Accept: "application/json",
         ...buildKimiHeaders(credentials?.providerSpecificData?.deviceId),
       };
-      const response = await fetch(config.refreshUrl, {
+      const response = await refreshFetch(config.refreshUrl, {
         method: "POST",
         headers,
         body: new URLSearchParams({
@@ -141,7 +162,7 @@ export async function refreshClaudeOAuthToken(refreshToken, log) {
   if (!refreshToken) return null;
   return dedupRefresh("claude", refreshToken, async () => {
   try {
-    const response = await fetch(OAUTH_ENDPOINTS.anthropic.token, {
+    const response = await refreshFetch(OAUTH_ENDPOINTS.anthropic.token, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -174,7 +195,7 @@ export async function refreshGoogleToken(refreshToken, clientId, clientSecret, l
   if (!refreshToken) return null;
   return dedupRefresh(`google:${clientId}`, refreshToken, async () => {
   try {
-    const response = await fetch(OAUTH_ENDPOINTS.google.token, {
+    const response = await refreshFetch(OAUTH_ENDPOINTS.google.token, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -210,7 +231,7 @@ export async function refreshQwenToken(refreshToken, log) {
   const endpoint = OAUTH_ENDPOINTS.qwen.token;
 
   try {
-    const response = await fetch(endpoint, {
+    const response = await refreshFetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -283,7 +304,7 @@ export async function refreshCodexToken(refreshToken, log) {
   if (!refreshToken) return null;
   return dedupRefresh("codex", refreshToken, async () => {
     try {
-      const response = await fetch(OAUTH_ENDPOINTS.openai.token, {
+      const response = await refreshFetch(OAUTH_ENDPOINTS.openai.token, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -372,6 +393,7 @@ export async function refreshKiroToken(refreshToken, providerSpecificData, log, 
         Accept: "application/json",
       },
       body: refreshRequest.body,
+      signal: refreshSignal(),
     }, proxyOptions);
 
     if (!response.ok) {
@@ -417,6 +439,7 @@ export async function refreshKiroToken(refreshToken, providerSpecificData, log, 
         refreshToken: refreshToken,
         grantType: "refresh_token",
       }),
+      signal: refreshSignal(),
     }, proxyOptions);
 
     if (!response.ok) {
@@ -453,6 +476,7 @@ export async function refreshKiroToken(refreshToken, providerSpecificData, log, 
     body: JSON.stringify({
       refreshToken: refreshToken,
     }),
+    signal: refreshSignal(),
   }, proxyOptions);
 
   if (!response.ok) {
@@ -485,7 +509,7 @@ export async function refreshIflowToken(refreshToken, log) {
   return dedupRefresh("iflow", refreshToken, async () => {
   const basicAuth = btoa(`${PROVIDERS.iflow.clientId}:${PROVIDERS.iflow.clientSecret}`);
 
-  const response = await fetch(OAUTH_ENDPOINTS.iflow.token, {
+  const response = await refreshFetch(OAUTH_ENDPOINTS.iflow.token, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -537,7 +561,7 @@ export async function refreshGitHubToken(refreshToken, log) {
     params.client_secret = PROVIDERS.github.clientSecret;
   }
 
-  const response = await fetch(OAUTH_ENDPOINTS.github.token, {
+  const response = await refreshFetch(OAUTH_ENDPOINTS.github.token, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -575,7 +599,7 @@ export async function refreshCopilotToken(githubAccessToken, log) {
   if (!githubAccessToken) return null;
   return dedupRefresh("copilot", githubAccessToken, async () => {
   try {
-    const response = await fetch(PROVIDER_OAUTH["github"]?.copilotTokenUrl, {
+    const response = await refreshFetch(PROVIDER_OAUTH["github"]?.copilotTokenUrl, {
       headers: {
         "Authorization": `token ${githubAccessToken}`,
         "User-Agent": GITHUB_COPILOT.USER_AGENT,
@@ -622,7 +646,7 @@ export async function refreshCodebuddyToken(refreshToken, log) {
   if (!refreshToken) return null;
   return dedupRefresh("codebuddy-cn", refreshToken, async () => {
     const oauth = PROVIDER_OAUTH["codebuddy-cn"] || {};
-    const response = await fetch(oauth.refreshUrl, {
+    const response = await refreshFetch(oauth.refreshUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

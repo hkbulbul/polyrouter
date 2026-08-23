@@ -105,6 +105,7 @@ import p102 from "./meta.js";
 import p103 from "./chatgpt-web.js";
 import p104 from "./trae.js";
 import p105 from "./agentrouter.js";
+import p106 from "./nara.js";
 
 export default [
   p0,
@@ -213,4 +214,5 @@ export default [
   p103,
   p104,
   p105,
+  p106,
 ];

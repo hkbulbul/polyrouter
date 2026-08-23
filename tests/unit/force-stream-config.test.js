@@ -1,14 +1,15 @@
 // Guards forceStream moved from chatCore hardcode → PROVIDERS schema (#5).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock } = vi.hoisted(() => ({
+const { executeMock, refreshCredentialsMock } = vi.hoisted(() => ({
   executeMock: vi.fn(),
+  refreshCredentialsMock: vi.fn(),
 }));
 
 vi.mock("../../open-sse/executors/index.js", () => ({
   getExecutor: vi.fn(() => ({
     execute: executeMock,
-    refreshCredentials: vi.fn().mockResolvedValue(null),
+    refreshCredentials: refreshCredentialsMock,
   })),
 }));
 
@@ -39,7 +40,7 @@ vi.mock("../../open-sse/utils/streamHandler.js", () => ({
 }));
 
 vi.mock("../../open-sse/services/tokenRefresh.js", () => ({
-  refreshWithRetry: vi.fn(),
+  refreshWithRetry: vi.fn(async (fn) => fn()),
 }));
 
 vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
@@ -71,6 +72,8 @@ vi.mock("../../open-sse/rtk/index.js", () => ({
 vi.mock("../../open-sse/rtk/headroom.js", () => ({
   compressWithHeadroom: vi.fn(async () => null),
   formatHeadroomLog: vi.fn(() => ""),
+  formatHeadroomSizeLog: vi.fn(() => ""),
+  isHeadroomPhantomSavings: vi.fn(() => false),
 }));
 
 vi.mock("../../open-sse/providers/capabilities.js", () => ({
@@ -90,11 +93,14 @@ vi.mock("../../open-sse/handlers/chatCore/requestDetail.js", () => ({
   extractRequestConfig: vi.fn((body, stream) => ({ body, stream })),
 }));
 
-vi.mock("../../open-sse/utils/error.js", () => ({
-  createErrorResult: vi.fn((status, message) => ({ success: false, status, error: message })),
-  formatProviderError: vi.fn((error) => error.message),
-  parseUpstreamError: vi.fn(),
-}));
+vi.mock("../../open-sse/utils/error.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    createErrorResult: vi.fn((status, message) => ({ success: false, status, error: message })),
+    formatProviderError: vi.fn((error) => error.message),
+  };
+});
 
 vi.mock("@/lib/usageDb.js", () => ({
   trackPendingRequest: vi.fn(),
@@ -129,6 +135,8 @@ describe("forceStream provider config", () => {
   beforeEach(() => {
     executeMock.mockReset();
     executeMock.mockRejectedValue(new Error("boom"));
+    refreshCredentialsMock.mockReset();
+    refreshCredentialsMock.mockResolvedValue(null);
   });
 
   it("only openai/codex/commandcode force streaming", async () => {
@@ -149,5 +157,28 @@ describe("forceStream provider config", () => {
 
     expect(executeMock).toHaveBeenCalledTimes(1);
     expect(executeMock.mock.calls[0][0].stream).toBe(true);
+  });
+
+  it("surfaces the retry response when refreshed credentials still fail", async () => {
+    const { handleChatCore } = await import("../../open-sse/handlers/chatCore.js");
+    executeMock
+      .mockResolvedValueOnce({
+        response: new Response(JSON.stringify({ error: { message: "first 403" } }), { status: 403 }),
+        url: "https://first.example",
+        headers: {},
+        transformedBody: {},
+      })
+      .mockResolvedValueOnce({
+        response: new Response(JSON.stringify({ error: { message: "diagnostic second 403" } }), { status: 403 }),
+        url: "https://retry.example",
+        headers: {},
+        transformedBody: {},
+      });
+    refreshCredentialsMock.mockResolvedValue({ accessToken: "refreshed" });
+
+    const result = await handleChatCore(makeOptions(true));
+
+    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ status: 403, error: "diagnostic second 403" });
   });
 });

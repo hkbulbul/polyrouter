@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   tunnelEnabled: false,
   tunnelUrl: "",
   tunnelProvider: "cloudflare",
+  ngrokAuthtoken: "",
   tailscaleEnabled: false,
   tailscaleUrl: "",
   stickyRoundRobinLimit: 3,

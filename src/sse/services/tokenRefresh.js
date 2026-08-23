@@ -5,6 +5,7 @@ import {
   getProjectIdForConnection,
   invalidateProjectId,
   removeConnection,
+  ANTIGRAVITY_REQUIRES_MANUAL_PROJECT,
 } from "open-sse/services/projectId.js";
 import {
   TOKEN_EXPIRY_BUFFER_MS as BUFFER_MS,
@@ -133,7 +134,7 @@ function _refreshProjectId(provider, connectionId, accessToken) {
 
   getProjectIdForConnection(connectionId, accessToken)
     .then((projectId) => {
-      if (!projectId) return;
+      if (!projectId || projectId === ANTIGRAVITY_REQUIRES_MANUAL_PROJECT) return;
       updateProviderCredentials(connectionId, { projectId }).catch((err) => {
         log.debug("TOKEN_REFRESH", "Failed to persist refreshed projectId", {
           connectionId,
@@ -191,7 +192,9 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
         ...(newCredentials.copilotTokenExpiresAt ? { copilotTokenExpiresAt: newCredentials.copilotTokenExpiresAt } : {}),
       };
     }
-    if (newCredentials.projectId)            updates.projectId = newCredentials.projectId;
+    if (Object.prototype.hasOwnProperty.call(newCredentials, "projectId")) {
+      updates.projectId = newCredentials.projectId;
+    }
 
     const result = await updateProviderConnection(connectionId, updates);
     log.info("TOKEN_REFRESH", "Credentials updated in localDb", {

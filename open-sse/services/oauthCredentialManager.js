@@ -4,6 +4,7 @@ import {
   refreshTokenByProvider,
 } from "./tokenRefresh.js";
 import { PROVIDER_OAUTH } from "../providers/index.js";
+import { TOKEN_REFRESH_INFLIGHT_TTL_MS } from "../config/runtimeConfig.js";
 
 // Single source: codex.oauth.maxRefreshAgeMs (8 days) — proactive refresh window
 export const CODEX_MAX_REFRESH_AGE_MS = PROVIDER_OAUTH["codex"]?.maxRefreshAgeMs;
@@ -134,15 +135,26 @@ function getRefreshLockKey(provider, credentials) {
 export async function withCredentialRefreshLock(provider, credentials, refreshFn) {
   const key = getRefreshLockKey(provider, credentials);
   const existing = refreshLocks.get(key);
-  if (existing) return existing;
+  // The `finally` below clears the entry when the refresh settles — but not when
+  // it hangs, and there was no other staleness check. That made this map a second
+  // permanent chokepoint stacked on top of dedupRefresh: one never-settling
+  // refresh blocked every later refresh under the same key for the process
+  // lifetime. It bites hardest when getRefreshLockKey falls through to "default",
+  // because then the key covers every anonymous credential for the provider.
+  if (existing) {
+    if (Date.now() - existing.startedAt < TOKEN_REFRESH_INFLIGHT_TTL_MS) return existing.promise;
+    console.warn(`[OAuth] ${provider} | refresh lock ${key} exceeded ${TOKEN_REFRESH_INFLIGHT_TTL_MS}ms — discarding and retrying`);
+    refreshLocks.delete(key);
+  }
 
   const pending = Promise.resolve()
     .then(refreshFn)
     .finally(() => {
-      refreshLocks.delete(key);
+      // Identity guard: never delete an entry a newer caller installed.
+      if (refreshLocks.get(key)?.promise === pending) refreshLocks.delete(key);
     });
 
-  refreshLocks.set(key, pending);
+  refreshLocks.set(key, { promise: pending, startedAt: Date.now() });
   return pending;
 }
 

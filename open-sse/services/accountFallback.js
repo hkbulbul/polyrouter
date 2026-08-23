@@ -27,6 +27,12 @@ export function isToolSchemaValidationError(status, errorText) {
     && /schema|parameters|tools|input_schema/i.test(text);
 }
 
+export function isAccountValidationRequiredError(status, errorText) {
+  if (status !== 403) return false;
+  const text = typeof errorText === "string" ? errorText : JSON.stringify(errorText || "");
+  return /VALIDATION_REQUIRED|verify your account to continue/i.test(text);
+}
+
 export function checkFallbackError(status, errorText, backoffLevel = 0) {
   const lowerError = errorText
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()

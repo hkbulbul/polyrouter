@@ -1,6 +1,6 @@
 import { platform, arch, hostname } from "os";
 import { PROVIDERS, PROVIDER_OAUTH } from "./providers.js";
-import { ANTIGRAVITY_IDE_USER_AGENT } from "../providers/shared.js";
+import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION } from "../providers/shared.js";
 import { createRequire } from "module";
 
 // === Gemini CLI === derive từ registry gemini-cli.transport
@@ -152,6 +152,14 @@ export const LOAD_CODE_ASSIST_METADATA = {
   platform: getPlatformEnum(),
   pluginType: PLUGIN_TYPE.GEMINI,
 };
+
+export const ANTIGRAVITY_LOAD_CODE_ASSIST_HEADERS = {
+  "Content-Type": "application/json",
+  "User-Agent": `antigravity/${ANTIGRAVITY_IDE_VERSION} darwin/arm64 google-api-nodejs-client/10.3.0`,
+  "X-Goog-Api-Client": "gl-node/22.21.1",
+};
+
+export const ANTIGRAVITY_LOAD_CODE_ASSIST_METADATA = { ideType: "ANTIGRAVITY" };
 
 // System prompts
 export const CLAUDE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI for Claude.";

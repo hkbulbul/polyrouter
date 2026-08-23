@@ -209,41 +209,25 @@ function killByPidFile(pidFile) {
   } catch { }
 }
 
-// Kill tunnel processes (cloudflared/tailscale) by their PID files
+// Kill tunnel processes by their PID files.
+// Only cloudflared writes one — tailscale is an OS daemon, stopped via stopFunnel().
 function killTunnelByPidFile() {
-  const tunnelDir = path.join(getAppDataDir(), "tunnel");
-  killByPidFile(path.join(tunnelDir, "cloudflared.pid"));
-  killByPidFile(path.join(tunnelDir, "tailscale.pid"));
+  killByPidFile(path.join(getAppDataDir(), "tunnel", "cloudflared.pid"));
 }
 
-// Kill cloudflared whose --url targets this app's port (covers stale PID file case)
+// Kill cloudflared whose --url targets this app's port (covers stale PID file case).
+// Mirrors killCloudflaredByPort() in src/lib/tunnel/cloudflare/cloudflared.js.
+// Boundary check ensures :20128 doesn't match :201280 or :202128.
 function killCloudflaredByAppPort(appPort) {
-  if (!appPort) return [];
-  const portMatchers = [`localhost:${appPort}`, `127.0.0.1:${appPort}`];
-  const pids = [];
+  if (!appPort) return;
   try {
     if (process.platform === "win32") {
-      const psCmd = `powershell -NonInteractive -WindowStyle Hidden -Command "Get-WmiObject Win32_Process -Filter 'Name=\\"cloudflared.exe\\"' | Select-Object ProcessId,CommandLine | ConvertTo-Csv -NoTypeInformation"`;
-      const output = execSync(psCmd, { encoding: "utf8", windowsHide: true, timeout: 5000 });
-      const lines = output.split("\n").slice(1).filter(l => l.trim());
-      lines.forEach(line => {
-        if (portMatchers.some(m => line.includes(m))) {
-          const match = line.match(/^"(\d+)"/);
-          if (match && match[1]) pids.push(match[1]);
-        }
-      });
+      const psCmd = `Get-CimInstance Win32_Process -Filter \\"Name='cloudflared.exe'\\" | Where-Object { $_.CommandLine -match ':${appPort}(\\D|$)' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`;
+      execSync(`powershell -NonInteractive -WindowStyle Hidden -Command "${psCmd}"`, { stdio: "ignore", windowsHide: true, timeout: 5000 });
     } else {
-      const output = execSync("ps -eo pid,command 2>/dev/null", { encoding: "utf8", timeout: 5000 });
-      output.split("\n").forEach(line => {
-        if (line.includes("cloudflared") && portMatchers.some(m => line.includes(m))) {
-          const parts = line.trim().split(/\s+/);
-          const pid = parts[0];
-          if (pid && !isNaN(pid)) pids.push(pid);
-        }
-      });
+      execSync(`pkill -f "cloudflared.*:${appPort}([^0-9]|$)" 2>/dev/null || true`, { stdio: "ignore", windowsHide: true, timeout: 5000 });
     }
   } catch { }
-  return pids;
 }
 
 // Kill all polyrouter processes

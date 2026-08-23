@@ -2,6 +2,39 @@ const http = require("http");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+
+// ─── Crash guard ──────────────────────────────────────────────────────────────
+// These handlers existed only in cli/cli.js (the launcher), so a stray rejection
+// in the *server* process was fatal and undiagnosable. The throws actually being
+// guarded here are request-scoped and harmless — a rejecting reader.cancel() on a
+// client disconnect, a throw inside the async upgrade listener below.
+//
+// Deliberately log-and-stay-up rather than process.exit(1): cli/cli.js:846 does
+// auto-restart with backoff, but a bare `npm run start` has no supervisor, and the
+// reported symptom is a hang, not a crash — exiting would turn "one dropped
+// request" into "gateway gone".
+//
+// This duplicates src/lib/dataDir.js defaultDir() and src/sse/utils/errorLog.js on
+// purpose: this file is CommonJS and cannot import either ESM module.
+const ERROR_LOG_PATH = path.join(
+  process.platform === "win32"
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "polyrouter")
+    : path.join(os.homedir(), ".polyrouter"),
+  "error.log"
+);
+
+function logFatal(kind, err) {
+  const detail = err?.stack || err?.message || String(err);
+  console.error(`[${kind}]`, detail);
+  try {
+    fs.mkdirSync(path.dirname(ERROR_LOG_PATH), { recursive: true });
+    fs.appendFileSync(ERROR_LOG_PATH, `[${new Date().toISOString()}] ${kind} ${detail}\n`);
+  } catch { /* logging must not be the thing that kills the process */ }
+}
+
+process.on("unhandledRejection", (reason) => logFatal("unhandledRejection", reason));
+process.on("uncaughtException", (err) => logFatal("uncaughtException", err));
 
 // Shared only with the in-process Next route used by the WebSocket bridge.
 // It is intentionally never exposed to browser JavaScript.
@@ -67,14 +100,21 @@ http.createServer = (...args) => {
   // Next's App Router cannot handle arbitrary WebSocket upgrades. Dispatch only
   // our exact realtime path and leave HMR/other Next upgrade paths untouched.
   server.on("upgrade", async (req, socket, head) => {
-    if (!isRealtimeUpgrade(req)) return;
-    stampSocketIp(req);
-    const runtime = await getRealtimeRuntime();
-    if (!runtime) {
+    try {
+      if (!isRealtimeUpgrade(req)) return;
+      stampSocketIp(req);
+      const runtime = await getRealtimeRuntime();
+      if (!runtime) {
+        if (!socket.destroyed) socket.destroy();
+        return;
+      }
+      runtime.handleUpgrade(req, socket, head);
+    } catch (error) {
+      // An async listener's throw escapes as an unhandledRejection, so this was
+      // previously a process-level event for one bad WebSocket handshake.
+      logFatal("upgrade", error);
       if (!socket.destroyed) socket.destroy();
-      return;
     }
-    runtime.handleUpgrade(req, socket, head);
   });
 
   const closeRuntime = () => {

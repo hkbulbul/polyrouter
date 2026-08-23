@@ -5,8 +5,66 @@ import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import * as log from "../utils/logger.js";
 
-// Mutex to prevent race conditions during account selection
-let selectionMutex = Promise.resolve();
+// Serializes the round-robin read-modify-write below, per provider.
+//
+// This used to be a single global promise chain acquired by EVERY request and
+// held across all the DB awaits in getProviderCredentials. Because a `finally`
+// runs on throw but not on a hang, one never-settling query left the chain
+// unresolvable and every later request for every provider blocked on it
+// forever — the gateway kept accepting connections and answered nothing until
+// the process was restarted. Only round-robin actually needs serializing (it
+// reads lastUsedAt/consecutiveUseCount and writes them back), and two
+// providers' round-robin state are independent, so the lock is now scoped to
+// that branch and keyed per provider. The default fill-first path takes no
+// lock at all.
+const roundRobinLocks = new Map();
+const ROUND_ROBIN_LOCK_TIMEOUT_MS = 10_000;
+
+/**
+ * Run `fn` with the provider's round-robin lock held.
+ *
+ * The wait is bounded: if the previous holder never releases, the next caller
+ * proceeds after ROUND_ROBIN_LOCK_TIMEOUT_MS. That is the deliberate tradeoff —
+ * a stuck holder costs this one provider strict round-robin ordering (two
+ * requests may pick the same account) instead of costing the whole gateway its
+ * liveness.
+ *
+ * The lock also self-releases on that same deadline. Without it, a hang inside
+ * `fn` means the `finally` never runs, `mine` stays in the map unresolved, and
+ * every later caller for this provider pays the full timeout — forever. The
+ * self-release turns that permanent tax into a one-time one.
+ */
+async function withRoundRobinLock(providerId, fn) {
+  const previous = roundRobinLocks.get(providerId) || Promise.resolve();
+  let release;
+  const mine = new Promise((resolve) => { release = resolve; });
+  roundRobinLocks.set(providerId, mine);
+
+  // Unref'd so a pending lock never holds the process open at shutdown.
+  const selfRelease = setTimeout(release, ROUND_ROBIN_LOCK_TIMEOUT_MS);
+  selfRelease.unref?.();
+
+  let timer = null;
+  try {
+    await Promise.race([
+      previous,
+      new Promise((resolve) => {
+        timer = setTimeout(() => {
+          log.warn("AUTH", `${providerId} | round-robin lock wait exceeded ${ROUND_ROBIN_LOCK_TIMEOUT_MS}ms — proceeding without strict ordering`);
+          resolve();
+        }, ROUND_ROBIN_LOCK_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+    return await fn();
+  } finally {
+    if (timer) clearTimeout(timer);
+    clearTimeout(selfRelease);
+    release();
+    // Identity guard: only drop the entry if a newer waiter hasn't replaced it.
+    if (roundRobinLocks.get(providerId) === mine) roundRobinLocks.delete(providerId);
+  }
+}
 
 /**
  * Get provider credentials from localDb
@@ -21,27 +79,27 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     ? excludeConnectionIds
     : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
   const preferredConnectionId = options?.preferredConnectionId || null;
-  // Acquire mutex to prevent race conditions
-  const currentMutex = selectionMutex;
-  let resolveMutex;
-  selectionMutex = new Promise(resolve => { resolveMutex = resolve; });
+  // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
+  const providerId = resolveProviderId(provider);
 
-  try {
-    await currentMutex;
+  // Read once, before any lock is taken. Both the noAuth branch and the
+  // strategy choice need this, and knowing the strategy up front is precisely
+  // what lets us take the round-robin lock only when it is actually needed.
+  const settings = await getSettings();
+  // Per-provider strategy overrides global setting
+  const providerOverride = (settings.providerStrategies || {})[providerId] || {};
+  const strategy = providerOverride.fallbackStrategy || settings.fallbackStrategy || "fill-first";
 
-    // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
-    const providerId = resolveProviderId(provider);
-
+  const select = async () => {
     // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
     if (FREE_PROVIDERS[providerId]?.noAuth) {
-      const settings = await getSettings();
-      const override = (settings.providerStrategies || {})[providerId] || {};
-      const strategy = override.rotateStrategy || "none";
-      let pickedId = override.proxyPoolId || null;
-      if (strategy !== "none") {
+      // Distinct from the fallback `strategy` above — this one picks a proxy pool.
+      const rotateStrategy = providerOverride.rotateStrategy || "none";
+      let pickedId = providerOverride.proxyPoolId || null;
+      if (rotateStrategy !== "none") {
         const allPools = await getProxyPools({ isActive: true });
         const poolIds = allPools.filter(p => p.proxyUrl).map(p => p.id);
-        pickedId = pickProxyPoolId(poolIds, strategy, providerId);
+        pickedId = pickProxyPoolId(poolIds, rotateStrategy, providerId);
       }
       const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: pickedId || "" });
       return {
@@ -103,11 +161,6 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       log.warn("AUTH", `${provider} | all ${connections.length} accounts unavailable`);
       return null;
     }
-
-    const settings = await getSettings();
-    // Per-provider strategy overrides global setting
-    const providerOverride = (settings.providerStrategies || {})[providerId] || {};
-    const strategy = providerOverride.fallbackStrategy || settings.fallbackStrategy || "fill-first";
 
     let connection;
     // Pin to preferred connection if specified and available
@@ -192,9 +245,17 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       // Pass full connection for clearAccountError to read modelLock_* keys
       _connection: connection
     };
-  } finally {
-    if (resolveMutex) resolveMutex();
+  };
+
+  // Round-robin is the only branch that does a read-modify-write on shared
+  // state (lastUsedAt / consecutiveUseCount), so it is the only one that needs
+  // serializing. Everything else — fill-first (the default), the pinned
+  // connection, the noAuth virtual connection, and the all-locked early
+  // returns — is read-only and runs with no lock at all.
+  if (strategy === "round-robin" && !preferredConnectionId) {
+    return withRoundRobinLock(providerId, select);
   }
+  return select();
 }
 
 /**

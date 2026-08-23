@@ -5,7 +5,11 @@ import { OAUTH_ENDPOINTS, ANTIGRAVITY_HEADERS, AG_DEFAULT_TOOLS, AG_TOOL_SUFFIX 
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
-import { serializeCloudCodeFunctionDeclaration } from "../translator/formats/gemini.js";
+import { getProjectIdForConnection, ANTIGRAVITY_REQUIRES_MANUAL_PROJECT, requiresManualGcpProject } from "../services/projectId.js";
+import {
+  serializeCloudCodeClaudeFunctionDeclaration,
+  serializeCloudCodeFunctionDeclaration,
+} from "../translator/formats/gemini.js";
 import { DEFAULT_THINKING_AG_SIGNATURE } from "../config/defaultThinkingSignature.js";
 
 // Sanitize function name: Gemini requires [a-zA-Z_][a-zA-Z0-9_.:\-]{0,63}
@@ -22,12 +26,19 @@ const MAX_ANTIGRAVITY_OUTPUT_TOKENS = 64000;
 const ANTIGRAVITY_IDE_REQUEST_ID_RE = /^agent\/[^/]+\/\d+\/[^/]+\/\d+$/;
 
 function summarizeToolSchema(schema, depth = 0) {
-  if (!schema || typeof schema !== "object" || depth >= 3) return null;
-  const properties = schema.properties && typeof schema.properties === "object"
-    ? Object.values(schema.properties).map(value => summarizeToolSchema(value, depth + 1))
+  if (schema === null || schema === undefined) return null;
+  if (typeof schema !== "object") return { valueKind: typeof schema, value: String(schema) };
+  if (depth >= 4) return { type: schema.type, keys: Object.keys(schema).sort() };
+  const properties = schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+    ? Object.entries(schema.properties).map(([name, value]) => ({
+        name,
+        valueKind: Array.isArray(value) ? "array" : typeof value,
+        schema: summarizeToolSchema(value, depth + 1),
+      }))
     : [];
   return {
     type: schema.type,
+    keys: Object.keys(schema).sort(),
     propertyCount: properties.length || undefined,
     requiredCount: Array.isArray(schema.required) ? schema.required.length : undefined,
     items: schema.items ? summarizeToolSchema(schema.items, depth + 1) : undefined,
@@ -49,6 +60,27 @@ function logAntigravityToolSchemaSummary(declarations) {
       schema: summarizeToolSchema(declaration.parametersJsonSchema || declaration.parameters)
     }));
   }
+}
+
+export function parseAntigravityValidationRequired(bodyText) {
+  if (!bodyText || typeof bodyText !== "string") return null;
+  let error;
+  try {
+    error = JSON.parse(bodyText)?.error;
+  } catch {
+    return null;
+  }
+  const details = Array.isArray(error?.details) ? error.details : [];
+  const info = details.find(detail => detail?.reason === "VALIDATION_REQUIRED");
+  if (!info && !/verify your account to continue/i.test(error?.message || "")) return null;
+  const help = details.find(detail => Array.isArray(detail?.links));
+  const validationUrl = info?.metadata?.validation_url
+    || help?.links?.find(link => /verify your account/i.test(link?.description || ""))?.url
+    || null;
+  return {
+    message: error?.message || "Verify your account to continue.",
+    validationUrl,
+  };
 }
 
 const ANTIGRAVITY_TRANSIENT_ERROR_PATTERNS = [
@@ -139,6 +171,35 @@ function buildIdeRequestId({ body, request, credentials, model, requestType }) {
   return `agent/${conversationId}/${Date.now()}/${trajectoryId}/${step}`;
 }
 
+// Real Antigravity is a Node.js client — its outbound requests never carry proxy tracing,
+// Stainless SDK, or Chromium Sec-Ch-* headers. Strip any that leak the proxy hop, force the
+// native Node accept-encoding, and move Authorization last (OmniRoute parity).
+const ANTIGRAVITY_SCRUB_HEADERS = new Set([
+  "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-forwarded-port",
+  "x-real-ip", "forwarded", "via",
+  "x-stainless-lang", "x-stainless-package-version", "x-stainless-os", "x-stainless-arch",
+  "x-stainless-runtime", "x-stainless-runtime-version", "x-stainless-timeout",
+  "x-stainless-retry-count", "x-stainless-helper-method",
+  "http-referer", "referer",
+  "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "sec-fetch-mode",
+  "sec-fetch-site", "sec-fetch-dest", "priority",
+  "accept-encoding",
+]);
+
+function scrubAntigravityHeaders(headers) {
+  const cleaned = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.startsWith("x-omniroute-") || lowerKey.startsWith("x-polyrouter-") || ANTIGRAVITY_SCRUB_HEADERS.has(lowerKey)) {
+      continue;
+    }
+    cleaned[key] = value;
+  }
+  // Standard Node.js accept-encoding (Electron clients add zstd — a fingerprint mismatch).
+  cleaned["Accept-Encoding"] = "gzip, deflate, br";
+  return cleaned;
+}
+
 export class AntigravityExecutor extends BaseExecutor {
   constructor() {
     super("antigravity", PROVIDERS.antigravity);
@@ -147,24 +208,91 @@ export class AntigravityExecutor extends BaseExecutor {
   buildUrl(model, stream, urlIndex = 0) {
     const baseUrls = this.getBaseUrls();
     const baseUrl = baseUrls[urlIndex] || baseUrls[0];
-    // Image generation MUST use non-streaming generateContent
-    const forceNonStream = isImageModel(model);
-    const action = (stream && !forceNonStream) ? "streamGenerateContent?alt=sse" : "generateContent";
-    return `${baseUrl}/v1internal:${action}`;
+    // Image generation MUST use non-streaming generateContent (chatCore forceStream
+    // already flips stream=false for image models). Everything else ALWAYS streams:
+    // the non-streaming `generateContent` 400s for some models (e.g. gpt-oss-120b-medium)
+    // because Cloud Code internally injects stream_options without stream=true.
+    // chatCore handles SSE→JSON for non-streaming clients.
+    if (isImageModel(model)) return `${baseUrl}/v1internal:generateContent`;
+    return `${baseUrl}/v1internal:streamGenerateContent?alt=sse`;
   }
 
   // sessionId comes from transformRequest output; base.execute runs transformRequest before
   // buildHeaders, so we read it from instance state cached there (fallback: explicit arg).
   buildHeaders(credentials, stream = true, sessionId = null) {
-    return {
+    const raw = {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${credentials.accessToken}`,
       "User-Agent": this.config.headers?.["User-Agent"] || ANTIGRAVITY_HEADERS["User-Agent"],
+      ...(stream ? { Accept: "text/event-stream" } : {}),
     };
+    const cleaned = scrubAntigravityHeaders(raw);
+    // `x-goog-user-project` is quota delegation, not project selection. Consumer
+    // projects such as `aicode-consumers` reject it with USER_PROJECT_DENIED;
+    // the Cloud Code envelope's `project` field is authoritative.
+    if (credentials?.accessToken) {
+      // Authorization lands last — matches the native Antigravity fingerprint.
+      cleaned.Authorization = `Bearer ${credentials.accessToken}`;
+    }
+    return cleaned;
   }
 
-  transformRequest(model, body, stream, credentials) {
-    const projectId = credentials?.projectId || this.generateProjectId();
+  async transformRequest(model, body, stream, credentials) {
+    // Real project id only — a fabricated id ("useful-fuze-abc12") is not a Cloud Code
+    // project and only earns a delayed 429 RESOURCE_EXHAUSTED from Google's quota check.
+    const storedProjectId = typeof credentials?.projectId === "string"
+      ? credentials.projectId.trim()
+      : "";
+    const hadStoredByopSentinel = storedProjectId === ANTIGRAVITY_REQUIRES_MANUAL_PROJECT;
+    let requiresManualProject = hadStoredByopSentinel && !credentials?.accessToken;
+    let projectId = hadStoredByopSentinel ? null : (storedProjectId || null);
+
+    // Auto-discover a missing project id (loadCodeAssist → onboardUser). The service is
+    // memoized per-connection for 1h, and chat.js already warms it on cold miss — so this
+    // is normally a cache hit. Prefer the OAuth-stored id over any client-supplied body
+    // project to avoid stale/wrong values causing 404/403 upstream.
+    if (!projectId && credentials?.accessToken) {
+      const discovered = await getProjectIdForConnection(
+        credentials.connectionId || credentials.email,
+        credentials.accessToken
+      );
+      if (discovered === ANTIGRAVITY_REQUIRES_MANUAL_PROJECT) {
+        requiresManualProject = true;
+      } else if (discovered) {
+        projectId = discovered;
+      }
+    }
+    // Also honor a BYOP marker set by an earlier discovery for this connection
+    // (executor may be called with different credential shapes per request).
+    if (!projectId && !requiresManualProject) {
+      const cid = credentials?.connectionId || credentials?.email;
+      if (requiresManualGcpProject(cid)) requiresManualProject = true;
+    }
+
+    // Fail fast with a clear signal instead of sending a fabricated/empty project id.
+    if (!projectId) {
+      if (requiresManualProject) {
+        return new Response(JSON.stringify({
+          error: {
+            message:
+              "GCP_PROJECT_REQUIRED: Google Antigravity now requires a free GCP Project ID. " +
+              "Create one at console.cloud.google.com and enter it in Providers → Antigravity " +
+              "(connection settings → Project ID). Automatic project creation is no longer " +
+              "available for personal accounts.",
+            type: "gcp_project_required",
+            code: "gcp_project_required",
+          },
+        }), { status: 422, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        error: {
+          message: "Missing Google projectId for Antigravity account. Auto-discovery via " +
+            "loadCodeAssist found no Cloud Code project. Please reconnect OAuth in Providers → " +
+            "Antigravity (and ensure the Google account has completed Gemini Code Assist onboarding).",
+          type: "oauth_missing_project_id",
+          code: "missing_project_id",
+        },
+      }), { status: 422, headers: { "Content-Type": "application/json" } });
+    }
 
     // ─── Image generation: completely different request structure ───
     if (isImageModel(model)) {
@@ -244,43 +372,31 @@ export class AntigravityExecutor extends BaseExecutor {
       return c;
     });
 
-    // The Claude backend uses Anthropic-native custom tools. Gemini-backed
-    // models use the Cloud Code functionDeclarations representation instead.
+    // Claude-backed models use protobuf `parameters`, which Cloud Code maps to
+    // Anthropic input_schema. Gemini-backed models accept parametersJsonSchema.
     const isClaudeModel = model.toLowerCase().includes("claude");
     let tools = body.request?.tools;
 
-    if (tools && tools.length > 0 && isClaudeModel) {
-      const seenToolNames = new Set();
-      const declarations = [];
-      for (const group of tools) {
-        for (const declaration of group?.functionDeclarations || []) {
-          if (!declaration?.name) continue;
-          const name = sanitizeFunctionName(declaration.name);
-          if (seenToolNames.has(name)) continue;
-          seenToolNames.add(name);
-          const schema = declaration.input_schema || declaration.parameters || { type: "object", properties: {} };
-          declarations.push({
-            name,
-            description: declaration.description || "",
-            parameters: declaration.parameters || structuredClone(schema),
-            input_schema: structuredClone(schema),
-          });
-        }
-      }
-      tools = declarations.length > 0 ? [{ functionDeclarations: declarations }] : [];
-    } else if (tools && tools.length > 0) {
+    if (tools && tools.length > 0) {
       // Merge all groups into a single functionDeclarations group (Gemini expects 1 group)
       const seenToolNames = new Set();
       const allDeclarations = [];
       for (const group of tools) {
-        for (const fn of group.functionDeclarations || []) {
+        for (const fn of group?.functionDeclarations || []) {
+          if (!fn?.name) continue;
           const name = sanitizeFunctionName(fn.name);
           if (seenToolNames.has(name)) continue;
           seenToolNames.add(name);
-          allDeclarations.push(serializeCloudCodeFunctionDeclaration({
+          const serializeDeclaration = isClaudeModel
+            ? serializeCloudCodeClaudeFunctionDeclaration
+            : serializeCloudCodeFunctionDeclaration;
+          allDeclarations.push(serializeDeclaration({
             ...fn,
             name,
-            parameters: fn.parameters || { type: "object", properties: {} }
+            parameters: fn.parameters
+              ?? fn.input_schema
+              ?? fn.parametersJsonSchema
+              ?? { type: "object", properties: {} }
           }));
         }
       }
@@ -354,14 +470,31 @@ export class AntigravityExecutor extends BaseExecutor {
     }
   }
 
-  generateProjectId() {
-    const adj = ["useful", "bright", "swift", "calm", "bold"][Math.floor(Math.random() * 5)];
-    const noun = ["fuze", "wave", "spark", "flow", "core"][Math.floor(Math.random() * 5)];
-    return `${adj}-${noun}-${crypto.randomUUID().slice(0, 5)}`;
-  }
-
   generateSessionId() {
     return crypto.randomUUID() + Date.now().toString();
+  }
+
+  async shouldRefreshResponse(response) {
+    if (response?.status !== HTTP_STATUS.FORBIDDEN || typeof response.clone !== "function") return true;
+    try {
+      const bodyText = await response.clone().text();
+      return !parseAntigravityValidationRequired(bodyText);
+    } catch {
+      return true;
+    }
+  }
+
+  parseError(response, bodyText) {
+    const validation = parseAntigravityValidationRequired(bodyText);
+    if (validation) {
+      const link = validation.validationUrl ? ` Complete verification: ${validation.validationUrl}` : "";
+      return {
+        status: response.status,
+        message: `${validation.message}${link}`,
+        validationRequired: true,
+      };
+    }
+    return super.parseError(response, bodyText);
   }
 
   parseRetryHeaders(headers) {

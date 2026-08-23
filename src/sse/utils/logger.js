@@ -1,5 +1,7 @@
 // Logger utility for cloud
 
+import { appendErrorLog } from "./errorLog.js";
+
 const LOG_LEVELS = {
   DEBUG: 0,
   INFO: 1,
@@ -39,8 +41,11 @@ export function line(tag, symbol, message) {
 }
 
 // Like line() but always printed regardless of LOG_LEVEL (errors must never be hidden)
+// Mirrored to error.log so a mid-session failure is still diagnosable after the
+// restart that used to be the only way to recover from one.
 export function errorLine(tag, symbol, message) {
   console.log(`[${formatTime()}] ${tag} ${symbol} ${message}`);
+  appendErrorLog(`${symbol} ${message}`);
 }
 
 // Format thinking intent for the request line ("high(10k)" / "off" / "auto")
@@ -81,15 +86,20 @@ export function info(tag, message, data) {
 }
 
 export function warn(tag, message, data) {
+  const dataStr = data ? ` ${formatData(data)}` : "";
+  // Mirrored unconditionally: the round-robin lock-wait warning and the token
+  // refresh in-flight-TTL warning are the two signals that identify a wedge, and
+  // they must not vanish just because LOG_LEVEL was raised.
+  appendErrorLog(`WARN [${tag}] ${message}${dataStr}`);
   if (LEVEL <= LOG_LEVELS.WARN) {
-    const dataStr = data ? ` ${formatData(data)}` : "";
     console.warn(`[${formatTime()}] ⚠️  [${tag}] ${message}${dataStr}`);
   }
 }
 
 export function error(tag, message, data) {
+  const dataStr = data ? ` ${formatData(data)}` : "";
+  appendErrorLog(`ERROR [${tag}] ${message}${dataStr}`);
   if (LEVEL <= LOG_LEVELS.ERROR) {
-    const dataStr = data ? ` ${formatData(data)}` : "";
     console.log(`[${formatTime()}] ❌ [${tag}] ${message}${dataStr}`);
   }
 }

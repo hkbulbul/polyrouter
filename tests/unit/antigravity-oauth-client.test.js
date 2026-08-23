@@ -91,6 +91,20 @@ describe("antigravity oauth client (deduped)", () => {
       email: "user@example.com",
       projectId: "project-123",
     });
+
+    const loadCodeAssistCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes("loadCodeAssist"));
+    expect(loadCodeAssistCall?.[1]).toMatchObject({
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "antigravity/2.1.1 darwin/arm64 google-api-nodejs-client/10.3.0",
+        "X-Goog-Api-Client": "gl-node/22.21.1",
+        Authorization: "Bearer ag-access-token",
+      },
+      body: JSON.stringify({ metadata: { ideType: "ANTIGRAVITY" } }),
+    });
+    expect(loadCodeAssistCall?.[1].headers).not.toHaveProperty("Client-Metadata");
+    expect(loadCodeAssistCall?.[1].headers).not.toHaveProperty("x-request-source");
   }, 15_000);
 
   it("declares post-exchange data in every mapper that reads it", async () => {

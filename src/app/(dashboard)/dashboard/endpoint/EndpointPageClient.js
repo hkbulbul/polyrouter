@@ -30,7 +30,7 @@ export default function APIPageClient({ machineId }) {
   const [hasPassword, setHasPassword] = useState(true);
  const [tunnelDashboardAccess, setTunnelDashboardAccess] = useState(false);
 
- // Cloudflare Tunnel state
+ // Tunnel state (backend: cloudflare | ngrok)
   const [tunnelChecking, setTunnelChecking] = useState(true);
   const [tunnelEnabled, setTunnelEnabled] = useState(false);
   const [tunnelReachable, setTunnelReachable] = useState(false);
@@ -41,6 +41,9 @@ export default function APIPageClient({ machineId }) {
   const [tunnelStatus, setTunnelStatus] = useState(null);
   const [showEnableTunnelModal, setShowEnableTunnelModal] = useState(false);
   const [showDisableTunnelModal, setShowDisableTunnelModal] = useState(false);
+  const [tunnelProvider, setTunnelProvider] = useState("cloudflare");
+  const [ngrokConfigured, setNgrokConfigured] = useState(false);
+  const [ngrokToken, setNgrokToken] = useState("");
 
   // Tailscale state
   const [tsEnabled, setTsEnabled] = useState(false);
@@ -85,6 +88,8 @@ export default function APIPageClient({ machineId }) {
   }, []);
 
   const { copied, copy } = useCopyToClipboard();
+
+  const tunnelLabel = tunnelProvider === "ngrok" ? "Tunnel (ngrok)" : "Tunnel";
 
   // Security gate: block remote exposure while dashboard uses default password or login is off.
   const isLoginUnsafe = !requireLogin || !hasPassword;
@@ -181,6 +186,7 @@ export default function APIPageClient({ machineId }) {
       setTunnelUrl(tUrl);
       setTunnelPublicUrl(data.tunnel?.publicUrl || "");
       setTunnelEnabled(tEnabled);
+      if (data.tunnel?.provider) setTunnelProvider(data.tunnel.provider);
       updateReachable(null, tunnelClientReachableRef, tunnelMissRef, setTunnelReachable, tunnelEverReachableRef, setTunnelEverReachable);
 
       const tsEn = data.tailscale?.settingsEnabled ?? data.tailscale?.enabled ?? false;
@@ -204,6 +210,8 @@ export default function APIPageClient({ machineId }) {
         setRequireLogin(data.requireLogin !== false);
         setHasPassword(data.hasPassword || false);
         setTunnelDashboardAccess(data.tunnelDashboardAccess || false);
+        setTunnelProvider(data.tunnelProvider === "ngrok" ? "ngrok" : "cloudflare");
+        setNgrokConfigured(data.ngrokConfigured || false);
       }
       if (statusRes.ok) {
         const data = await statusRes.json();
@@ -310,13 +318,41 @@ export default function APIPageClient({ machineId }) {
   };
 
   const handleEnableTunnel = async () => {
+    const useNgrok = tunnelProvider === "ngrok";
+    const token = ngrokToken.trim();
+    if (useNgrok && !ngrokConfigured && !token) {
+      setTunnelStatus({ type: "error", message: "Paste your ngrok authtoken first." });
+      return;
+    }
+
     setShowEnableTunnelModal(false);
     setTunnelLoading(true);
     setTunnelStatus(null);
     setTunnelProgress("Creating tunnel...");
 
-    // Poll download progress while enable request is pending
-    let polling = true;
+    // Persist the backend choice (and token) before enable — the server reads it from settings
+    try {
+      const patchRes = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tunnelProvider, ...(useNgrok && token ? { ngrokAuthtoken: token } : {}) }),
+      });
+      if (!patchRes.ok) {
+        setTunnelStatus({ type: "error", message: "Failed to save tunnel provider" });
+        setTunnelLoading(false);
+        setTunnelProgress("");
+        return;
+      }
+      if (useNgrok && token) { setNgrokConfigured(true); setNgrokToken(""); }
+    } catch (error) {
+      setTunnelStatus({ type: "error", message: error.message });
+      setTunnelLoading(false);
+      setTunnelProgress("");
+      return;
+    }
+
+    // Download progress only exists for cloudflared (ngrok ships as a library)
+    let polling = !useNgrok;
     const pollProgress = async () => {
       while (polling) {
         try {
@@ -333,7 +369,7 @@ export default function APIPageClient({ machineId }) {
         await new Promise((r) => setTimeout(r, 1000));
       }
     };
-    pollProgress();
+    if (polling) pollProgress();
 
     try {
       const res = await fetch("/api/tunnel/enable", { method: "POST" });
@@ -742,7 +778,7 @@ export default function APIPageClient({ machineId }) {
           {/* Cloudflare Tunnel */}
           {tunnelEnabled && !tunnelLoading && tunnelReachable ? (
             <EndpointRow
-              label="Tunnel"
+              label={tunnelLabel}
               active
               url={`${tunnelPublicUrl || tunnelUrl}/v1`}
               copyId="tunnel_url"
@@ -752,7 +788,7 @@ export default function APIPageClient({ machineId }) {
             />
           ) : tunnelEnabled && !tunnelLoading && !tunnelReachable ? (
             <EndpointRow
-              label="Tunnel"
+              label={tunnelLabel}
               active
               status={{
                 tone: "pending",
@@ -763,13 +799,13 @@ export default function APIPageClient({ machineId }) {
             />
           ) : tunnelLoading ? (
             <EndpointRow
-              label="Tunnel"
+              label={tunnelLabel}
               status={{ tone: "pending", spin: true, message: tunnelProgress || "Creating tunnel…" }}
               actions={stopButton(() => { setTunnelLoading(false); setTunnelProgress(""); })}
             />
           ) : tunnelStatus?.type === "error" ? (
             <EndpointRow
-              label="Tunnel"
+              label={tunnelLabel}
               status={{ tone: "error", icon: "error", message: tunnelStatus.message }}
               actions={
                 <Button size="sm" variant="secondary" icon="cloud_upload" onClick={() => setShowEnableTunnelModal(true)}>
@@ -779,13 +815,13 @@ export default function APIPageClient({ machineId }) {
             />
           ) : tunnelChecking ? (
             <EndpointRow
-              label="Tunnel"
+              label={tunnelLabel}
               status={{ tone: "pending", spin: true, message: "Checking…" }}
               actions={stopButton(() => setTunnelChecking(false))}
             />
           ) : (
             <EndpointRow
-              label="Tunnel"
+              label={tunnelLabel}
               status={{ tone: "pending", icon: "cloud_off", message: "Not enabled — expose this endpoint over the public internet." }}
               actions={
                 <Button
@@ -1152,7 +1188,7 @@ export default function APIPageClient({ machineId }) {
               <span className="material-symbols-outlined text-primary">cloud_upload</span>
               <div>
                 <p className="text-sm text-text-main font-medium mb-1">
-                  Cloudflare Tunnel
+                  {tunnelProvider === "ngrok" ? "ngrok" : "Cloudflare Tunnel"}
                 </p>
                 <p className="text-sm text-text-muted">
                   Expose your local PolyRouter to the internet. No port forwarding, no static IP needed. Share endpoint URL with your team or use it in Cursor, Cline, and other AI tools from anywhere.
@@ -1161,19 +1197,65 @@ export default function APIPageClient({ machineId }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {TUNNEL_BENEFITS.map((benefit) => (
-              <div key={benefit.title} className="flex flex-col items-center text-center p-3  bg-sidebar/50">
-                <span className="material-symbols-outlined text-xl text-primary mb-1">{benefit.icon}</span>
-                <p className="text-xs font-semibold">{benefit.title}</p>
-                <p className="text-xs text-text-muted">{benefit.desc}</p>
-              </div>
+          {/* Backend picker — both publish the same stable public URL */}
+          <div className="flex gap-2">
+            {[
+              { id: "cloudflare", label: "Cloudflare", hint: "No account needed" },
+              { id: "ngrok", label: "ngrok", hint: "Needs authtoken" },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setTunnelProvider(opt.id)}
+                className={`flex-1 p-3 text-left border ${tunnelProvider === opt.id ? "border-primary bg-primary/10" : "border-border-subtle bg-sidebar/50"}`}
+              >
+                <p className="text-sm font-semibold">{opt.label}</p>
+                <p className="text-xs text-text-muted">{opt.hint}</p>
+              </button>
             ))}
           </div>
 
-          <p className="text-xs text-text-muted">
-            Requires outbound port 7844 (TCP/UDP). Connection may take 10-30s.
-          </p>
+          {tunnelProvider === "ngrok" ? (
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">
+                Authtoken {ngrokConfigured && <span className="text-text-muted font-normal">(saved)</span>}
+              </label>
+              <Input
+                type="password"
+                placeholder={ngrokConfigured ? "Leave blank to keep existing token" : "2abc...xyz"}
+                value={ngrokToken}
+                onChange={(e) => setNgrokToken(e.target.value)}
+              />
+              <p className="text-xs text-text-muted">
+                Free at{" "}
+                <a
+                  href="https://dashboard.ngrok.com/get-started/your-authtoken"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline"
+                >
+                  dashboard.ngrok.com
+                </a>
+                . Stored locally; write-only after saving.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {TUNNEL_BENEFITS.map((benefit) => (
+                  <div key={benefit.title} className="flex flex-col items-center text-center p-3  bg-sidebar/50">
+                    <span className="material-symbols-outlined text-xl text-primary mb-1">{benefit.icon}</span>
+                    <p className="text-xs font-semibold">{benefit.title}</p>
+                    <p className="text-xs text-text-muted">{benefit.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-text-muted">
+                Requires outbound port 7844 (TCP/UDP). Connection may take 10-30s.
+              </p>
+            </>
+          )}
 
           <div className="flex gap-2">
             <Button onClick={handleEnableTunnel} fullWidth>
@@ -1191,7 +1273,7 @@ export default function APIPageClient({ machineId }) {
         onClose={() => !tunnelLoading && setShowDisableTunnelModal(false)}
       >
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-text-muted">The Cloudflare tunnel will be disconnected. Remote access via tunnel URL will stop working.</p>
+          <p className="text-sm text-text-muted">The tunnel will be disconnected. Remote access via tunnel URL will stop working.</p>
           <div className="flex gap-2">
             <Button onClick={handleDisableTunnel} fullWidth disabled={tunnelLoading} variant="danger">
               {tunnelLoading ? "Disabling..." : "Disable"}
