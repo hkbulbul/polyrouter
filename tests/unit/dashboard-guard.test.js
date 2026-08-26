@@ -1,20 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import fs from "fs";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  nextResponse: Symbol("next"),
-  jsonResponse: vi.fn((body, init) => ({
-    status: init?.status || 200,
-    body,
-  })),
-  getSettings: vi.fn(),
-  validateApiKey: vi.fn(),
-  getConsistentMachineId: vi.fn(),
-  verifyDashboardAuthToken: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const nextResponse = Symbol("next");
+  return {
+    nextResponse,
+    next: vi.fn(() => nextResponse),
+    jsonResponse: vi.fn((body, init) => ({
+      status: init?.status || 200,
+      body,
+    })),
+    getSettings: vi.fn(),
+    validateApiKey: vi.fn(),
+    getConsistentMachineId: vi.fn(),
+    verifyDashboardAuthToken: vi.fn(),
+  };
+});
 
 vi.mock("next/server", () => ({
   NextResponse: {
-    next: vi.fn(() => mocks.nextResponse),
+    next: mocks.next,
     json: mocks.jsonResponse,
     redirect: vi.fn((url) => ({ status: 307, url })),
   },
@@ -34,16 +39,41 @@ vi.mock("@/lib/auth/dashboardSession", () => ({
 }));
 
 const { proxy, __test__ } = await import("../../src/dashboardGuard.js");
+const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+const ORIGINAL_LOCALITY_SECRET = process.env.LOCALITY_INTERNAL_SECRET;
+const LOCALITY_SECRET = "locality-secret";
 
-function request(pathname, headers = {}) {
+function request(pathname, headers = {}, method = "GET") {
   const normalizedHeaders = new Headers(headers);
   return {
+    method,
     nextUrl: { pathname, searchParams: new URL(`http://localhost${pathname}`).searchParams },
     headers: normalizedHeaders,
     cookies: { get: vi.fn(() => undefined) },
     url: `http://localhost${pathname}`,
   };
 }
+
+function trustedHeaders(realIp = "127.0.0.1", headers = {}) {
+  return {
+    host: "localhost:20128",
+    origin: "http://localhost:20128",
+    "x-9r-real-ip": realIp,
+    "x-9r-locality-proof": LOCALITY_SECRET,
+    ...headers,
+  };
+}
+
+beforeEach(() => {
+  process.env.NODE_ENV = "test";
+  process.env.LOCALITY_INTERNAL_SECRET = LOCALITY_SECRET;
+});
+
+afterEach(() => {
+  process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+  if (ORIGINAL_LOCALITY_SECRET === undefined) delete process.env.LOCALITY_INTERNAL_SECRET;
+  else process.env.LOCALITY_INTERNAL_SECRET = ORIGINAL_LOCALITY_SECRET;
+});
 
 describe("dashboard guard public LLM API access", () => {
   beforeEach(() => {
@@ -65,6 +95,7 @@ describe("dashboard guard public LLM API access", () => {
     const response = await proxy(request("/v1/chat/completions", {
       host: "localhost",
       "x-9r-real-ip": "10.204.111.34",
+      "x-9r-locality-proof": LOCALITY_SECRET,
     }));
 
     expect(response.status).toBe(401);
@@ -72,10 +103,7 @@ describe("dashboard guard public LLM API access", () => {
   });
 
   it("allows loopback peer IP regardless of Host", async () => {
-    const response = await proxy(request("/v1/chat/completions", {
-      host: "localhost:20128",
-      "x-9r-real-ip": "127.0.0.1",
-    }));
+    const response = await proxy(request("/v1/chat/completions", trustedHeaders()));
 
     expect(response).toBe(mocks.nextResponse);
     expect(mocks.validateApiKey).not.toHaveBeenCalled();
@@ -206,6 +234,41 @@ describe("dashboard guard local-only access", () => {
     expect(response.body.error).toBe("Local only: CLI token required");
   });
 
+  it.each(["GET", "POST", "DELETE"])("rejects forged production Command Code %s access", async (method) => {
+    process.env.NODE_ENV = "production";
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/commandcode-settings", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+      "x-9r-real-ip": "127.0.0.1",
+    }, method));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Local only: CLI token required");
+  });
+
+  it("rejects an invalid production locality proof", async () => {
+    process.env.NODE_ENV = "production";
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/commandcode-settings", {
+      ...trustedHeaders(),
+      "x-9r-locality-proof": "forged",
+    }));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("allows trusted local Command Code access when dashboard login is disabled", async () => {
+    process.env.NODE_ENV = "production";
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/commandcode-settings", trustedHeaders()));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
   it("rejects local-only route on loopback when requireLogin=true and no JWT", async () => {
     const response = await proxy(request("/api/mcp/filesystem/sse", {
       host: "localhost:20128",
@@ -230,11 +293,7 @@ describe("dashboard guard local-only access", () => {
   it("allows a local-only route from a native IPv6 loopback peer", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
-    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
-      host: "localhost:20128",
-      origin: "http://localhost:20128",
-      "x-9r-real-ip": "::1",
-    }));
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", trustedHeaders("::1")));
 
     expect(response).toBe(mocks.nextResponse);
   });
@@ -242,11 +301,7 @@ describe("dashboard guard local-only access", () => {
   it("allows a local-only route from an IPv4-mapped loopback peer", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
-    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
-      host: "localhost:20128",
-      origin: "http://localhost:20128",
-      "x-9r-real-ip": "::ffff:127.0.0.1",
-    }));
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", trustedHeaders("::ffff:127.0.0.1")));
 
     expect(response).toBe(mocks.nextResponse);
   });
@@ -265,11 +320,7 @@ describe("dashboard guard local-only access", () => {
   it("rejects a remote IPv6 peer despite localhost headers", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
-    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
-      host: "localhost:20128",
-      origin: "http://localhost:20128",
-      "x-9r-real-ip": "2001:db8::1",
-    }));
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", trustedHeaders("2001:db8::1")));
 
     expect(response.status).toBe(403);
   });
@@ -277,12 +328,9 @@ describe("dashboard guard local-only access", () => {
   it("rejects a forwarded request even when its socket peer is IPv6 loopback", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
-    const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
-      host: "localhost:20128",
-      origin: "http://localhost:20128",
-      "x-9r-real-ip": "::1",
+    const response = await proxy(request("/api/cli-tools/antigravity-mitm", trustedHeaders("::1", {
       "x-9r-via-proxy": "1",
-    }));
+    })));
 
     expect(response.status).toBe(403);
   });
@@ -308,13 +356,37 @@ describe("dashboard guard local-only access", () => {
     expect(response.status).toBe(403);
   });
 
-  it("allows local-only route with valid CLI token", async () => {
-    const response = await proxy(request("/api/mcp/filesystem/sse", {
+  it("allows remote Command Code access with a valid CLI token", async () => {
+    process.env.NODE_ENV = "production";
+
+    const response = await proxy(request("/api/cli-tools/commandcode-settings", {
       host: "router.example.com",
       "x-9r-cli-token": "cli-token",
     }));
 
     expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("rejects unproven internal locality headers during development", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/commandcode-settings", {
+      host: "localhost:20128",
+      origin: "http://localhost:20128",
+      "x-9r-real-ip": "127.0.0.1",
+    }));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("strips locality proof before continuing", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    await proxy(request("/api/cli-tools/commandcode-settings", trustedHeaders()));
+
+    const forwarded = mocks.next.mock.calls.at(-1)[0].request.headers;
+    expect(forwarded.get("x-9r-locality-proof")).toBeNull();
+    expect(forwarded.get("x-9r-real-ip")).toBe("127.0.0.1");
   });
 
   it("allows setup-password through the public API allowlist for route-level checks", async () => {
@@ -323,6 +395,15 @@ describe("dashboard guard local-only access", () => {
     }));
 
     expect(response).toBe(mocks.nextResponse);
+  });
+});
+
+describe("production entrypoints", () => {
+  it("routes Node and Bun production starts through custom-server", () => {
+    const packageJson = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+
+    expect(packageJson.scripts.start).toBe("node custom-server.js --production");
+    expect(packageJson.scripts["start:bun"]).toBe("bun custom-server.js --production");
   });
 });
 

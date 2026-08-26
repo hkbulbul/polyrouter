@@ -8,6 +8,7 @@ import { Card } from "@/shared/components";
 function getStatus(status) {
   if (!status) return { label: "Unknown", cls: "bg-gray-500/10 text-gray-500" };
   if (!status.installed) return { label: "Not installed", cls: "bg-gray-500/10 text-gray-500" };
+  if (status.updateRequired) return { label: "Update required", cls: "bg-orange-500/10 text-orange-600 dark:text-orange-400" };
   if (status.hasPolyRouter) return { label: "Connected", cls: "bg-green-500/10 text-green-600 dark:text-green-400" };
   return { label: "Not configured", cls: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" };
 }

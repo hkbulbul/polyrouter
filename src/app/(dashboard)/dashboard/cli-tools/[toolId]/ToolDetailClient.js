@@ -9,7 +9,7 @@ import {
   ClaudeToolCard, CodexToolCard, DroidToolCard, OpenClawToolCard,
   HermesToolCard, DefaultToolCard, OpenCodeToolCard, CoworkToolCard,
   CopilotToolCard, ClineToolCard, KiloToolCard, DeepSeekTuiToolCard,
-  JcodeToolCard, GrokBuildToolCard,
+  JcodeToolCard, GrokBuildToolCard, CommandCodeToolCard,
 } from "../components";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
@@ -20,6 +20,7 @@ export default function ToolDetailClient({ toolId, machineId }) {
   const [loading, setLoading] = useState(true);
   const [modelMappings, setModelMappings] = useState({});
   const [cloudEnabled, setCloudEnabled] = useState(false);
+  const [requireApiKey, setRequireApiKey] = useState(false);
   const [tunnelEnabled, setTunnelEnabled] = useState(false);
   const [tunnelPublicUrl, setTunnelPublicUrl] = useState("");
   const [tailscaleEnabled, setTailscaleEnabled] = useState(false);
@@ -44,6 +45,7 @@ export default function ToolDetailClient({ toolId, machineId }) {
         if (settingsRes.ok) {
           const data = await settingsRes.json();
           setCloudEnabled(data.cloudEnabled || false);
+          setRequireApiKey(data.requireApiKey || false);
         }
         if (tunnelRes.ok) {
           const data = await tunnelRes.json();
@@ -141,6 +143,8 @@ export default function ToolDetailClient({ toolId, machineId }) {
         return <JcodeToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
       case "grok-build":
         return <GrokBuildToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
+      case "commandcode":
+        return <CommandCodeToolCard {...commonProps} activeProviders={getActiveProviders()} requireApiKey={requireApiKey} />;
       default:
         return <DefaultToolCard toolId={toolId} {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} tunnelEnabled={tunnelEnabled} />;
     }

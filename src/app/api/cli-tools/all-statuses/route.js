@@ -14,6 +14,7 @@ import { GET as kiloGet } from "../kilo-settings/route";
 import { GET as deepseekTuiGet } from "../deepseek-tui-settings/route";
 import { GET as jcodeGet } from "../jcode-settings/route";
 import { GET as grokBuildGet } from "../grok-build-settings/route";
+import { GET as commandCodeGet } from "../commandcode-settings/route";
 
 const STATUS_GETTERS = {
   claude: claudeGet,
@@ -29,6 +30,7 @@ const STATUS_GETTERS = {
   "deepseek-tui": deepseekTuiGet,
   jcode: jcodeGet,
   "grok-build": grokBuildGet,
+  commandcode: commandCodeGet,
 };
 
 // Batch endpoint: gather all CLI tool statuses in one round-trip
@@ -38,6 +40,14 @@ export async function GET() {
       try {
         const res = await getter();
         const data = await res.json();
+        if (toolId === "commandcode") {
+          return [toolId, {
+            installed: data.installed,
+            version: data.version,
+            updateRequired: data.updateRequired,
+            hasPolyRouter: data.hasPolyRouter && data.compatible,
+          }];
+        }
         return [toolId, data];
       } catch {
         return [toolId, null];

@@ -134,6 +134,18 @@ export const CLI_TOOLS = {
     description: "OpenCode AI Terminal Assistant",
     configType: "custom",
   },
+  commandcode: {
+    id: "commandcode",
+    name: "Command Code",
+    image: "/providers/commandcode.png",
+    color: "#6366F1",
+    description: "Command Code CLI via PolyRouter native BYOK",
+    configType: "custom",
+    notes: [
+      { type: "info", text: "Requires Command Code 1.30.0 or later. Older releases do not load providers.json." },
+      { type: "info", text: "Select one or more models, then click Apply to update providers.json. Reopen /model or /connect afterward; your active model is never changed automatically." },
+    ],
+  },
   cowork: {
     id: "cowork",
     name: "Claude Cowork",

@@ -1,3 +1,11 @@
+# Unreleased
+
+## Features
+- **Command Code CLI**: add Command Code 1.30+ native BYOK setup with multi-model selection, explicit exact-set Apply, secret-safe authentication, and owned-only reset without changing the active model.
+
+## Security
+- **Local access**: authenticate socket-derived locality and route production starts through the hardened server wrapper so forged headers cannot reach host-only settings routes.
+
 # v1.0.17 (CLI) - 2026-08-23
 
 ## Features

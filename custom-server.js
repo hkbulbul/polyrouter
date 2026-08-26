@@ -36,9 +36,9 @@ function logFatal(kind, err) {
 process.on("unhandledRejection", (reason) => logFatal("unhandledRejection", reason));
 process.on("uncaughtException", (err) => logFatal("uncaughtException", err));
 
-// Shared only with the in-process Next route used by the WebSocket bridge.
-// It is intentionally never exposed to browser JavaScript.
+// Shared only with in-process Next code. Never expose these to browser JavaScript.
 process.env.REALTIME_INTERNAL_SECRET ||= crypto.randomBytes(32).toString("hex");
+process.env.LOCALITY_INTERNAL_SECRET ||= crypto.randomBytes(32).toString("hex");
 
 const origCreate = http.createServer.bind(http);
 let realtimeRuntimePromise;
@@ -65,7 +65,9 @@ function stampSocketIp(req) {
   delete req.headers["x-forwarded-for"];
   delete req.headers["x-9r-via-proxy"];
   delete req.headers["x-9r-secure"];
+  delete req.headers["x-9r-locality-proof"];
   req.headers["x-9r-real-ip"] = ip;
+  req.headers["x-9r-locality-proof"] = process.env.LOCALITY_INTERNAL_SECRET;
   if (viaProxy) req.headers["x-9r-via-proxy"] = "1";
   if (req.socket?.encrypted === true || (isLoopbackProxy && viaProxy && xForwardedProto === "https")) {
     req.headers["x-9r-secure"] = "1";
@@ -131,26 +133,26 @@ const standaloneServer = path.join(__dirname, "server.js");
 if (fs.existsSync(standaloneServer)) {
   require(standaloneServer);
 } else {
-  // Development fallback: `next dev` does not create standalone/server.js,
-  // but it can still share this HTTP server and its websocket upgrade hook.
-  process.env.NODE_ENV ||= "development";
+  const isProduction = process.argv.includes("--production");
+  process.env.NODE_ENV = isProduction ? "production" : (process.env.NODE_ENV || "development");
   process.env.PORT ||= "20127";
-  // Keep development manifests separate from the production standalone build.
-  process.env.NEXT_DIST_DIR ||= ".next-dev";
+  // Keep development manifests separate from the production build.
+  process.env.NEXT_DIST_DIR = isProduction ? ".next" : (process.env.NEXT_DIST_DIR || ".next-dev");
   const next = require("next");
-  const devApp = next({
-    dev: true,
+  const app = next({
+    dev: !isProduction,
     hostname: process.env.HOSTNAME || "localhost",
     port: Number(process.env.PORT),
   });
-  const devHandle = devApp.getRequestHandler();
-  devApp.prepare().then(() => {
-    const server = http.createServer(devHandle);
+  const handle = app.getRequestHandler();
+  app.prepare().then(() => {
+    const server = http.createServer(handle);
     server.listen(Number(process.env.PORT), process.env.HOSTNAME || "localhost", () => {
-      console.log(`▲ Next.js development server ready on http://localhost:${process.env.PORT}`);
+      const mode = isProduction ? "production" : "development";
+      console.log(`▲ Next.js ${mode} server ready on http://localhost:${process.env.PORT}`);
     });
   }).catch((error) => {
-    console.error("[realtime] Failed to start Next.js development server:", error?.message || error);
+    console.error("[realtime] Failed to start Next.js server:", error?.message || error);
     process.exitCode = 1;
   });
 }
