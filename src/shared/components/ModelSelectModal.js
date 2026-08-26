@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
 import Modal from "./Modal";
 import ProviderIcon from "./ProviderIcon";
@@ -32,6 +32,7 @@ export default function ModelSelectModal({
   kindFilter = null,
   addedModelValues = [],
   closeOnSelect = true,
+  instruction = "Click to add, click again to remove. Changes are saved automatically.",
 }) {
   // Filter activeProviders by serviceKinds when kindFilter set (e.g. "webSearch", "webFetch")
   const filteredActiveProviders = useMemo(() => {
@@ -62,7 +63,7 @@ export default function ModelSelectModal({
 
   useEffect(() => {
     if (!isOpen || cursorConnectionIds.length === 0) {
-      setCursorModels([]);
+      void Promise.resolve().then(() => setCursorModels([]));
       return undefined;
     }
 
@@ -104,7 +105,7 @@ export default function ModelSelectModal({
   };
 
   useEffect(() => {
-    if (isOpen) fetchCombos();
+    if (isOpen) void Promise.resolve().then(fetchCombos);
   }, [isOpen]);
 
   const fetchProviderNodes = async () => {
@@ -120,7 +121,7 @@ export default function ModelSelectModal({
   };
 
   useEffect(() => {
-    if (isOpen) fetchProviderNodes();
+    if (isOpen) void Promise.resolve().then(fetchProviderNodes);
   }, [isOpen]);
 
   const fetchCustomModels = async () => {
@@ -136,7 +137,7 @@ export default function ModelSelectModal({
   };
 
   useEffect(() => {
-    if (isOpen) fetchCustomModels();
+    if (isOpen) void Promise.resolve().then(fetchCustomModels);
   }, [isOpen]);
 
   const fetchDisabledModels = async () => {
@@ -152,7 +153,7 @@ export default function ModelSelectModal({
   };
 
   useEffect(() => {
-    if (isOpen) fetchDisabledModels();
+    if (isOpen) void Promise.resolve().then(fetchDisabledModels);
   }, [isOpen]);
 
   const allProviders = useMemo(() => ({ ...OAUTH_PROVIDERS, ...FREE_PROVIDERS, ...FREE_TIER_PROVIDERS, ...APIKEY_PROVIDERS }), []);
@@ -404,11 +405,11 @@ export default function ModelSelectModal({
   }, [combos, searchQuery, kindFilter]);
 
   // Sort models alphabetically, with added models floated to top
-  const sortModels = (models) => {
+  const sortModels = useCallback((models) => {
     const added = models.filter(m => addedModelValues.includes(m.value)).sort((a, b) => a.name.localeCompare(b.name));
     const rest = models.filter(m => !addedModelValues.includes(m.value)).sort((a, b) => a.name.localeCompare(b.name));
     return [...added, ...rest];
-  };
+  }, [addedModelValues]);
 
   // Filter models by search query
   const filteredGroups = useMemo(() => {
@@ -433,7 +434,7 @@ export default function ModelSelectModal({
     });
 
     return filtered;
-  }, [groupedModels, searchQuery, addedModelValues]);
+  }, [groupedModels, searchQuery, sortModels]);
 
   const handleSelect = (model) => {
     const value = model?.value || model?.name || model;
@@ -466,7 +467,7 @@ export default function ModelSelectModal({
       {/* Info bar */}
       <div className="flex items-center gap-2 mb-3 px-2.5 py-2 bg-primary/8 border border-primary/20  text-xs text-text-muted">
         <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: "14px" }}>info</span>
-        <span>Click to add, click again to remove. Changes are saved automatically.</span>
+        <span>{instruction}</span>
       </div>
 
       {/* Search - compact */}
@@ -622,4 +623,5 @@ ModelSelectModal.propTypes = {
   kindFilter: PropTypes.string,
   addedModelValues: PropTypes.arrayOf(PropTypes.string),
   closeOnSelect: PropTypes.bool,
+  instruction: PropTypes.string,
 };

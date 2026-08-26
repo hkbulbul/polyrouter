@@ -66,6 +66,7 @@ export default function BaseUrlSelect({
   cloudEnabled = false,
   cloudUrl = "",
   withV1 = true,
+  preserveInitialValue = false,
 }) {
   const [savedPresets, setSavedPresets] = useState([]);
   const [mode, setMode] = useState("");
@@ -73,7 +74,11 @@ export default function BaseUrlSelect({
   const initializedRef = useRef(false);
 
   useEffect(() => {
-    setSavedPresets(readSavedPresets());
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setSavedPresets(readSavedPresets());
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const options = useMemo(
@@ -81,19 +86,31 @@ export default function BaseUrlSelect({
     [requiresExternalUrl, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl, cloudEnabled, cloudUrl, savedPresets, withV1]
   );
 
-  // Always default to first option (127.0.0.1) on mount, ignore persisted value
+  // Existing integrations intentionally default to local; safe config editors can opt into hydration.
   useEffect(() => {
-    if (initializedRef.current) return;
-    if (options.length === 0) return;
+    if (initializedRef.current || options.length === 0) return;
     initializedRef.current = true;
-    const first = options.find((o) => o.value !== CUSTOM_VALUE);
-    if (first) {
-      setMode(first.value);
-      onChange(first.url);
-    } else {
-      setMode(CUSTOM_VALUE);
-    }
-  }, [options, onChange]);
+    Promise.resolve().then(() => {
+      const hydrated = preserveInitialValue && value ? ensureV1(value) : "";
+      if (hydrated) {
+        const matchingOption = options.find((option) => option.url === hydrated);
+        if (matchingOption) {
+          setMode(matchingOption.value);
+        } else {
+          setMode(CUSTOM_VALUE);
+          setCustomInput(hydrated);
+        }
+        return;
+      }
+      const first = options.find((o) => o.value !== CUSTOM_VALUE);
+      if (first) {
+        setMode(first.value);
+        onChange(first.url);
+      } else {
+        setMode(CUSTOM_VALUE);
+      }
+    });
+  }, [options, onChange, preserveInitialValue, value]);
 
   const handleSelect = (e) => {
     const next = e.target.value;

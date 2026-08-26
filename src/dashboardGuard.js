@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { getSettings, validateApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
@@ -5,6 +6,8 @@ import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
+const LOCALITY_PROOF_HEADER = "x-9r-locality-proof";
+const LOCALITY_HEADERS = [LOCALITY_PROOF_HEADER, "x-9r-real-ip", "x-9r-via-proxy", "x-9r-secure"];
 
 let cachedCliToken = null;
 async function getCliToken() {
@@ -71,6 +74,7 @@ const PROTECTED_API_PATHS = [
 // Routes that spawn child processes or read host secrets — restrict to localhost.
 const LOCAL_ONLY_PATHS = [
   "/api/cli-tools/cowork-settings",
+  "/api/cli-tools/commandcode-settings",
   "/api/cli-tools/antigravity-mitm",
   "/api/mcp/",
   "/api/tunnel/tailscale-install",
@@ -108,25 +112,41 @@ function isLoopbackHostname(value) {
   return LOOPBACK_HOSTS.has(host);
 }
 
-export function isLocalRequest(request) {
-  // Stamped by custom-server.js when forwarding headers exist: request came through
-  // a reverse proxy, so the loopback socket is the proxy hop, not the end-user.
-  if (request.headers.get("x-9r-via-proxy")) return false;
-  // Trusted peer IP from TCP socket (custom-server.js); unspoofable. Primary anchor for "local".
-  const realIp = request.headers.get("x-9r-real-ip");
-  if (realIp) {
-    if (!isLoopbackHostname(realIp)) return false;
-  } else if (!isLoopbackHostname(request.headers.get("host"))) {
-    // Fallback for bare server.js (dev) without custom-server: legacy Host-based check.
+function secretsMatch(actual, expected) {
+  const left = Buffer.from(actual || "", "utf8");
+  const right = Buffer.from(expected || "", "utf8");
+  return left.length > 0 && left.length === right.length && timingSafeEqual(left, right);
+}
+
+function hasLoopbackOrigin(request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    return isLoopbackHostname(new URL(origin).hostname);
+  } catch {
     return false;
   }
-  const origin = request.headers.get("origin");
-  if (origin) {
-    try {
-      if (!isLoopbackHostname(new URL(origin).hostname)) return false;
-    } catch { return false; }
+}
+
+export function isLocalRequest(request) {
+  const expectedProof = process.env.LOCALITY_INTERNAL_SECRET;
+  const actualProof = request.headers.get(LOCALITY_PROOF_HEADER);
+  if (expectedProof && secretsMatch(actualProof, expectedProof)) {
+    if (request.headers.get("x-9r-via-proxy")) return false;
+    return isLoopbackHostname(request.headers.get("x-9r-real-ip")) && hasLoopbackOrigin(request);
   }
-  return true;
+
+  // Production must come through custom-server.js. Raw Next entrypoints fail closed.
+  if (process.env.NODE_ENV === "production") return false;
+  // Development fallback is Host-based only when no forged internal headers are present.
+  if (LOCALITY_HEADERS.some((header) => request.headers.has(header))) return false;
+  return isLoopbackHostname(request.headers.get("host")) && hasLoopbackOrigin(request);
+}
+
+function nextWithoutLocalityProof(request) {
+  const headers = new Headers(request.headers);
+  headers.delete(LOCALITY_PROOF_HEADER);
+  return NextResponse.next({ request: { headers } });
 }
 
 function isPublicLlmApi(pathname) {
@@ -214,20 +234,20 @@ export async function proxy(request) {
   // Always protected - require valid JWT or local CLI token (machineId-based)
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
     if (await hasValidCliToken(request) || await hasValidToken(request))
-      return NextResponse.next();
+      return nextWithoutLocalityProof(request);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   if (isPublicLlmApi(pathname)) {
-    if (await canAccessPublicLlmApi(request)) return NextResponse.next();
+    if (await canAccessPublicLlmApi(request)) return nextWithoutLocalityProof(request);
     return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.
   if (pathname.startsWith("/api/")) {
-    if (isPublicApi(pathname)) return NextResponse.next();
+    if (isPublicApi(pathname)) return nextWithoutLocalityProof(request);
     if (await hasValidCliToken(request) || await isAuthenticated(request))
-      return NextResponse.next();
+      return nextWithoutLocalityProof(request);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -257,13 +277,13 @@ export async function proxy(request) {
     }
 
     // If login not required, allow through
-    if (!requireLogin) return NextResponse.next();
+    if (!requireLogin) return nextWithoutLocalityProof(request);
 
     // Verify JWT token
     const token = request.cookies.get("auth_token")?.value;
     if (token) {
       if (await verifyDashboardAuthToken(token)) {
-        return NextResponse.next();
+        return nextWithoutLocalityProof(request);
       } else {
         return NextResponse.redirect(new URL("/login", request.url));
       }
@@ -277,5 +297,5 @@ export async function proxy(request) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  return NextResponse.next();
+  return nextWithoutLocalityProof(request);
 }

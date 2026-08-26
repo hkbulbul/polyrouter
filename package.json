@@ -7,11 +7,11 @@
     "dev": "node custom-server.js",
     "dev:webpack": "next dev --webpack --port 20127",
     "build": "npm run build:extension && next build --webpack",
-    "start": "next start --port 20127",
+    "start": "node custom-server.js --production",
     "dev:bun": "bun --bun next dev --webpack --port 20127",
     "build:bun": "bun run build:extension && bun --bun next build --webpack",
     "build:extension": "node scripts/build-polyrouter-extension.mjs",
-    "start:bun": "bun ./.next/standalone/server.js",
+    "start:bun": "bun custom-server.js --production",
     "cli:pack": "npm --prefix cli run pack:cli",
     "cli:publish": "npm --prefix cli run publish:cli"
   },
