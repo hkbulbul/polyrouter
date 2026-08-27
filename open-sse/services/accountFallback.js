@@ -1,4 +1,4 @@
-import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS } from "../config/errorConfig.js";
+import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, MODEL_UNSUPPORTED_COOLDOWN_MS } from "../config/errorConfig.js";
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)
@@ -27,6 +27,22 @@ export function isToolSchemaValidationError(status, errorText) {
     && /schema|parameters|tools|input_schema/i.test(text);
 }
 
+// "This model isn't supported for you" is an *entitlement* fact, not account ill
+// health. Rollout-gated models (e.g. codex gpt-5.6-sol) are enabled per account,
+// so the next account may well succeed — we must still rotate. What's wrong is
+// treating it as transient: entitlement doesn't change in 30s, so the default
+// TRANSIENT_COOLDOWN_MS makes us re-upload the whole request body to the same
+// non-entitled account on every request. checkFallbackError gives it a long lock,
+// keeping the account fully usable for its other models.
+// ponytail: 400-only, text-matched. Widen to 404 or add a per-provider rule when
+// a second provider's phrasing actually shows up.
+export function isModelNotSupportedError(status, errorText) {
+  if (status !== 400) return false;
+  const text = typeof errorText === "string" ? errorText : JSON.stringify(errorText || "");
+  return /\bmodel\b|model_not_(?:found|supported)/i.test(text)
+    && /not[ _](?:supported|found|available)|unsupported|does not exist|unknown model|invalid model/i.test(text);
+}
+
 export function isAccountValidationRequiredError(status, errorText) {
   if (status !== 403) return false;
   const text = typeof errorText === "string" ? errorText : JSON.stringify(errorText || "");
@@ -34,6 +50,12 @@ export function isAccountValidationRequiredError(status, errorText) {
 }
 
 export function checkFallbackError(status, errorText, backoffLevel = 0) {
+  // Entitlement, not health: rotate (another account may have the model) but hold
+  // the lock long so we stop paying a dead 400 probe on every request.
+  if (isModelNotSupportedError(status, errorText)) {
+    return { shouldFallback: true, cooldownMs: MODEL_UNSUPPORTED_COOLDOWN_MS };
+  }
+
   const lowerError = errorText
     ? (typeof errorText === "string" ? errorText : JSON.stringify(errorText)).toLowerCase()
     : "";
