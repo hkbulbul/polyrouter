@@ -60,6 +60,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   }, [connection]);
 
   const isOAuth = connection?.authType === "oauth";
+  const isCookie = connection?.authType === "cookie";
   const isAzure = connection?.provider === "azure";
   const isCloudflareAi = connection?.provider === "cloudflare-ai";
   const isCompatible = connection
@@ -206,12 +207,12 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
           <>
             <div className="flex gap-2">
               <Input
-                label="API Key"
+                label={isCookie ? "Cookie Value" : "API Key"}
                 type="password"
                 value={formData.apiKey}
                 onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                placeholder="Enter new API key"
-                hint="Leave blank to keep the current API key."
+                placeholder={isCookie ? "Enter a new cookie value" : "Enter new API key"}
+                hint={`Leave blank to keep the current ${isCookie ? "cookie" : "API key"}.`}
                 className="flex-1"
               />
               <div className="pt-6">

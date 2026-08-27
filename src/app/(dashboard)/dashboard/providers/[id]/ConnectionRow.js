@@ -6,7 +6,7 @@ import PropTypes from "prop-types";
 import { Badge, Toggle, Tooltip, Dropdown, DropdownItem } from "@/shared/components";
 import CooldownTimer from "./CooldownTimer";
 
-export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onDelete, oneByOneStatus = null, autoPing = null }) {
+export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst, isLast, onMoveUp, onMoveDown, onToggleActive, onUpdateProxy, onEdit, onRenew, onDelete, oneByOneStatus = null, autoPing = null }) {
   const [updatingProxy, setUpdatingProxy] = useState(false);
 
   const proxyPoolMap = new Map((proxyPools || []).map((pool) => [pool.id, pool]));
@@ -238,6 +238,12 @@ export default function ConnectionRow({ connection, proxyPools, isOAuth, isFirst
               </button>
             </Tooltip>
           )}
+          {onRenew && (
+            <button onClick={onRenew} className="flex flex-col items-center px-2 py-1 text-text-muted hover:bg-black/5 hover:text-primary dark:hover:bg-white/5">
+              <span className="material-symbols-outlined text-[18px]">login</span>
+              <span className="text-[10px] leading-tight">Renew</span>
+            </button>
+          )}
           <button onClick={onEdit} className="flex flex-col items-center  px-2 py-1 text-text-muted hover:bg-black/5 hover:text-primary dark:hover:bg-white/5">
             <span className="material-symbols-outlined text-[18px]">edit</span>
             <span className="text-[10px] leading-tight">Edit</span>
@@ -286,6 +292,7 @@ ConnectionRow.propTypes = {
   onToggleActive: PropTypes.func.isRequired,
   onUpdateProxy: PropTypes.func,
   onEdit: PropTypes.func.isRequired,
+  onRenew: PropTypes.func,
   onDelete: PropTypes.func.isRequired,
   oneByOneStatus: PropTypes.shape({
     state: PropTypes.string,

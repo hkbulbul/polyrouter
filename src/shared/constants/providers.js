@@ -68,6 +68,8 @@ export const APIKEY_PROVIDERS = byCategory("apikey");
 
 // Web Cookie Providers (use browser session cookie instead of API key)
 export const WEB_COOKIE_PROVIDERS = byCategory("webCookie");
+// Temporary: browser-profile sign-in is disabled while the Connector flow replaces it.
+export const WEB_COOKIE_SIGNIN_ENABLED = false;
 
 // Media provider kinds — each kind maps to a route and endpoint config
 export const MEDIA_PROVIDER_KINDS = [

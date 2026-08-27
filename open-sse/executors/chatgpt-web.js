@@ -9,11 +9,12 @@
  * The OAuth access token gives us a ChatGPT session; we inject it as a cookie
  * into the Playwright browser context.
  */
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
 import { SSE_DONE, SSE_HEADERS_NO_BUFFER } from "../utils/sseConstants.js";
 import { sseChunk } from "../utils/sse.js";
+import { launchInstalledChromium } from "../utils/installedChromium.js";
 import {
   completeChatGptWebToolCall,
   findChatGptWebTurnByCallId,
@@ -49,6 +50,8 @@ const MCP_CONNECTOR_NAME = process.env.CHATGPT_WEB_MCP_CONNECTOR_NAME || "PolyRo
 let browserInstance = null;
 let browserContext = null;
 let browserContextSessionKey = null;
+let browserContextCredentialHash = null;
+let browserMutationQueue = Promise.resolve();
 let activeTabs = 0;
 const pagesBySession = new Map();
 const busySessions = new Set();
@@ -57,6 +60,7 @@ function resetBrowserState() {
   browserInstance = null;
   browserContext = null;
   browserContextSessionKey = null;
+  browserContextCredentialHash = null;
   activeTabs = 0;
   pagesBySession.clear();
   busySessions.clear();
@@ -92,40 +96,43 @@ function normalizeStoredCookies(cookies) {
 }
 
 async function getBrowserContext(sessionKey, sessionCookies) {
-  if (browserInstance && !browserInstance.isConnected()) {
-    resetBrowserState();
-  }
-  if (browserContext && browserContextSessionKey === sessionKey) {
-    return browserContext;
-  }
-  if (browserContext && activeTabs > 0) {
-    throw new Error("ChatGPT Web cannot switch accounts while another turn is active");
-  }
-  if (browserContext) {
-    await closeBrowser();
-  }
-
-  const { chromium } = await new Function("return import('playwright-core')")();
-  browserInstance = await chromium.launch({
-    headless: false,
-    channel: "chrome",
-    args: ["--no-first-run", "--no-default-browser-check"],
-  });
-  const launchedBrowser = browserInstance;
-  launchedBrowser.on("disconnected", () => {
-    if (browserInstance === launchedBrowser) resetBrowserState();
-  });
-  browserContext = await browserInstance.newContext({
-    viewport: { width: 1280, height: 900 },
-  });
-  browserContextSessionKey = sessionKey;
-
   const cookies = normalizeStoredCookies(sessionCookies);
-  if (cookies.length > 0) {
-    await browserContext.addCookies(cookies);
-  }
+  const credentialHash = createHash("sha256")
+    .update(JSON.stringify(cookies))
+    .digest("hex");
+  const open = async () => {
+    if (browserInstance && !browserInstance.isConnected()) {
+      resetBrowserState();
+    }
+    if (
+      browserContext
+      && browserContextSessionKey === sessionKey
+      && browserContextCredentialHash === credentialHash
+    ) {
+      return browserContext;
+    }
+    if (browserContext && activeTabs > 0) {
+      throw new Error("ChatGPT Web cannot switch accounts while another turn is active");
+    }
+    if (browserContext) await closeBrowser();
 
-  return browserContext;
+    ({ browser: browserInstance } = await launchInstalledChromium());
+    const launchedBrowser = browserInstance;
+    launchedBrowser.on("disconnected", () => {
+      if (browserInstance === launchedBrowser) resetBrowserState();
+    });
+    browserContext = await browserInstance.newContext({
+      viewport: { width: 1280, height: 900 },
+    });
+    browserContextSessionKey = sessionKey;
+    browserContextCredentialHash = credentialHash;
+    if (cookies.length > 0) await browserContext.addCookies(cookies);
+    return browserContext;
+  };
+
+  const queued = browserMutationQueue.then(open, open);
+  browserMutationQueue = queued.then(() => undefined, () => undefined);
+  return queued;
 }
 
 async function closeBrowser() {
@@ -685,6 +692,10 @@ export class ChatGptWebExecutor extends BaseExecutor {
       const turn = continuedResults[0].turn;
       if (continuedResults.some((result) => result.turn.token !== turn.token)) {
         return { response: errorResponse(400, "Tool results reference multiple active ChatGPT Web turns") };
+      }
+      if (turn.connectionId && turn.connectionId !== credentials?.connectionId) {
+        cleanupToolRuntime(turn, "ChatGPT Web MCP continuation changed connections", true);
+        return { response: errorResponse(409, "ChatGPT Web MCP continuation must use its original connection") };
       }
       const runtime = turn.runtime;
       const expected = runtime?.outstanding;

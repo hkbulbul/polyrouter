@@ -84,11 +84,10 @@ describe("dashboard guard public LLM API access", () => {
     mocks.verifyDashboardAuthToken.mockResolvedValue(false);
   });
 
-  it("allows loopback public LLM API without API key", async () => {
+  it("rejects unstamped loopback public LLM API without API key", async () => {
     const response = await proxy(request("/v1/chat/completions", { host: "localhost:20128" }));
 
-    expect(response).toBe(mocks.nextResponse);
-    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
   });
 
   it("rejects remote Host-spoof when real peer IP is non-loopback", async () => {
@@ -116,11 +115,10 @@ describe("dashboard guard public LLM API access", () => {
     expect(response.body.error).toBe("API key required for remote API access");
   });
 
-  it("allows loopback rewritten public LLM API without API key", async () => {
+  it("rejects unstamped rewritten public LLM API without API key", async () => {
     const response = await proxy(request("/api/v1/chat/completions", { host: "localhost:20128" }));
 
-    expect(response).toBe(mocks.nextResponse);
-    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
   });
 
   it("rejects remote beta public LLM API without API key", async () => {
@@ -225,6 +223,73 @@ describe("dashboard guard local-only access", () => {
     mocks.verifyDashboardAuthToken.mockResolvedValue(false);
   });
 
+  it.each(["GET", "POST", "DELETE"])("rejects remote Web Cookie browser sign-in %s access", async (method) => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/oauth/web-cookie/browser?flowId=test", {
+      host: "router.example.com",
+      origin: "https://router.example.com",
+    }, method));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects connector cookie import from an unstamped request", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/oauth/chatgpt-web/cookie", {
+      host: "localhost:20128",
+    }, "POST"));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("allows trusted local connector cookie import", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/oauth/chatgpt-web/cookie", trustedHeaders(), "POST"));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("rejects Web Cookie browser sign-in with an evil Origin", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/oauth/web-cookie/browser", {
+      ...trustedHeaders(),
+      origin: "https://evil.example.com",
+    }, "POST"));
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rejects Web Cookie browser sign-in through a local reverse proxy", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/oauth/web-cookie/browser", trustedHeaders("127.0.0.1", {
+      "x-9r-via-proxy": "1",
+    }), "POST"));
+
+    expect(response.status).toBe(403);
+  });
+
+  it.each(["GET", "POST", "DELETE"])("allows trusted local Web Cookie browser sign-in %s access", async (method) => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/oauth/web-cookie/browser", trustedHeaders(), method));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("allows remote Web Cookie browser sign-in with a valid CLI token", async () => {
+    const response = await proxy(request("/api/oauth/web-cookie/browser", {
+      host: "router.example.com",
+      "x-9r-cli-token": "cli-token",
+    }, "POST"));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
   it("rejects local-only route from non-loopback host without CLI token", async () => {
     const response = await proxy(request("/api/mcp/filesystem/sse", {
       host: "router.example.com",
@@ -279,7 +344,7 @@ describe("dashboard guard local-only access", () => {
     expect(response.body.error).toBe("Local only: CLI token required");
   });
 
-  it("allows local-only route on loopback when requireLogin=false", async () => {
+  it("rejects unstamped local-only route even when requireLogin=false", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
     const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
@@ -287,7 +352,7 @@ describe("dashboard guard local-only access", () => {
       origin: "http://localhost:20128",
     }));
 
-    expect(response).toBe(mocks.nextResponse);
+    expect(response.status).toBe(403);
   });
 
   it("allows a local-only route from a native IPv6 loopback peer", async () => {
@@ -306,7 +371,7 @@ describe("dashboard guard local-only access", () => {
     expect(response).toBe(mocks.nextResponse);
   });
 
-  it("allows bracketed IPv6 loopback Host and Origin without a stamped peer", async () => {
+  it("rejects bracketed IPv6 loopback without a stamped peer", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
     const response = await proxy(request("/api/cli-tools/antigravity-mitm", {
@@ -314,7 +379,7 @@ describe("dashboard guard local-only access", () => {
       origin: "http://[::1]:20128",
     }));
 
-    expect(response).toBe(mocks.nextResponse);
+    expect(response.status).toBe(403);
   });
 
   it("rejects a remote IPv6 peer despite localhost headers", async () => {

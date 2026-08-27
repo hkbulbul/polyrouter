@@ -7,7 +7,6 @@ import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
 const LOCALITY_PROOF_HEADER = "x-9r-locality-proof";
-const LOCALITY_HEADERS = [LOCALITY_PROOF_HEADER, "x-9r-real-ip", "x-9r-via-proxy", "x-9r-secure"];
 
 let cachedCliToken = null;
 async function getCliToken() {
@@ -85,6 +84,8 @@ const LOCAL_ONLY_PATHS = [
   "/api/tunnel/disable",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/api/oauth/chatgpt-web/cookie",
+  "/api/oauth/web-cookie/browser",
   "/api/auth/reset-password",
   "/api/headroom/start",
   "/api/headroom/stop",
@@ -136,11 +137,9 @@ export function isLocalRequest(request) {
     return isLoopbackHostname(request.headers.get("x-9r-real-ip")) && hasLoopbackOrigin(request);
   }
 
-  // Production must come through custom-server.js. Raw Next entrypoints fail closed.
-  if (process.env.NODE_ENV === "production") return false;
-  // Development fallback is Host-based only when no forged internal headers are present.
-  if (LOCALITY_HEADERS.some((header) => request.headers.has(header))) return false;
-  return isLoopbackHostname(request.headers.get("host")) && hasLoopbackOrigin(request);
+  // Requests without a socket-stamped proof are not trusted as local. This also
+  // keeps raw Next development servers from treating a spoofed Host as locality.
+  return false;
 }
 
 function nextWithoutLocalityProof(request) {

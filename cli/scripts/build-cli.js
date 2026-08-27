@@ -210,6 +210,8 @@ function ensureModuleInBundle(pkg) {
   console.log(`✅ Bundled ${pkg}`);
 }
 ensureModuleInBundle("sql.js");
+// Browser sign-in and ChatGPT Web load Playwright dynamically, outside Next's tracer.
+ensureModuleInBundle("playwright-core");
 // The realtime bridge is loaded by custom-server.js, so it is not visible to
 // Next's output tracer and must be carried explicitly by the CLI bundle.
 ensureModuleInBundle("ws");
