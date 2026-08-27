@@ -41,6 +41,13 @@ export const TRANSIENT_COOLDOWN_MS = 30 * 1000;
 // Hard cap for provider-reported rate limit cooldown (e.g. codex resets_at can be 5-6h)
 export const MAX_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
 
+// A rollout-gated model the account isn't entitled to. Not transient — re-probing
+// costs a full request body upload (~120KB) for a guaranteed 400, so skip the
+// account for this model instead. Held at the rate-limit ceiling rather than hours
+// because nothing clears a lock early: only expiry, or a success for this exact
+// model, which the lock itself prevents.
+export const MODEL_UNSUPPORTED_COOLDOWN_MS = MAX_RATE_LIMIT_COOLDOWN_MS;
+
 // Cooldown durations (ms)
 const COOLDOWN = {
   long: 2 * 60 * 1000,

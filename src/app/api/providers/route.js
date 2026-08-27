@@ -8,7 +8,7 @@ import {
 } from "@/models";
 import { APIKEY_PROVIDERS } from "@/shared/constants/config";
 import { AI_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, isCustomEmbeddingProvider } from "@/shared/constants/providers";
-import { normalizeProviderId, normalizeProviderSpecificData } from "@/lib/providerNormalization";
+import { normalizeProviderId, normalizeProviderSpecificData, sanitizeProviderConnection, stripManagedProviderData } from "@/lib/providerNormalization";
 
 export const dynamic = "force-dynamic";
 
@@ -66,14 +66,7 @@ export async function GET() {
       const name = isCompatible
         ? (c.name || nodeNameMap[c.provider] || c.providerSpecificData?.nodeName || c.provider)
         : c.name;
-      return {
-        ...c,
-        name,
-        apiKey: undefined,
-        accessToken: undefined,
-        refreshToken: undefined,
-        idToken: undefined,
-      };
+      return sanitizeProviderConnection({ ...c, name });
     });
 
     return NextResponse.json({ connections: safeConnections });
@@ -124,7 +117,11 @@ export async function POST(request) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    let providerSpecificData = normalizeProviderSpecificData(provider, body, body.providerSpecificData);
+    let providerSpecificData = normalizeProviderSpecificData(
+      provider,
+      body,
+      stripManagedProviderData(body.providerSpecificData),
+    );
 
     // Compatible LLM nodes support multiple API-key connections (key pool); runtime
     // rotates/fails over via getProviderCredentials. Embedding nodes stay single-connection.
@@ -185,11 +182,10 @@ export async function POST(request) {
       testStatus: testStatus || "unknown",
     });
 
-    // Hide sensitive fields
-    const result = { ...newConnection };
-    delete result.apiKey;
-
-    return NextResponse.json({ connection: result }, { status: 201 });
+    return NextResponse.json(
+      { connection: sanitizeProviderConnection(newConnection) },
+      { status: 201 },
+    );
   } catch (error) {
     console.log("Error creating provider:", error);
     return NextResponse.json({ error: "Failed to create provider" }, { status: 500 });

@@ -24,6 +24,30 @@ export function normalizeProviderId(provider) {
   return providerByName?.id || trimmed;
 }
 
+const SENSITIVE_CONNECTION_FIELDS = [
+  "apiKey", "accessToken", "refreshToken", "idToken",
+];
+const SENSITIVE_PROVIDER_DATA_FIELDS = ["sessionCookies", "browserProfileId", "browserChannel"];
+
+export function stripManagedProviderData(providerSpecificData) {
+  if (!providerSpecificData || typeof providerSpecificData !== "object" || Array.isArray(providerSpecificData)) {
+    return providerSpecificData;
+  }
+  const safe = { ...providerSpecificData };
+  for (const field of SENSITIVE_PROVIDER_DATA_FIELDS) delete safe[field];
+  return safe;
+}
+
+export function sanitizeProviderConnection(connection) {
+  if (!connection || typeof connection !== "object") return connection;
+  const safe = { ...connection };
+  for (const field of SENSITIVE_CONNECTION_FIELDS) delete safe[field];
+  if (safe.providerSpecificData && typeof safe.providerSpecificData === "object") {
+    safe.providerSpecificData = stripManagedProviderData(safe.providerSpecificData);
+  }
+  return safe;
+}
+
 export function normalizeProviderSpecificData(provider, body = {}, providerSpecificData = null) {
   const next = providerSpecificData && typeof providerSpecificData === "object"
     ? { ...providerSpecificData }

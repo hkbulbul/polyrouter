@@ -26,7 +26,7 @@ window.addEventListener("message", async (event) => {
     return;
   }
 
-  const { requestId, action, provider } = event.data;
+  const { requestId, action, provider, connectionId } = event.data;
 
   if (action === "IMPORT_PROVIDER_SESSION") {
     const confirmed = window.confirm(
@@ -44,7 +44,7 @@ window.addEventListener("message", async (event) => {
   }
 
   try {
-    const response = await chrome.runtime.sendMessage({ action, provider });
+    const response = await chrome.runtime.sendMessage({ action, provider, connectionId });
     postToPage({
       type: "POLYROUTER_CONNECTOR_RESPONSE",
       requestId,

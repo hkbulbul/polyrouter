@@ -89,7 +89,8 @@ async function verifyProviderSession(provider) {
   }
 }
 
-async function importProviderSession(providerId, sender) {
+async function importProviderSession(providerId, connectionId, sender) {
+  getPolyRouterOrigin(sender);
   const provider = getProvider(providerId);
   await verifyProviderSession(provider);
   const cookies = await collectProviderCookies(provider);
@@ -98,22 +99,7 @@ async function importProviderSession(providerId, sender) {
     throw new Error(`No ${provider.label} cookies were found. Sign in first, then try again.`);
   }
 
-  const origin = getPolyRouterOrigin(sender);
-  const response = await fetch(`${origin}/api/oauth/chatgpt-web/cookie`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-PolyRouter-Connector": "1",
-    },
-    body: JSON.stringify({ provider: providerId, cookies }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || `PolyRouter rejected the ${provider.label} session`);
-  }
-
-  return data;
+  return { provider: providerId, connectionId: connectionId || null, cookies };
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -124,7 +110,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "OPEN_PROVIDER_TAB":
         return focusOrOpenProviderTab(getProvider(message.provider));
       case "IMPORT_PROVIDER_SESSION":
-        return importProviderSession(message.provider, sender);
+        return importProviderSession(message.provider, message.connectionId, sender);
       default:
         throw new Error("Unknown PolyRouter Connector action");
     }
