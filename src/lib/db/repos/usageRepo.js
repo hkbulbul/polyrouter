@@ -12,7 +12,7 @@ function maskApiKey(key) {
 const PENDING_TIMEOUT_MS = 60 * 1000;
 const RING_CAP = 50;
 const CONN_CACHE_TTL_MS = 30 * 1000;
-const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "30d": 2592000000, "60d": 5184000000 };
+const PERIOD_MS = { "24h": 86400000, "7d": 604800000, "14d": 1209600000, "30d": 2592000000, "60d": 5184000000 };
 
 // In-memory state shared across Next.js modules
 if (!global._pendingRequests) global._pendingRequests = { byModel: {}, byAccount: {} };
@@ -446,7 +446,7 @@ export async function getUsageStats(period = "all") {
   const useDailySummary = period !== "24h" && period !== "today";
 
   if (useDailySummary) {
-    const periodDays = { "7d": 7, "30d": 30, "60d": 60 };
+    const periodDays = { "7d": 7, "14d": 14, "30d": 30, "60d": 60 };
     const maxDays = periodDays[period] || null;
     const dayRows = loadDaysInRange(db, maxDays);
 
@@ -709,7 +709,7 @@ export async function getChartData(period = "7d") {
     return buckets;
   }
 
-  const bucketCount = period === "7d" ? 7 : period === "30d" ? 30 : 60;
+  const bucketCount = period === "7d" ? 7 : period === "14d" ? 14 : period === "30d" ? 30 : 60;
   const today = new Date();
   const labelFn = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
