@@ -19,7 +19,7 @@ function getEffectiveStatus(conn) {
   return conn.testStatus === "unavailable" && !isCooldown ? "active" : conn.testStatus;
 }
 
-function MediaProviderCard({ provider, kind, connections, isCustom, onToggle }) {
+function MediaProviderCard({ provider, kind, connections, isCustom, onToggle, sponsor = null }) {
   const providerInfo = AI_PROVIDERS[provider.id];
   const isNoAuth = !!providerInfo?.noAuth;
 
@@ -53,8 +53,41 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle }) 
     <Link href={`/dashboard/media-providers/${kind}/${provider.id}`} className="group">
       <Card
         padding="xs"
-        className={`h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}
+        className={`relative h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}
       >
+        {sponsor ? (
+          sponsor.href ? (
+            <a
+              href={sponsor.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute -top-2.5 right-3 z-10 inline-flex h-[18px] items-center gap-1.5 bg-amber-400 pl-3 pr-2 text-[9px] font-bold uppercase leading-none text-amber-950 shadow-[0_2px_5px_rgba(245,158,11,0.22)] [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%)] hover:bg-amber-300"
+              title={sponsor.badgeSublabel ? `${sponsor.badgeLabel}: ${sponsor.badgeSublabel}` : sponsor.badgeLabel}
+            >
+              <span className="tracking-[0.14em]">{sponsor.badgeLabel}</span>
+              {sponsor.badgeSublabel ? (
+                <>
+                  <span aria-hidden="true" className="h-2.5 w-px bg-amber-800/35" />
+                  <span className="font-black tracking-wide">{sponsor.badgeSublabel}</span>
+                </>
+              ) : null}
+            </a>
+          ) : (
+            <span
+              className="pointer-events-none absolute -top-2.5 right-3 z-10 inline-flex h-[18px] items-center gap-1.5 bg-amber-400 pl-3 pr-2 text-[9px] font-bold uppercase leading-none text-amber-950 shadow-[0_2px_5px_rgba(245,158,11,0.22)] [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%)]"
+              title={sponsor.badgeSublabel ? `${sponsor.badgeLabel}: ${sponsor.badgeSublabel}` : sponsor.badgeLabel}
+            >
+              <span className="tracking-[0.14em]">{sponsor.badgeLabel}</span>
+              {sponsor.badgeSublabel ? (
+                <>
+                  <span aria-hidden="true" className="h-2.5 w-px bg-amber-800/35" />
+                  <span className="font-black tracking-wide">{sponsor.badgeSublabel}</span>
+                </>
+              ) : null}
+            </span>
+          )
+        ) : null}
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
@@ -144,6 +177,7 @@ export default function MediaProviderKindPage() {
   const [connections, setConnections] = useState([]);
   const [customNodes, setCustomNodes] = useState([]);
   const [combos, setCombos] = useState([]);
+  const [sponsorsMap, setSponsorsMap] = useState(null);
   const [showAddCustomEmbedding, setShowAddCustomEmbedding] = useState(false);
 
   // webSearch/webFetch listing pages are merged into /web
@@ -164,6 +198,14 @@ export default function MediaProviderKindPage() {
       .then((r) => r.json())
       .then((d) => setConnections(d.connections || []))
       .catch(() => {});
+    fetch(`/api/sponsors?kind=${encodeURIComponent(kind)}&refresh=1`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const m = new Map();
+        for (const s of d.sponsors || []) m.set(String(s.providerId).toLowerCase(), s);
+        setSponsorsMap(m);
+      })
+      .catch(() => {});
     if (isEmbedding) {
       fetch("/api/provider-nodes", { cache: "no-store" })
         .then((r) => r.json())
@@ -176,7 +218,7 @@ export default function MediaProviderKindPage() {
         .then((d) => setCombos(d.combos || []))
         .catch(() => {});
     }
-  }, [isEmbedding, supportsCombo, kindConfig]);
+  }, [isEmbedding, supportsCombo, kindConfig, kind]);
 
   if (!kindConfig) return notFound();
 
@@ -191,7 +233,22 @@ export default function MediaProviderKindPage() {
     textIcon: "CE",
   }));
 
-  const allProviders = [...providers, ...customProviders];
+  const getSponsorPos = (id) => sponsorsMap?.get(String(id).toLowerCase())?.position ?? 9999;
+  const sortedProviders = [...providers].sort((a, b) => {
+    const pa = getSponsorPos(a.id), pb = getSponsorPos(b.id);
+    const sa = pa !== 9999, sb = pb !== 9999;
+    if (sa !== sb) return sa ? -1 : 1;
+    if (sa && pa !== pb) return pa - pb;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+  const sortedCustomProviders = [...customProviders].sort((a, b) => {
+    const pa = getSponsorPos(a.id), pb = getSponsorPos(b.id);
+    const sa = pa !== 9999, sb = pb !== 9999;
+    if (sa !== sb) return sa ? -1 : 1;
+    if (sa && pa !== pb) return pa - pb;
+    return (a.name || "").localeCompare(b.name || "");
+  });
+  const allProviders = [...sortedProviders, ...sortedCustomProviders];
 
   const handleToggleProvider = async (providerId, newActive) => {
     const providerConns = connections.filter((c) => c.provider === providerId);
@@ -254,16 +311,17 @@ export default function MediaProviderKindPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {providers.map((provider) => (
+          {sortedProviders.map((provider) => (
             <MediaProviderCard
               key={provider.id}
               provider={provider}
               kind={kind}
               connections={connections}
               onToggle={handleToggleProvider}
+              sponsor={sponsorsMap?.get(String(provider.id).toLowerCase()) || null}
             />
           ))}
-          {customProviders.map((provider) => (
+          {sortedCustomProviders.map((provider) => (
             <MediaProviderCard
               key={provider.id}
               provider={provider}
@@ -271,6 +329,7 @@ export default function MediaProviderKindPage() {
               connections={connections}
               isCustom
               onToggle={handleToggleProvider}
+              sponsor={sponsorsMap?.get(String(provider.id).toLowerCase()) || null}
             />
           ))}
         </div>

@@ -70,6 +70,13 @@ export {
   discardInstallationTelemetryEventsByTarget,
 } from "./repos/installationIdentityRepo.js";
 
+// Sponsors (DB-driven provider badges — position/number controlled remotely)
+export {
+  getSponsorsConfig, setSponsorsConfig,
+  getSponsors, getPublicSponsors, getSponsor,
+  upsertSponsor, deleteSponsor, reorderSponsors,
+} from "./repos/sponsorsRepo.js";
+
 // Request details
 export {
   saveRequestDetail, getRequestDetails, getRequestDetailById, getDistinctProviders,
@@ -91,12 +98,14 @@ export async function exportDb() {
     customModels: [],
     mitmAlias: {},
     pricing: {},
+    sponsors: {},
   };
 
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'modelAliases'`)) out.modelAliases[r.key] = parseJson(r.value);
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'customModels'`)) out.customModels.push(parseJson(r.value));
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'mitmAlias'`)) out.mitmAlias[r.key] = parseJson(r.value);
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'pricing'`)) out.pricing[r.key] = parseJson(r.value);
+  for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'sponsors'`)) out.sponsors[r.key] = parseJson(r.value);
 
   return out;
 }
@@ -115,7 +124,7 @@ export async function importDb(payload) {
     db.run(`DELETE FROM proxyPools`);
     db.run(`DELETE FROM apiKeys`);
     db.run(`DELETE FROM combos`);
-    db.run(`DELETE FROM kv WHERE scope IN ('modelAliases', 'customModels', 'mitmAlias', 'pricing')`);
+    db.run(`DELETE FROM kv WHERE scope IN ('modelAliases', 'customModels', 'mitmAlias', 'pricing', 'sponsors')`);
 
     // Settings
     if (payload.settings) {
@@ -167,6 +176,9 @@ export async function importDb(payload) {
     }
     for (const [provider, models] of Object.entries(payload.pricing || {})) {
       db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('pricing', ?, ?)`, [provider, stringifyJson(models || {})]);
+    }
+    for (const [key, val] of Object.entries(payload.sponsors || {})) {
+      db.run(`INSERT OR REPLACE INTO kv(scope, key, value) VALUES('sponsors', ?, ?)`, [key, stringifyJson(val)]);
     }
   });
 

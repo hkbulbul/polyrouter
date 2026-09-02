@@ -27,6 +27,13 @@ const nextConfig = {
   env: {
     // Public endpoint URL only: it is not an authorization credential.
     PUBLIC_INSTALLATION_TELEMETRY_URL: process.env.PUBLIC_INSTALLATION_TELEMETRY_URL || "",
+    // Cloud sponsors and embedding banners read these in src/lib/sponsors/remote.js. They must be
+    // inlined at build time because .env is stripped from the published package
+    // (cli/scripts/build-cli.js EXCLUDE_PATTERNS), so a released install has no other source.
+    // Supplied by CI; empty locally, which makes both features render nothing. The key is a
+    // role:anon JWT restricted by RLS to SELECT — never put a service-role key here.
+    SPONSORS_SUPABASE_URL: process.env.SPONSORS_SUPABASE_URL || "",
+    SPONSORS_SUPABASE_ANON_KEY: process.env.SPONSORS_SUPABASE_ANON_KEY || "",
   },
   experimental: {
     // #1529/#1572: LLM clients can send long context or base64 image payloads through /v1 rewrites.

@@ -2,17 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import QuotaTable from "./QuotaTable";
-import Toggle from "@/shared/components/Toggle";
-import Tooltip from "@/shared/components/Tooltip";
+import QuotaTrackerTable from "../../../quota/components/QuotaTrackerTable";
 import {
   parseQuotaData,
-  calculatePercentage,
-  filterQuotasByVisibility,
-  getHiddenQuotaRows,
+  getRemainingPercentage,
   getQuotaVisibilityKey,
   getConnectionLabel,
-  getConnectionQuotaRemaining,
   sortVisibleConnections,
   buildLoadingState,
   filterQuotaStateByConnections,
@@ -24,6 +19,7 @@ import {
   shouldResetPage,
   getPaginationPageValue,
   getProviderOptions,
+  getPageQuotaSummary,
   reconcileConnectionsPage,
   getQuotaCache,
   setQuotaCache,
@@ -58,11 +54,6 @@ const KIRO_METHOD_LABELS = {
 const AUTO_PING_SETTINGS_KEYS = {
   claude: "claudeAutoPing",
   codex: "codexAutoPing",
-};
-
-const AUTO_PING_TOOLTIPS = {
-  claude: "When your 5h quota runs out, auto-sends a request the moment it resets so a new window starts right away.",
-  codex: "Auto-starts the next 5h Codex window after reset by sending a tiny gpt-5.5 request. Consumes a small amount of quota.",
 };
 
 function kiroMethodLabel(conn) {
@@ -124,7 +115,7 @@ function formatTimeRemaining(value) {
   return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
 }
 
-export default function ProviderLimits() {
+export default function QuotaTracker() {
   const { copied, copy } = useCopyToClipboard();
   const [connections, setConnections] = useState([]);
   const [quotaData, setQuotaData] = useState({});
@@ -212,7 +203,7 @@ export default function ProviderLimits() {
         return [];
       }
     },
-    [accountFilter, expiringFirst, page, pageSize, providerFilter],
+    [accountFilter, page, pageSize, providerFilter],
   );
 
   // Fetch quota for a specific connection
@@ -222,7 +213,7 @@ export default function ProviderLimits() {
 
     try {
       console.log(
-        `[ProviderLimits] Fetching quota for ${provider} (${connectionId})`,
+        `[QuotaTracker] Fetching quota for ${provider} (${connectionId})`,
       );
       const response = await fetch(`/api/usage/${connectionId}`);
 
@@ -234,7 +225,7 @@ export default function ProviderLimits() {
         if (response.status === 404) {
           // Connection not found - skip silently
           console.warn(
-            `[ProviderLimits] Connection not found for ${provider}, skipping`,
+            `[QuotaTracker] Connection not found for ${provider}, skipping`,
           );
           return;
         }
@@ -242,7 +233,7 @@ export default function ProviderLimits() {
         if (response.status === 401) {
           // Auth error - show message instead of throwing
           console.warn(
-            `[ProviderLimits] Auth error for ${provider}:`,
+            `[QuotaTracker] Auth error for ${provider}:`,
             errorMsg,
           );
           const quotaEntry = {
@@ -261,7 +252,7 @@ export default function ProviderLimits() {
       }
 
       const data = await response.json();
-      console.log(`[ProviderLimits] Got quota for ${provider}:`, data);
+      console.log(`[QuotaTracker] Got quota for ${provider}:`, data);
 
       // Parse quota data using provider-specific parser
       const parsedQuotas = parseQuotaData(provider, data);
@@ -280,7 +271,7 @@ export default function ProviderLimits() {
       setQuotaCache(connectionId, quotaEntry);
     } catch (error) {
       console.error(
-        `[ProviderLimits] Error fetching quota for ${provider} (${connectionId}):`,
+        `[QuotaTracker] Error fetching quota for ${provider} (${connectionId}):`,
         error,
       );
       setErrors((prev) => ({
@@ -700,8 +691,11 @@ export default function ProviderLimits() {
     const quotas = quotaData[conn.id]?.quotas;
     if (!quotas?.length) return false;
     return quotas.some((q) => {
-      if (!q.total || q.total <= 0) return false;
-      return calculatePercentage(q.used, q.total) <= DEPLETED_QUOTA_THRESHOLD;
+      const hasMeasuredQuota = q.total > 0
+        || (q.remaining != null && Number.isFinite(Number(q.remaining)))
+        || (q.remainingPercentage != null && Number.isFinite(Number(q.remainingPercentage)));
+      if (!hasMeasuredQuota) return false;
+      return getRemainingPercentage(q) <= DEPLETED_QUOTA_THRESHOLD;
     });
   };
 
@@ -755,6 +749,10 @@ export default function ProviderLimits() {
   const connectionsPageSummary = getConnectionsPaginationSummary(pagination);
   const isCustomPageSize = !ACCOUNT_PAGE_SIZE_OPTIONS.includes(pageSize);
   const pageSizeLabel = getPageSizeLabel(pageSize, isCustomPageSize);
+  const pageQuotaSummary = useMemo(
+    () => getPageQuotaSummary(sortedConnections, quotaData),
+    [sortedConnections, quotaData],
+  );
 
   if (!connectionsLoading && !hasEligibleConnections) {
     return (
@@ -794,9 +792,12 @@ export default function ProviderLimits() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Controls */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 border-b border-border pb-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="max-w-xl">
+          <h2 className="text-lg font-semibold tracking-tight text-text-primary">Capacity at a glance</h2>
+          <p className="mt-1 text-sm text-text-muted">Read available fallback capacity, then act on the accounts that need attention.</p>
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="relative">
             <button
@@ -1011,285 +1012,62 @@ export default function ProviderLimits() {
         </div>
       </div>
 
-      {/* Provider cards: 2 columns, compact */}
+      <section aria-label="Capacity on this page" className="border border-border bg-surface shadow-[var(--shadow-soft)]">
+        <div className="grid divide-y divide-border sm:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))] sm:divide-x sm:divide-y-0">
+          <div className="px-4 py-3.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.11em] text-text-muted">Accounts in this page</div>
+            <div className="mt-1 flex items-baseline gap-2"><strong className="text-2xl font-semibold tracking-tight text-text-primary tabular-nums">{pageQuotaSummary.accounts}</strong><span className="text-xs text-text-muted">{connectionsPageSummary.toLowerCase()}</span></div>
+          </div>
+          <div className="px-4 py-3.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.11em] text-text-muted">Ready capacity</div>
+            <div className="mt-1 text-2xl font-semibold tracking-tight text-brand-700 tabular-nums dark:text-brand-300">{pageQuotaSummary.ready}<span className="ml-1 text-sm font-normal text-text-muted">measured</span></div>
+          </div>
+          <div className="px-4 py-3.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.11em] text-text-muted">Needs attention</div>
+            <div className="mt-1 text-2xl font-semibold tracking-tight text-text-primary tabular-nums">{pageQuotaSummary.depleted}<span className="ml-1 text-sm font-normal text-text-muted">empty</span>{pageQuotaSummary.disabled > 0 && <span className="ml-2 text-sm font-normal text-text-muted">· {pageQuotaSummary.disabled} off</span>}</div>
+          </div>
+          <div className="px-4 py-3.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.11em] text-text-muted">Next reset</div>
+            <div className="mt-1 text-2xl font-semibold tracking-tight text-text-primary tabular-nums">{pageQuotaSummary.earliestResetAt ? formatTimeRemaining(pageQuotaSummary.earliestResetAt) : "—"}</div>
+          </div>
+        </div>
+        {pageQuotaSummary.measuredAccounts + pageQuotaSummary.disabled < pageQuotaSummary.accounts && <div className="border-t border-border bg-bg-alt px-4 py-2 text-xs text-text-muted">{pageQuotaSummary.accounts - pageQuotaSummary.measuredAccounts - pageQuotaSummary.disabled} active account{pageQuotaSummary.accounts - pageQuotaSummary.measuredAccounts - pageQuotaSummary.disabled === 1 ? " has" : "s have"} not reported measurable quota yet.</div>}
+      </section>
+
       {expiringFirst && (
-        <div className=" border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-700 dark:text-green-300">
-          Expiring-first currently reorders accounts inside the current page.
-          Cross-page ordering still follows backend pagination.
+        <div className="border border-brand-500/20 bg-brand-500/10 px-3 py-2 text-xs text-brand-700 dark:text-brand-300">
+          Expiring-first reorders accounts inside this page. Backend pagination still determines cross-page ordering.
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {sortedConnections.map((conn) => {
-          const quota = quotaData[conn.id];
-          const isLoading = loading[conn.id];
-          const error = errors[conn.id];
-
-          // Use table layout for all providers
-          const isInactive = conn.isActive === false;
-          const isCodex = conn.provider === "codex";
-          const resetCreditCount = getCodexResetCreditCount(quota);
-          const isResettingLimit = resettingLimitId === conn.id;
-          const rowBusy = deletingId === conn.id || togglingId === conn.id || isResettingLimit;
-          const rawQuotas = quota?.quotas || [];
-          const visibleQuotas = filterQuotasByVisibility(conn.provider, rawQuotas, quotaVisibility);
-          const hiddenQuotaRows = getHiddenQuotaRows(conn.provider, rawQuotas, quotaVisibility);
-
-          return (
-            <Card
-              key={conn.id}
-              padding="none"
-              className={`min-w-0 ${isInactive ? "opacity-60" : ""}`}
-            >
-              <div className="px-3 py-2 border-b border-black/10 dark:border-white/10">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 shrink-0  flex items-center justify-center overflow-hidden">
-                      <ProviderIcon
-                        src={`/providers/${conn.provider}.png`}
-                        alt={conn.provider}
-                        size={32}
-                        className="object-contain"
-                        fallbackText={
-                          conn.provider?.slice(0, 2).toUpperCase() || "PR"
-                        }
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-text-primary capitalize truncate">
-                        {conn.provider}
-                      </h3>
-                      {getConnectionLabel(conn) ? (
-                        <p className="text-xs text-text-muted truncate">
-                          {getConnectionLabel(conn)}
-                        </p>
-                      ) : null}
-                      {getConnectionSecondaryLabel(conn) ? (
-                        <p className="text-[11px] text-text-muted/80 truncate">
-                          {getConnectionSecondaryLabel(conn)}
-                        </p>
-                      ) : null}
-                      {conn.provider === "kiro" && (
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[10px] font-semibold text-brand-600 dark:text-brand-300">
-                            {kiroMethodLabel(conn)}
-                          </span>
-                          {kiroRegion(conn) && (
-                            <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
-                              {kiroRegion(conn)}
-                            </span>
-                          )}
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              isInactive
-                                ? "bg-surface-2 text-text-muted"
-                                : conn.testStatus === "active" || conn.testStatus === "success"
-                                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
-                                  : conn.testStatus === "error" || conn.testStatus === "expired" || conn.testStatus === "unavailable"
-                                    ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                                    : "bg-surface-2 text-text-muted"
-                            }`}
-                          >
-                            {isInactive ? "disabled" : conn.testStatus || "unknown"}
-                          </span>
-                          {conn.providerSpecificData?.profileArn && (
-                            <button
-                              type="button"
-                              onClick={() => copy(conn.providerSpecificData.profileArn, conn.id)}
-                              title={conn.providerSpecificData.profileArn}
-                              className="inline-flex max-w-full items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-[10px] text-text-muted transition-colors hover:text-primary"
-                            >
-                              <span className="material-symbols-outlined text-[12px]">
-                                {copied === conn.id ? "check" : "content_copy"}
-                              </span>
-                              <code className="truncate font-mono">
-                                {conn.providerSpecificData.profileArn}
-                              </code>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    {isCodex && (
-                      <>
-                        <Tooltip
-                          text={
-                            resetCreditCount > 0
-                              ? `Use one Codex reset credit. Available: ${resetCreditCount}`
-                              : "No Codex reset credits available"
-                          }
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setResetConfirmState({ connection: conn, resetCreditCount })}
-                            disabled={resetCreditCount <= 0 || isLoading || rowBusy}
-                            aria-label={
-                              resetCreditCount > 0
-                                ? `Use one Codex reset credit. ${resetCreditCount} available.`
-                                : "No Codex reset credits available"
-                            }
-                            className={`flex h-8 min-w-10 items-center justify-center gap-1  border px-2 text-[11px] font-medium tabular-nums transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/60 disabled:cursor-not-allowed disabled:opacity-60 ${
-                              resetCreditCount > 0
-                                ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
-                                : "border-black/10 bg-black/[0.02] text-text-muted dark:border-white/10 dark:bg-white/[0.03]"
-                            }`}
-                          >
-                            <span className={`material-symbols-outlined text-[15px] ${isResettingLimit ? "animate-spin" : ""}`}>
-                              {isResettingLimit ? "progress_activity" : "restart_alt"}
-                            </span>
-                            <span>{resetCreditCount}</span>
-                          </button>
-                        </Tooltip>
-                        <Tooltip text="View Codex reset credit expiry">
-                          <button
-                            type="button"
-                            onClick={() => handleViewCodexResetCredits(conn)}
-                            disabled={isLoading || rowBusy}
-                            aria-label="View Codex reset credit expiry"
-                            className="flex h-8 w-8 items-center justify-center  border border-black/10 text-text-muted transition-colors hover:bg-black/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/5"
-                          >
-                            <span className="material-symbols-outlined text-[17px]">schedule</span>
-                          </button>
-                        </Tooltip>
-                      </>
-                    )}
-                    {AUTO_PING_SETTINGS_KEYS[conn.provider] && conn.authType === "oauth" && (
-                      <Tooltip text={AUTO_PING_TOOLTIPS[conn.provider]}>
-                        <button
-                          type="button"
-                          onClick={() => toggleAutoPing(conn.id, conn.provider, !(autoPingMaps[conn.provider]?.[conn.id] === true))}
-                          aria-label="Toggle auto-ping"
-                          className={`flex h-8 w-8 items-center justify-center  transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${autoPingMaps[conn.provider]?.[conn.id] === true ? "text-primary" : "text-text-muted"}`}
-                        >
-                          <span className="material-symbols-outlined text-[18px]">bolt</span>
-                        </button>
-                      </Tooltip>
-                    )}
-                    <Tooltip text="Refresh quota">
-                      <button
-                        type="button"
-                        onClick={() => refreshProvider(conn.id, conn.provider)}
-                        disabled={isLoading || rowBusy}
-                        aria-label="Refresh quota"
-                        className="flex h-8 w-8 items-center justify-center  hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
-                      >
-                        <span
-                          className={`material-symbols-outlined text-[18px] text-text-muted ${isLoading ? "animate-spin" : ""}`}
-                        >
-                          refresh
-                        </span>
-                      </button>
-                    </Tooltip>
-                    <Tooltip text="Edit connection">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedConnection(conn);
-                          setShowEditModal(true);
-                        }}
-                        disabled={rowBusy}
-                        aria-label="Edit connection"
-                        className="flex h-8 w-8 items-center justify-center  hover:bg-black/5 dark:hover:bg-white/5 text-text-muted hover:text-primary transition-colors disabled:opacity-50"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          edit
-                        </span>
-                      </button>
-                    </Tooltip>
-                    <Tooltip text="Delete connection">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteConnection(conn.id)}
-                        disabled={rowBusy}
-                        aria-label="Delete connection"
-                        className="flex h-8 w-8 items-center justify-center  hover:bg-red-500/10 text-red-500 transition-colors disabled:opacity-50"
-                      >
-                        <span
-                          className={`material-symbols-outlined text-[18px] ${deletingId === conn.id ? "animate-pulse" : ""}`}
-                        >
-                          delete
-                        </span>
-                      </button>
-                    </Tooltip>
-                    <div
-                      className="inline-flex items-center pl-0.5"
-                      title={
-                        (conn.isActive ?? true)
-                          ? "Disable connection"
-                          : "Enable connection"
-                      }
-                    >
-                      <Toggle
-                        size="sm"
-                        checked={conn.isActive ?? true}
-                        disabled={rowBusy}
-                        onChange={(nextActive) =>
-                          handleToggleConnectionActive(conn.id, nextActive)
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-2 py-1.5">
-                {isLoading ? (
-                  <div className="text-center py-5 text-text-muted">
-                    <span className="material-symbols-outlined text-[28px] animate-spin">
-                      progress_activity
-                    </span>
-                  </div>
-                ) : error ? (
-                  <div className="text-center py-5">
-                    <span className="material-symbols-outlined text-[28px] text-red-500">
-                      error
-                    </span>
-                    <p className="mt-1.5 text-xs text-text-muted">{error}</p>
-                  </div>
-                ) : quota?.message ? (
-                  <div className="text-center py-5">
-                    <p className="text-xs text-text-muted">{quota.message}</p>
-                  </div>
-                ) : (
-                  <QuotaTable
-                    quotas={visibleQuotas}
-                    compact
-                    sortMode="default"
-                    showSortLabel={
-                      conn.provider === "codex" && quotaSortMode !== "default"
-                    }
-                    onHideQuota={(quotaRow) => handleHideQuota(conn.provider, quotaRow)}
-                  />
-                )}
-                {hiddenQuotaRows.length > 0 && (
-                  <div className="mt-2 flex min-w-0 items-center gap-1 border-t border-black/5 pt-2 text-[10px] text-text-muted dark:border-white/5">
-                    <span className="material-symbols-outlined shrink-0 text-[14px]">
-                      visibility_off
-                    </span>
-                    <span className="shrink-0">Hidden:</span>
-                    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap">
-                      {hiddenQuotaRows.map((quotaRow) => (
-                        <button
-                          key={getQuotaVisibilityKey(quotaRow)}
-                          type="button"
-                          onClick={() => handleShowQuota(conn.provider, quotaRow)}
-                          className="shrink-0  border border-black/10 px-1.5 py-0.5 transition-colors hover:bg-black/5 hover:text-text-primary dark:border-white/10 dark:hover:bg-white/5"
-                          title="Show this quota row"
-                        >
-                          {quotaRow.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      <QuotaTrackerTable
+        connections={sortedConnections}
+        quotaData={quotaData}
+        loading={loading}
+        errors={errors}
+        quotaVisibility={quotaVisibility}
+        autoPingMaps={autoPingMaps}
+        copied={copied}
+        bulkBusy={bulkToggling}
+        deletingId={deletingId}
+        togglingId={togglingId}
+        resettingLimitId={resettingLimitId}
+        getConnectionLabel={getConnectionLabel}
+        getConnectionSecondaryLabel={getConnectionSecondaryLabel}
+        getKiroMethodLabel={kiroMethodLabel}
+        getKiroRegion={kiroRegion}
+        getCodexResetCreditCount={getCodexResetCreditCount}
+        onCopy={copy}
+        onRefresh={refreshProvider}
+        onToggleAutoPing={toggleAutoPing}
+        onShowResetCredits={handleViewCodexResetCredits}
+        onOpenResetConfirm={(connection, resetCreditCount) => setResetConfirmState({ connection, resetCreditCount })}
+        onEdit={(connection) => { setSelectedConnection(connection); setShowEditModal(true); }}
+        onDelete={handleDeleteConnection}
+        onToggleActive={handleToggleConnectionActive}
+        onHideQuota={handleHideQuota}
+        onShowQuota={handleShowQuota}
+      />
 
       <div className=" border border-black/10 bg-black/[0.02] px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
           <div className="flex flex-wrap items-center justify-between gap-2">

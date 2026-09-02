@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.public-installation-telemetry]
 verify_jwt = false
+
+[functions.sponsors-admin]
+verify_jwt = false
