@@ -1371,20 +1371,6 @@ export default function ProviderDetailPage() {
         </div>
       )}
 
-      {providerId === "agentrouter" && (
-        <Card>
-          <div className="flex min-h-28 items-center justify-center border border-dashed border-border bg-black/[0.015] px-5 py-6 text-center dark:bg-white/[0.015]">
-            <div>
-              <span className="material-symbols-outlined mb-2 block text-[24px] text-text-muted">
-                data_array
-              </span>
-              <h2 className="font-semibold">Embeddings</h2>
-              <p className="mt-1 text-xs text-text-muted">Coming soon</p>
-            </div>
-          </div>
-        </Card>
-      )}
-
       {isCompatible && providerNode && (
         <Card>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
