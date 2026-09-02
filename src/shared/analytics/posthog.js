@@ -18,6 +18,16 @@ export function createDashboardOpenProperties({ appVersion }) {
   };
 }
 
+export function createInstallationLifecycleProperties({ installationId, appVersion, eventType }) {
+  return {
+    event_source: "installation_telemetry",
+    telemetry_identity: "installation",
+    installation_id: installationId,
+    event_type: eventType,
+    ...(typeof appVersion === "string" && appVersion ? { app_version: appVersion } : {}),
+  };
+}
+
 export function createPostHogPageviewProperties({ pathname, origin, referrer }) {
   const safePathname = typeof pathname === "string" && pathname.startsWith("/")
     ? pathname

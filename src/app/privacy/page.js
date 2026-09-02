@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-bg text-text-main px-6 py-12">
       <article className="max-w-3xl mx-auto space-y-8">
-        <Link href="/landing" className="text-primary hover:underline">← Back to PolyRouter</Link>
+        <Link href="/dashboard" className="text-primary hover:underline">← Back to Dashboard</Link>
         <header>
           <h1 className="text-3xl font-bold">Privacy Policy</h1>
           <p className="text-text-muted mt-2">Last updated: August 1, 2026</p>

@@ -99,6 +99,7 @@ const APIKEY_INITIAL_VISIBLE = 20;
 export default function ProvidersPage() {
   const [connections, setConnections] = useState([]);
   const [providerNodes, setProviderNodes] = useState([]);
+  const [sponsorsMap, setSponsorsMap] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAllApikey, setShowAllApikey] = useState(false);
   const [showAddCompatibleModal, setShowAddCompatibleModal] = useState(false);
@@ -149,15 +150,24 @@ export default function ProvidersPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [connectionsRes, nodesRes] = await Promise.all([
+        const [connectionsRes, nodesRes, sponsorsRes] = await Promise.all([
           fetch("/api/providers"),
           fetch("/api/provider-nodes"),
+          fetch("/api/sponsors?kind=llm&refresh=1", { cache: "no-store" }),
         ]);
         const connectionsData = await connectionsRes.json();
         const nodesData = await nodesRes.json();
         if (connectionsRes.ok)
           setConnections(connectionsData.connections || []);
         if (nodesRes.ok) setProviderNodes(nodesData.nodes || []);
+        if (sponsorsRes.ok) {
+          const sData = await sponsorsRes.json();
+          const list = sData.sponsors || [];
+          // sponsors already capped/sorted by server (position + maxVisible)
+          const m = new Map();
+          for (const s of list) m.set(String(s.providerId).toLowerCase(), s);
+          setSponsorsMap(m);
+        }
       } catch (error) {
         console.log("Error fetching data:", error);
       } finally {
@@ -278,13 +288,25 @@ export default function ProvidersPage() {
     }))
     .filter((p) => matchSearch(p.name));
 
+  // Sponsors control visible position + count via /api/sponsors (position + maxVisible cap) — any kind (oauth/apikey/free)
+  const getSponsorPos = (id) => {
+    const s = sponsorsMap?.get(String(id).toLowerCase());
+    return s ? s.position : 9999;
+  };
+  const sponsorFirst = ([ka], [kb]) => {
+    const pa = getSponsorPos(ka), pb = getSponsorPos(kb);
+    const sa = pa !== 9999, sb = pb !== 9999;
+    if (sa !== sb) return sa ? -1 : 1;
+    if (sa && pa !== pb) return pa - pb;
+    return 0;
+  };
   const oauthEntries = sortByPriority(
     Object.entries(OAUTH_PROVIDERS).filter(([, info]) => !info.hidden && matchSearch(info.name)),
     "oauth",
-  );
+  ).sort(sponsorFirst);
   const freeEntries = Object.entries(FREE_PROVIDERS)
     .filter(([, info]) => !info.hidden && matchSearch(info.name))
-    .sort(([, a], [, b]) => (b.noAuth ? 1 : 0) - (a.noAuth ? 1 : 0));
+    .sort((a, b) => sponsorFirst(a, b) || (b[1].noAuth ? 1 : 0) - (a[1].noAuth ? 1 : 0));
   const freeTierEntries = sortByPriority(
     Object.entries(FREE_TIER_PROVIDERS).filter(
       ([, info]) =>
@@ -293,8 +315,7 @@ export default function ProvidersPage() {
         (info.serviceKinds ?? ["llm"]).includes("llm"),
     ),
     "freeTier",
-  ).sort(([, a], [, b]) => (b.noAuth ? 1 : 0) - (a.noAuth ? 1 : 0));
-  // API Key: connected providers first, then alphabetical by name
+  ).sort((a, b) => sponsorFirst(a, b) || (b[1].noAuth ? 1 : 0) - (a[1].noAuth ? 1 : 0));
   const apikeyEntries = Object.entries(APIKEY_PROVIDERS)
     .filter(
       ([, info]) =>
@@ -303,6 +324,8 @@ export default function ProvidersPage() {
         matchSearch(info.name),
     )
     .sort(([ka, a], [kb, b]) => {
+      const r = sponsorFirst([ka], [kb]);
+      if (r !== 0) return r;
       const ca = getProviderStats(ka, "apikey").total > 0 ? 0 : 1;
       const cb = getProviderStats(kb, "apikey").total > 0 ? 0 : 1;
       if (ca !== cb) return ca - cb;
@@ -432,6 +455,7 @@ export default function ProvidersPage() {
               provider={info}
               stats={getProviderStats(key, "oauth")}
               authType="oauth"
+              sponsor={sponsorsMap?.get(String(key).toLowerCase()) || null}
               onToggle={(active) => handleToggleProvider(key, "oauth", active)}
             />
           ))}
@@ -480,6 +504,7 @@ export default function ProvidersPage() {
                 provider={info}
                 stats={getProviderStats(key, freeAuthTypes)}
                 authType="free"
+                sponsor={sponsorsMap?.get(String(key).toLowerCase()) || null}
                 onToggle={(active) =>
                   handleToggleProvider(key, freeAuthTypes, active)
                 }
@@ -493,6 +518,7 @@ export default function ProvidersPage() {
               provider={info}
               stats={getProviderStats(key, "apikey")}
               authType="apikey"
+              sponsor={sponsorsMap?.get(String(key).toLowerCase()) || null}
               onToggle={(active) => handleToggleProvider(key, "apikey", active)}
             />
           ))}
@@ -534,6 +560,7 @@ export default function ProvidersPage() {
               provider={info}
               stats={getProviderStats(key, "apikey")}
               authType="apikey"
+              sponsor={sponsorsMap?.get(String(key).toLowerCase()) || null}
               onToggle={(active) => handleToggleProvider(key, "apikey", active)}
             />
           ))}
@@ -623,7 +650,7 @@ export default function ProvidersPage() {
   );
 }
 
-function ProviderCard({ providerId, provider, stats, authType, onToggle }) {
+function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor = null }) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
   const isNoAuth = !!provider.noAuth;
 
@@ -644,8 +671,41 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle }) {
     <Link href={`/dashboard/providers/${providerId}`} className="group min-w-0">
       <Card
         padding="xs"
-        className={`h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}
+        className={`relative h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}
       >
+        {sponsor ? (
+          sponsor.href ? (
+            <a
+              href={sponsor.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute -top-2.5 right-3 z-10 inline-flex h-[18px] items-center gap-1.5 bg-amber-400 pl-3 pr-2 text-[9px] font-bold uppercase leading-none text-amber-950 shadow-[0_2px_5px_rgba(245,158,11,0.22)] [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%)] hover:bg-amber-300"
+              title={sponsor.badgeSublabel ? `${sponsor.badgeLabel}: ${sponsor.badgeSublabel}` : sponsor.badgeLabel}
+            >
+              <span className="tracking-[0.14em]">{sponsor.badgeLabel}</span>
+              {sponsor.badgeSublabel ? (
+                <>
+                  <span aria-hidden="true" className="h-2.5 w-px bg-amber-800/35" />
+                  <span className="font-black tracking-wide">{sponsor.badgeSublabel}</span>
+                </>
+              ) : null}
+            </a>
+          ) : (
+            <span
+              className="pointer-events-none absolute -top-2.5 right-3 z-10 inline-flex h-[18px] items-center gap-1.5 bg-amber-400 pl-3 pr-2 text-[9px] font-bold uppercase leading-none text-amber-950 shadow-[0_2px_5px_rgba(245,158,11,0.22)] [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%)]"
+              title={sponsor.badgeSublabel ? `${sponsor.badgeLabel}: ${sponsor.badgeSublabel}` : sponsor.badgeLabel}
+            >
+              <span className="tracking-[0.14em]">{sponsor.badgeLabel}</span>
+              {sponsor.badgeSublabel ? (
+                <>
+                  <span aria-hidden="true" className="h-2.5 w-px bg-amber-800/35" />
+                  <span className="font-black tracking-wide">{sponsor.badgeSublabel}</span>
+                </>
+              ) : null}
+            </span>
+          )
+        ) : null}
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div
@@ -740,6 +800,7 @@ function ApiKeyProviderCard({
   authType,
   onToggle,
   disabled = false,
+  sponsor = null,
 }) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
   const isCompatible = providerId.startsWith(OPENAI_COMPATIBLE_PREFIX);
@@ -772,12 +833,45 @@ function ApiKeyProviderCard({
   const card = (
     <Card
       padding="xs"
-      className={`h-full transition-colors ${
+      className={`relative h-full transition-colors ${
         disabled
           ? "cursor-not-allowed opacity-60"
           : "cursor-pointer hover:bg-black/[0.01] dark:hover:bg-white/[0.01]"
       } ${!disabled && allDisabled ? "opacity-50" : ""}`}
     >
+        {sponsor ? (
+          sponsor.href ? (
+            <a
+              href={sponsor.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute -top-2.5 right-3 z-10 inline-flex h-[18px] items-center gap-1.5 bg-amber-400 pl-3 pr-2 text-[9px] font-bold uppercase leading-none text-amber-950 shadow-[0_2px_5px_rgba(245,158,11,0.22)] [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%)] hover:bg-amber-300"
+              title={sponsor.badgeSublabel ? `${sponsor.badgeLabel}: ${sponsor.badgeSublabel}` : sponsor.badgeLabel}
+            >
+              <span className="tracking-[0.14em]">{sponsor.badgeLabel}</span>
+              {sponsor.badgeSublabel ? (
+                <>
+                  <span aria-hidden="true" className="h-2.5 w-px bg-amber-800/35" />
+                  <span className="font-black tracking-wide">{sponsor.badgeSublabel}</span>
+                </>
+              ) : null}
+            </a>
+          ) : (
+            <span
+              className="pointer-events-none absolute -top-2.5 right-3 z-10 inline-flex h-[18px] items-center gap-1.5 bg-amber-400 pl-3 pr-2 text-[9px] font-bold uppercase leading-none text-amber-950 shadow-[0_2px_5px_rgba(245,158,11,0.22)] [clip-path:polygon(8px_0,100%_0,100%_100%,0_100%)]"
+              title={sponsor.badgeSublabel ? `${sponsor.badgeLabel}: ${sponsor.badgeSublabel}` : sponsor.badgeLabel}
+            >
+              <span className="tracking-[0.14em]">{sponsor.badgeLabel}</span>
+              {sponsor.badgeSublabel ? (
+                <>
+                  <span aria-hidden="true" className="h-2.5 w-px bg-amber-800/35" />
+                  <span className="font-black tracking-wide">{sponsor.badgeSublabel}</span>
+                </>
+              ) : null}
+            </span>
+          )
+        ) : null}
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <div

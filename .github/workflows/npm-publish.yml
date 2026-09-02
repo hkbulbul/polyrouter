@@ -17,6 +17,10 @@ jobs:
       NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: ${{ secrets.POLYROUTER_POSTHOG_PROJECT_TOKEN }}
       NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.POLYROUTER_POSTHOG_HOST || 'https://us.i.posthog.com' }}
       PUBLIC_INSTALLATION_TELEMETRY_URL: ${{ vars.POLYROUTER_PUBLIC_INSTALLATION_TELEMETRY_URL }}
+      # Read-only display data (cloud sponsors, embedding banners), inlined by next.config.mjs.
+      # Deliberately not in the verify step below: a missing banner must never fail a release.
+      SPONSORS_SUPABASE_URL: ${{ vars.POLYROUTER_SPONSORS_SUPABASE_URL }}
+      SPONSORS_SUPABASE_ANON_KEY: ${{ secrets.POLYROUTER_SPONSORS_SUPABASE_ANON_KEY }}
 
     steps:
       - uses: actions/checkout@v4

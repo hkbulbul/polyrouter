@@ -17,5 +17,6 @@ export {
   getCustomModels, addCustomModel, deleteCustomModel,
   getMitmAlias, setMitmAliasAll,
   getPricing, getPricingForModel, updatePricing, resetPricing, resetAllPricing,
+  getSponsorsConfig, setSponsorsConfig, getSponsors, getPublicSponsors, getSponsor, upsertSponsor, deleteSponsor, reorderSponsors,
   exportDb, importDb,
 } from "@/lib/db/index.js";

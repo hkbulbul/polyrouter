@@ -34,6 +34,10 @@ const PUBLIC_API_PATHS = [
   "/api/settings/require-login",
   "/api/realtime/tickets",
   "/api/mcp/chatgpt-web",
+  // Display-only banner rows for the provider detail page. No secrets — same rationale as the
+  // /api/sponsors GET bypass below. GET is the only export, so other verbs 405 on their own.
+  // Matching is exact-or-prefix, so any future /api/embedding-banners/* would also be public.
+  "/api/embedding-banners",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
@@ -240,6 +244,12 @@ export async function proxy(request) {
   if (isPublicLlmApi(pathname)) {
     if (await canAccessPublicLlmApi(request)) return nextWithoutLocalityProof(request);
     return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
+  }
+
+  // Sponsors GET is public (badge metadata only, no secrets, kind-aware) — lets provider/embedding grids
+  // load before login and for any client. PATCH/others stay protected below.
+  if (pathname === "/api/sponsors" && request.method === "GET") {
+    return nextWithoutLocalityProof(request);
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.

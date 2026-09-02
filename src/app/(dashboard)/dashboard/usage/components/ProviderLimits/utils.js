@@ -300,6 +300,54 @@ export function getRemainingPercentage(quota) {
   return calculatePercentage(quota?.used, quota?.total);
 }
 
+export function getPageQuotaSummary(connections = [], quotaData = {}) {
+  const now = Date.now();
+  let ready = 0;
+  let depleted = 0;
+  let disabled = 0;
+  let earliestResetAt = null;
+  let measuredAccounts = 0;
+
+  connections.forEach((connection) => {
+    if (connection.isActive === false) {
+      disabled += 1;
+      return;
+    }
+
+    const quotas = quotaData[connection.id]?.quotas || [];
+    const measured = quotas.filter((quota) => (
+      quota.total > 0
+      || (quota.remaining != null && Number.isFinite(Number(quota.remaining)))
+      || (quota.remainingPercentage != null && Number.isFinite(Number(quota.remainingPercentage)))
+    ));
+
+    if (measured.length) {
+      measuredAccounts += 1;
+      if (measured.some((quota) => getRemainingPercentage(quota) <= DEPLETED_QUOTA_THRESHOLD)) {
+        depleted += 1;
+      } else {
+        ready += 1;
+      }
+    }
+
+    quotas.forEach((quota) => {
+      const resetAt = new Date(quota.resetAt).getTime();
+      if (Number.isFinite(resetAt) && resetAt > now && (!earliestResetAt || resetAt < earliestResetAt)) {
+        earliestResetAt = resetAt;
+      }
+    });
+  });
+
+  return {
+    accounts: connections.length,
+    ready,
+    depleted,
+    disabled,
+    measuredAccounts,
+    earliestResetAt: earliestResetAt ? new Date(earliestResetAt).toISOString() : null,
+  };
+}
+
 export function getQuotaVisibilityKey(quota) {
   if (!quota || typeof quota !== "object") return "";
   return String(quota.modelKey || quota.name || "").trim();
