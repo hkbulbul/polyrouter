@@ -1,10 +1,20 @@
 # Unreleased
 
+# v1.0.18 (CLI) - 2026-09-02
+
 ## Features
 - **Command Code CLI**: add Command Code 1.30+ native BYOK setup with multi-model selection, explicit exact-set Apply, secret-safe authentication, and owned-only reset without changing the active model.
+- **Sponsors & Embedding Banners**: add cloud-backed sponsors and embedding banners end-to-end — anon REST read path with sanitizers (https-only allowlist, PostgREST injection blocked, size caps), GET-only `/api/sponsors` and `/api/embedding-banners` (`force-dynamic`, `no-store`), `EmbeddingBanner` (image / YouTube / sandboxed HTML `iframe`), Supabase migrations 004–007 and `sponsors-admin` / `embedding-providers-admin` Edge Functions, and build-time inlining of `SPONSORS_SUPABASE_*` via `next.config.mjs` so published installs render correctly (fixes silent empty-key in release bundle).
+- **Usage & Analytics**: add 14D period between 7D and 30D across selectors, APIs, and daily buckets (Today · 24h · 7D · 14D · 30D · 60D).
+
+## Fixes
+- **Web Cookie / Connector**: move browser sign-in to the Connector extension and disable the empty-profile browser flow behind `WEB_COOKIE_SIGNIN_ENABLED=false` (both endpoints return 503 `SIGNIN_DISABLED`); Connector validates PolyRouter origin and threads `connectionId` for in-place refresh; 409 on mid-commit sign-in race.
+- **Fallback**: rotate accounts on rollout-gated "model is not supported" 400 with a 30 min per-model cooldown (was 30s transient) so entitlement probes are paid once per window while the account stays usable for other models.
+- **Dashboard**: remove landing page, rewrite `ProviderLimits` with shared utils, and add `QuotaTrackerTable` quota summary.
 
 ## Security
 - **Local access**: authenticate socket-derived locality and route production starts through the hardened server wrapper so forged headers cannot reach host-only settings routes.
+- **Credential handling**: strip `apiKey` / `accessToken` / `refreshToken` / `idToken` / `sessionCookies` / `browserProfileId` from provider API responses, harden `dashboardGuard` locality proof to fail closed, remove managed browser profile on cookie-connection delete, and serialize ChatGPT Web `getBrowserContext` with 409 on mid-flight connection switch.
 
 # v1.0.17 (CLI) - 2026-08-23
 
