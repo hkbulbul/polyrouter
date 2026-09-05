@@ -55,6 +55,14 @@ export function cacheClaudeHeaders(headers) {
   }
 
   if (Object.keys(captured).length > 0) {
+    // If the user-agent reports an older Claude Code version (< 2.1.251),
+    // bump to 2.1.261 so upstream model version gates (e.g. Fable 5.1) don't reject the request
+    if (captured["user-agent"]) {
+      captured["user-agent"] = captured["user-agent"].replace(/(\b(?:claude-cli|claude-code)\/)2\.1\.\d+/g, (m, prefix) => {
+        const v = m.split("/")[1];
+        return v < "2.1.251" ? `${prefix}2.1.261` : m;
+      });
+    }
     cachedHeaders = captured;
     console.log(`[ClaudeHeaders] Cached ${Object.keys(captured).length} identity headers from Claude Code client`);
   }

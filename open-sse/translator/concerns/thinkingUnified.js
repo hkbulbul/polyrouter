@@ -115,8 +115,9 @@ function resolveFormat(targetFormat, model, provider) {
   }
   const caps = getCapabilitiesForModel(provider, model);
   if (caps.thinkingFormat) {
-    // If targetFormat is claude, an "openai" format cannot be sent to Claude Messages
-    if (targetFormat === "claude" && caps.thinkingFormat === "openai") {
+    // If targetFormat is claude, non-claude-compatible formats cannot be sent to Claude Messages
+    const isClaudeCompatible = caps.thinkingFormat.startsWith("claude-") || caps.thinkingFormat === "minimax" || caps.thinkingFormat === "hunyuan";
+    if (targetFormat === "claude" && !isClaudeCompatible) {
       return FORMAT_TO_NATIVE[targetFormat] || "claude-budget";
     }
     // If targetFormat is OpenAI-compatible, Claude or Gemini native formats cannot be sent to Chat Completions
@@ -259,7 +260,8 @@ function applyFormat(fmt, body, cfg, caps) {
     case "claude-budget": {
       if (none && canDisable) { body.thinking = { type: "disabled" }; break; }
       const budget = toBudget(eff, caps.thinkingRange);
-      body.thinking = budget === -1 ? { type: "enabled" } : { type: "enabled", budget_tokens: budget || 8192 };
+      const budgetTokens = (budget === -1 || !budget || !Number.isFinite(budget)) ? 8192 : budget;
+      body.thinking = { type: "enabled", budget_tokens: budgetTokens };
       break;
     }
     case "gemini-level": {
@@ -310,7 +312,8 @@ function applyFormat(fmt, body, cfg, caps) {
     case "hunyuan": {
       if (none && canDisable) { body.thinking = { type: "disabled" }; break; }
       const budget = toBudget(eff, caps.thinkingRange);
-      body.thinking = budget === -1 ? { type: "enabled" } : { type: "enabled", budget_tokens: budget || 8192 };
+      const budgetTokens = (budget === -1 || !budget || !Number.isFinite(budget)) ? 8192 : budget;
+      body.thinking = { type: "enabled", budget_tokens: budgetTokens };
       break;
     }
     case "step": {

@@ -8,11 +8,38 @@ Emergency backup when everything else is quota-limited. Code 24/7 with zero cost
 
 Free tier providers are your **fallback** when subscription and cheap quota exhausted:
 
+- 🆓 **Experiential Labs** - Frontier models FREE (Claude Fable 5.1, Astra, GLM 5.3 Flash, Claude Opus 5...)
 - 🆓 **iFlow** - 8 models FREE (Kimi K2, Qwen3, GLM 4.7, MiniMax M2...)
 - 🆓 **Qwen** - 3 models FREE (Qwen3 Coder Plus/Flash, Vision)
 - 🆓 **Kiro** - 2 models FREE (Claude Sonnet 4.5, Haiku 4.5)
 
 **Strategy:** Use as emergency backup. Unlimited usage, zero cost forever!
+
+---
+
+## Experiential Labs (FREE Frontier Models)
+
+### Overview
+
+Access cutting-edge models like **Claude Fable 5.1**, **Astra**, **GLM 5.3 Flash**, and **Claude Opus 5** via Experiential Labs API gateway with PolyRouter.
+
+### Setup
+
+**Step 1: Get an API Key**
+- Open [Experiential Labs Platform](https://platform.experientiallabs.ai/settings/api-keys).
+- Sign up or log in using Google or GitHub.
+- Go to API Keys, create a new key, and copy it.
+
+**Step 2: Connect in PolyRouter**
+- Start `polyrouter` and navigate to the dashboard at `http://localhost:20128/dashboard`.
+- Go to **Providers** → **Experiential Labs**.
+- Click **Add Connection**, name it, paste your API key, and hit **Save**.
+
+**Step 3: Connect CLI Tools**
+- In dashboard, go to **CLI Tools** → select **Claude Code** or **Codex**.
+- Choose your model (e.g. `explabs/claude-fable-5.1` or `explabs/astra`).
+- Click **Apply**.
+- In a new terminal, launch `claude` or `codex` and start coding!
 
 ---
 

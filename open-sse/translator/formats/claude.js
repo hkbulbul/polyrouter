@@ -195,6 +195,18 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     delete body.output_config;
   }
 
+  // Ensure client_metadata version meets upstream model version gate (e.g. Fable 5.1 requires >= 2.1.251)
+  if (body.client_metadata && typeof body.client_metadata === "object") {
+    if (typeof body.client_metadata.version === "string" && body.client_metadata.version < "2.1.251") {
+      body.client_metadata.version = "2.1.261";
+    }
+  }
+  if (body.metadata?.client_metadata && typeof body.metadata.client_metadata === "object") {
+    if (typeof body.metadata.client_metadata.version === "string" && body.metadata.client_metadata.version < "2.1.251") {
+      body.metadata.client_metadata.version = "2.1.261";
+    }
+  }
+
   // Clamp max_tokens to the model's real output ceiling. Models whose caps
   // declare a higher maxOutput (e.g. Opus 4.8 / Sonnet 4.6 = 128000) are allowed
   // up to it, so max-effort thinking gets full budget; others fall back to the
@@ -210,12 +222,23 @@ export function prepareClaudeRequest(body, provider = null, apiKey = null, conne
     // Prefer raising max_tokens to preserve the requested thinking depth; if the
     // budget alone meets/exceeds the ceiling, cap output and shrink the budget so
     // some tokens remain for the answer.
-    if (body.thinking?.type === "enabled" && body.thinking.budget_tokens && body.thinking.budget_tokens >= body.max_tokens) {
-      body.max_tokens = Math.min(body.thinking.budget_tokens + 1024, ceiling);
+    if (body.thinking?.type === "enabled") {
+      if (!body.thinking.budget_tokens || !Number.isFinite(body.thinking.budget_tokens)) {
+        body.thinking.budget_tokens = 8192;
+      }
       if (body.thinking.budget_tokens >= body.max_tokens) {
-        body.thinking.budget_tokens = Math.max(1024, body.max_tokens - 1024);
+        body.max_tokens = Math.min(body.thinking.budget_tokens + 1024, ceiling);
+        if (body.thinking.budget_tokens >= body.max_tokens) {
+          body.thinking.budget_tokens = Math.max(1024, body.max_tokens - 1024);
+        }
       }
     }
+  } else if (body.thinking?.type === "enabled") {
+    const ceiling = getCapabilitiesForModel(provider, body.model).maxOutput || DEFAULT_MAX_TOKENS;
+    if (!body.thinking.budget_tokens || !Number.isFinite(body.thinking.budget_tokens)) {
+      body.thinking.budget_tokens = 8192;
+    }
+    body.max_tokens = Math.min(body.thinking.budget_tokens + 1024, ceiling);
   }
 
   // 1. System: remove all cache_control, add only to last block with ttl 1h

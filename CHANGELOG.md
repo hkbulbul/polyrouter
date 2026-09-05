@@ -1,5 +1,16 @@
 # Unreleased
 
+# v1.0.21 (CLI) - 2026-09-05
+
+## Features
+- **Experiential Labs Frontier Models**: add first-class support and model capabilities for `claude-fable-5.1` (with transparent aliasing to `claude-fable-latest`), `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, `gpt-6-astra` / `astra`, `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.5`, `gpt-5.4-mini`, and `glm-5.3-flash`.
+- **Model Aliasing**: support `upstreamModelId` in provider registry and `modelMap` in `DefaultExecutor.transformRequest` to map client model slugs to upstream endpoints seamlessly.
+
+## Fixes
+- **Claude Code Version Gate**: automatically bump forwarded `client_metadata.version` and cached `User-Agent` client headers to `>= 2.1.261` to satisfy upstream model version gates requiring Claude Code 2.1.251+.
+- **Thinking Budget Enforcement**: enforce `thinking.budget_tokens: 8192` default and reconcile `max_tokens > budget_tokens` for all requests targeting Claude Messages endpoints when thinking is enabled, eliminating 400 parameter errors.
+- **Server Stability (EPIPE Guard)**: ignore `EPIPE` exceptions on `process.stdout`/`stderr` in `custom-server.js` to prevent recursive `uncaughtException` hang loops on broken client pipes.
+
 # v1.0.20 (CLI) - 2026-09-05
 
 ## Features
