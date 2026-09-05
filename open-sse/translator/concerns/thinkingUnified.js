@@ -106,9 +106,26 @@ export const captureThinking = extractThinking;
 // Resolve thinking format: provider override > capability > derive(targetFormat).
 function resolveFormat(targetFormat, model, provider) {
   const providerFmt = provider ? PROVIDERS[provider]?.thinkingFormat : null;
-  if (providerFmt) return providerFmt;
+  // Provider thinkingFormat override only applies if targetFormat is compatible.
+  // In particular, an "openai" provider override must never leak into Claude or Gemini targets that reject reasoning_effort.
+  if (providerFmt) {
+    const isOpenAiTarget = targetFormat === "openai" || targetFormat === "openai-responses" || targetFormat === "openai-response" || targetFormat === "codex";
+    if (providerFmt === "openai" && isOpenAiTarget) return providerFmt;
+    if (providerFmt !== "openai") return providerFmt;
+  }
   const caps = getCapabilitiesForModel(provider, model);
-  if (caps.thinkingFormat) return caps.thinkingFormat;
+  if (caps.thinkingFormat) {
+    // If targetFormat is claude, an "openai" format cannot be sent to Claude Messages
+    if (targetFormat === "claude" && caps.thinkingFormat === "openai") {
+      return FORMAT_TO_NATIVE[targetFormat] || "claude-budget";
+    }
+    // If targetFormat is OpenAI-compatible, Claude or Gemini native formats cannot be sent to Chat Completions
+    const isOpenAiTarget = targetFormat === "openai" || targetFormat === "openai-responses" || targetFormat === "openai-response" || targetFormat === "codex";
+    if (isOpenAiTarget && (caps.thinkingFormat.startsWith("claude-") || caps.thinkingFormat.startsWith("gemini-"))) {
+      return "openai";
+    }
+    return caps.thinkingFormat;
+  }
   return FORMAT_TO_NATIVE[targetFormat] || "openai";
 }
 

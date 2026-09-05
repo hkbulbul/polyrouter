@@ -331,6 +331,16 @@ export async function POST(request) {
           break;
         }
 
+        case "explabs":
+        case "experiential": {
+          const explabsRes = await fetch("https://api.experientiallabs.ai/v1/models", {
+            headers: { "Authorization": `Bearer ${apiKey}` },
+            signal: AbortSignal.timeout(10000),
+          });
+          isValid = explabsRes.status !== 401 && explabsRes.status !== 403;
+          break;
+        }
+
         case "agentrouter": {
           {
             const cfg = PROVIDERS[provider];

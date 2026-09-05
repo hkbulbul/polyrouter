@@ -1,5 +1,15 @@
 # Unreleased
 
+# v1.0.20 (CLI) - 2026-09-05
+
+## Features
+- **Experiential Labs Provider**: integrate Experiential Labs (`explabs`) gateway with support for Chat Completions, Responses, and native Anthropic Messages APIs, dynamic model discovery, key validation, connection testing, and suggested models.
+- **Provider Assets**: add official Experiential Labs logo (`explabs.png`, `explabs.svg`, `xpl.png`, `experiential.png`) and icon resolution mapping across dashboard and CLI.
+- **Model Capabilities**: register `claude-opus-5` and `claude-sonnet-4` model capabilities and matching patterns (1M context, adaptive thinking).
+
+## Fixes
+- **Claude Code & Thinking Translation**: resolve thinking format cleanly for Anthropic Messages endpoints so OpenAI `reasoning_effort` does not leak into native `/v1/messages` calls; preserve `thinking: { type: "adaptive" }` and `output_config: { effort: "high" }`.
+
 # v1.0.19 (CLI) - 2026-09-02
 
 ## Fixes

@@ -15,6 +15,18 @@ export const FILTERS = {
       contextLength: m.context_length,
     })),
 
+  explabs: (items) =>
+    (Array.isArray(items) ? items : []).map((item) => {
+      const m = item?.model || item;
+      return {
+        id: m.slug || m.id,
+        name: m.display_name || m.name || m.slug || m.id,
+        contextLength: m.context_window || m.contextLength,
+      };
+    }),
+
+  experiential: (items) => FILTERS.explabs(items),
+
   "openrouter-free": (models) =>
     models
       .filter(
