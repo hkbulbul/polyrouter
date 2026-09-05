@@ -40,6 +40,7 @@ import { translateRequest } from "../../open-sse/translator/index.js";
 import { getCapabilitiesForModel } from "../../open-sse/providers/capabilities.js";
 import { getProviderIconSrc } from "@/shared/utils/providerIcon.js";
 import fs from "fs";
+import path from "path";
 
 const originalFetch = global.fetch;
 
@@ -263,10 +264,36 @@ describe("Experiential Labs Claude Code & Thinking Routing", () => {
     expect(translated.output_config).toBeUndefined();
   });
 
+  it("translates Claude Code request with adaptive thinking to claude-budget with budget_tokens for explabs/claude-fable-5.1", () => {
+    const body = {
+      model: "explabs/claude-fable-5.1",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "adaptive" },
+    };
+
+    const translated = translateRequest("claude", "claude", "claude-fable-5.1", body, true, null, "explabs");
+
+    expect(translated.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
+    expect(translated.max_tokens).toBeGreaterThan(8192);
+  });
+
+  it("normalizes Claude Code thinking for non-Claude models like explabs/glm-5.3-flash to claude-budget with budget_tokens", () => {
+    const body = {
+      model: "explabs/glm-5.3-flash",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "adaptive" },
+    };
+
+    const translated = translateRequest("claude", "claude", "glm-5.3-flash", body, true, null, "explabs");
+
+    expect(translated.thinking).toEqual({ type: "enabled", budget_tokens: 8192 });
+    expect(translated.max_tokens).toBeGreaterThan(8192);
+  });
+
   it("provides logo image assets and resolves them via getProviderIconSrc", () => {
-    // Both web dashboard and CLI asset directories have the explabs logo
-    expect(fs.existsSync("public/providers/explabs.png")).toBe(true);
-    expect(fs.existsSync("cli/app/public/providers/explabs.png")).toBe(true);
+    const rootDir = path.resolve(__dirname, "../..");
+    expect(fs.existsSync(path.join(rootDir, "public/providers/explabs.png"))).toBe(true);
+    expect(fs.existsSync(path.join(rootDir, "cli/app/public/providers/explabs.png"))).toBe(true);
 
     // Icon resolution resolves primary and aliases to explabs.png
     expect(getProviderIconSrc("explabs")).toBe("/providers/explabs.png");

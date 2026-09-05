@@ -24,9 +24,16 @@ const ERROR_LOG_PATH = path.join(
   "error.log"
 );
 
+// Ignore EPIPE on stdout/stderr so broken pipes don't spin in uncaughtException loops
+process.stdout?.on?.("error", (err) => { if (err?.code === "EPIPE") return; });
+process.stderr?.on?.("error", (err) => { if (err?.code === "EPIPE") return; });
+
 function logFatal(kind, err) {
+  if (err?.code === "EPIPE" || err?.syscall === "write" || err?.message?.includes?.("EPIPE")) return;
   const detail = err?.stack || err?.message || String(err);
-  console.error(`[${kind}]`, detail);
+  try {
+    console.error(`[${kind}]`, detail);
+  } catch { /* console write failed */ }
   try {
     fs.mkdirSync(path.dirname(ERROR_LOG_PATH), { recursive: true });
     fs.appendFileSync(ERROR_LOG_PATH, `[${new Date().toISOString()}] ${kind} ${detail}\n`);
