@@ -41,6 +41,16 @@ export const parseZenMuxModels = (data) => parseOpenAIStyleModels(data).map((mod
   };
 });
 
+export const parseExplabsModels = (data) => parseOpenAIStyleModels(data).map((model) => {
+  const m = model?.model || model;
+  return {
+    ...m,
+    id: m.id || m.slug,
+    name: m.display_name || m.name || m.slug || m.id,
+    kind: "llm",
+  };
+});
+
 const parseGeminiCliModels = (data) => {
   if (Array.isArray(data?.models)) {
     return data.models
@@ -237,6 +247,14 @@ const PROVIDER_MODELS_CONFIG = {
   zenmux: {
     ...createOpenAIModelsConfig("https://zenmux.ai/api/v1/models"),
     parseResponse: parseZenMuxModels,
+  },
+  explabs: {
+    ...createOpenAIModelsConfig("https://api.experientiallabs.ai/v1/models"),
+    parseResponse: parseExplabsModels,
+  },
+  experiential: {
+    ...createOpenAIModelsConfig("https://api.experientiallabs.ai/v1/models"),
+    parseResponse: parseExplabsModels,
   },
   agentrouter: createOpenAIModelsConfig("https://agentrouter.org/v1/models"),
   anthropic: {

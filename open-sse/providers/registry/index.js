@@ -1,4 +1,4 @@
-﻿// Auto-generated: static imports for all registry entries
+// Auto-generated: static imports for all registry entries
 import p0 from "./alicode-intl.js";
 import p1 from "./alicode.js";
 import p2 from "./anthropic.js";
@@ -106,6 +106,7 @@ import p103 from "./chatgpt-web.js";
 import p104 from "./trae.js";
 import p105 from "./agentrouter.js";
 import p106 from "./nara.js";
+import p107 from "./explabs.js";
 
 export default [
   p0,
@@ -215,4 +216,5 @@ export default [
   p104,
   p105,
   p106,
+  p107,
 ];

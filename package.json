@@ -1,6 +1,6 @@
 {
   "name": "polyrouter-app",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "PolyRouter local AI gateway dashboard and OpenAI-compatible API router",
   "private": true,
   "scripts": {
@@ -55,7 +55,7 @@
     "better-sqlite3": "^12.11.1"
   },
   "comment_ngrok": "optional: only needed when settings.tunnelProvider is 'ngrok'; cloudflared is the default tunnel backend",
-  "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools \u00e2\u20ac\u201d sql.js is used as fallback at runtime",
+  "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools \u2014 sql.js is used as fallback at runtime",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "eslint": "^9.39.5",
