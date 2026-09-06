@@ -200,6 +200,30 @@ function scrubAntigravityHeaders(headers) {
   return cleaned;
 }
 
+export const ANTIGRAVITY_UPSTREAM_MODEL_MAP = {
+  "gemini-3.8-flash": "gemini-3.8-flash-tiered",
+  "gemini-3.8-flash-high": "gemini-3.8-flash-tiered",
+  "gemini-3.8-flash-medium": "gemini-3.8-flash-tiered",
+  "gemini-3.8-flash-low": "gemini-3.8-flash-tiered",
+  "gemini-3.7-flash": "gemini-3.7-flash-tiered",
+  "gemini-3.7-flash-high": "gemini-3.7-flash-tiered",
+  "gemini-3.7-flash-medium": "gemini-3.7-flash-tiered",
+  "gemini-3.7-flash-low": "gemini-3.7-flash-tiered",
+  "gemini-3.6-flash": "gemini-3.6-flash-tiered",
+  "gemini-3.1-pro": "gemini-pro-agent",
+  "gemini-3.1-pro-high": "gemini-pro-agent",
+};
+
+export function resolveAntigravityModel(model) {
+  if (!model || typeof model !== "string") return model;
+  const clean = model.trim();
+  const sufMatch = clean.match(/\([^()]+\)\s*$/);
+  const suffix = sufMatch ? sufMatch[0] : "";
+  const baseId = suffix ? clean.slice(0, sufMatch.index).trim() : clean;
+  const mapped = ANTIGRAVITY_UPSTREAM_MODEL_MAP[baseId] || baseId;
+  return (mapped + suffix).trim();
+}
+
 export class AntigravityExecutor extends BaseExecutor {
   constructor() {
     super("antigravity", PROVIDERS.antigravity);
@@ -208,12 +232,13 @@ export class AntigravityExecutor extends BaseExecutor {
   buildUrl(model, stream, urlIndex = 0) {
     const baseUrls = this.getBaseUrls();
     const baseUrl = baseUrls[urlIndex] || baseUrls[0];
+    const resolvedModel = resolveAntigravityModel(model);
     // Image generation MUST use non-streaming generateContent (chatCore forceStream
     // already flips stream=false for image models). Everything else ALWAYS streams:
     // the non-streaming `generateContent` 400s for some models (e.g. gpt-oss-120b-medium)
     // because Cloud Code internally injects stream_options without stream=true.
     // chatCore handles SSE→JSON for non-streaming clients.
-    if (isImageModel(model)) return `${baseUrl}/v1internal:generateContent`;
+    if (isImageModel(resolvedModel)) return `${baseUrl}/v1internal:generateContent`;
     return `${baseUrl}/v1internal:streamGenerateContent?alt=sse`;
   }
 
@@ -237,6 +262,7 @@ export class AntigravityExecutor extends BaseExecutor {
   }
 
   async transformRequest(model, body, stream, credentials) {
+    const resolvedModel = resolveAntigravityModel(model);
     // Real project id only — a fabricated id ("useful-fuze-abc12") is not a Cloud Code
     // project and only earns a delayed 429 RESOURCE_EXHAUSTED from Google's quota check.
     const storedProjectId = typeof credentials?.projectId === "string"
@@ -295,10 +321,10 @@ export class AntigravityExecutor extends BaseExecutor {
     }
 
     // ─── Image generation: completely different request structure ───
-    if (isImageModel(model)) {
-      const imageConfig = parseImageConfig(model);
+    if (isImageModel(resolvedModel)) {
+      const imageConfig = parseImageConfig(resolvedModel);
       // Strip model name suffixes for the actual API model name
-      const cleanModel = model.replace(/-(\d+)x(\d+)$/, "");
+      const cleanModel = resolvedModel.replace(/-(\d+)x(\d+)$/, "");
 
       // Build simplified contents — text-only, merge all user messages
       const contents = [];
@@ -374,7 +400,7 @@ export class AntigravityExecutor extends BaseExecutor {
 
     // Claude-backed models use protobuf `parameters`, which Cloud Code maps to
     // Anthropic input_schema. Gemini-backed models accept parametersJsonSchema.
-    const isClaudeModel = model.toLowerCase().includes("claude");
+    const isClaudeModel = resolvedModel.toLowerCase().includes("claude");
     let tools = body.request?.tools;
 
     if (tools && tools.length > 0) {
@@ -430,10 +456,10 @@ export class AntigravityExecutor extends BaseExecutor {
     return {
       ...body,
       project: projectId,
-      model: model,
+      model: resolvedModel,
       userAgent: "antigravity",
       requestType: "agent",
-      requestId: buildIdeRequestId({ body, request: transformedRequest, credentials, model, requestType: "agent" }),
+      requestId: buildIdeRequestId({ body, request: transformedRequest, credentials, model: resolvedModel, requestType: "agent" }),
       request: transformedRequest
     };
   }

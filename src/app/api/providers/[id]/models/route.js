@@ -11,8 +11,10 @@ import { resolveQoderModels } from "open-sse/services/qoderModels.js";
 import { resolveGrokCliModels } from "open-sse/services/grokCliModels.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
+import { ANTIGRAVITY_OAUTH_CLIENT } from "open-sse/providers/shared.js";
 
 const GEMINI_CLI_MODELS_URL = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
+const ANTIGRAVITY_MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 
 // The /codex/models endpoint gates each entry by minimal_client_version against this
 // value, and codex CLI's own manifest (openai/codex codex-rs/models-manager/models.json)
@@ -72,6 +74,25 @@ const parseGeminiCliModels = (data) => {
   }
 
   return [];
+};
+
+const parseAntigravityModels = (data) => {
+  const models = parseGeminiCliModels(data);
+  const modelIds = new Set(models.map((m) => m.id));
+  const additions = [];
+  if (modelIds.has("gemini-3.8-flash-tiered") && !modelIds.has("gemini-3.8-flash")) {
+    additions.push({ id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", upstreamModelId: "gemini-3.8-flash-tiered" });
+  }
+  if (modelIds.has("gemini-3.7-flash-tiered") && !modelIds.has("gemini-3.7-flash")) {
+    additions.push({ id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", upstreamModelId: "gemini-3.7-flash-tiered" });
+  }
+  if (modelIds.has("gemini-3.6-flash-tiered") && !modelIds.has("gemini-3.6-flash")) {
+    additions.push({ id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", upstreamModelId: "gemini-3.6-flash-tiered" });
+  }
+  if (modelIds.has("gemini-pro-agent") && !modelIds.has("gemini-3.1-pro-high")) {
+    additions.push({ id: "gemini-3.1-pro-high", name: "Gemini 3.1 Pro (High)", upstreamModelId: "gemini-pro-agent" });
+  }
+  return [...models, ...additions];
 };
 
 const appendCodexReviewModels = (models) => models.flatMap((model) => {
@@ -206,13 +227,25 @@ const PROVIDER_MODELS_CONFIG = {
     })
   },
   antigravity: {
-    url: "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:models",
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    authHeader: "Authorization",
-    authPrefix: "Bearer ",
-    body: {},
-    parseResponse: (data) => data.models || []
+    customResolver: buildOAuthResolver({
+      refreshFn: (conn) => refreshGoogleToken(conn.refreshToken, ANTIGRAVITY_OAUTH_CLIENT.clientId, ANTIGRAVITY_OAUTH_CLIENT.clientSecret),
+      fetchFn: (token, conn) => {
+        const projectId = conn.projectId || conn.providerSpecificData?.projectId;
+        const body = projectId ? { project: projectId } : {};
+        return fetch(ANTIGRAVITY_MODELS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+            "User-Agent": "antigravity",
+            "X-Client-Name": "antigravity"
+          },
+          body: JSON.stringify(body)
+        });
+      },
+      parseFn: parseAntigravityModels,
+      errorLabel: "Failed to fetch Antigravity models"
+    })
   },
   github: {
     url: "https://api.githubcopilot.com/models",
