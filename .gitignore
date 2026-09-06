@@ -92,3 +92,6 @@ graphify-out/*
 .codegraph/
 .PR/
 .next-analyze/*
+
+# Sentry Config File
+.env.sentry-build-plugin

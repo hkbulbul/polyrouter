@@ -117,13 +117,22 @@ export default function Sidebar({ onClose }) {
       <aside className="flex w-72 flex-col border-r border-border-subtle bg-vibrancy backdrop-blur-xl transition-colors duration-300 min-h-full">
 
         {/* Logo */}
-        <div className="px-6 py-4 flex flex-col gap-2">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="flex flex-col">
-              <h1 className="text-lg font-semibold tracking-tight">
+        <div className="px-5 py-4 flex flex-col gap-2 border-b border-border-subtle/50">
+          <Link href="/dashboard" className="flex items-center gap-3 group">
+            <div className="size-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-border-subtle bg-surface shadow-xs transition-transform duration-200 group-hover:scale-105">
+              <img
+                src="/favicon.svg"
+                alt="PolyRouter"
+                width={36}
+                height={36}
+                className="size-full object-contain"
+              />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-base font-semibold tracking-tight leading-tight truncate">
                 <span className="text-brand-500">Poly</span><span className="text-text-main">Router</span>
               </h1>
-              <span className="text-xs text-text-muted">v{APP_CONFIG.version}</span>
+              <span className="text-[11px] text-text-muted font-mono">v{APP_CONFIG.version}</span>
             </div>
           </Link>
         </div>

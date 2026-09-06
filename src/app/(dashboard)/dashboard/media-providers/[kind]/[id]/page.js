@@ -68,9 +68,20 @@ export default function MediaProviderDetailPage() {
     return <div className="text-text-muted text-sm py-12 text-center">Loading...</div>;
   }
 
-  const kinds = isCustom ? ["embedding"] : (provider.serviceKinds ?? ["llm"]);
-  if (!isCustom && !kinds.includes(kind)) return notFound();
-  const usesOpenAIRealtimeOAuth = kind === "speechToSpeech" && id === "openai";
+  useEffect(() => {
+    if (kind === "speechToSpeech" && id === "codex") {
+      router.replace("/dashboard/media-providers/speechToSpeech/openai");
+    }
+  }, [kind, id, router]);
+
+  const kinds = isCustom ? ["embedding"] : (provider?.serviceKinds ?? ["llm"]);
+  if (!isCustom && !kinds.includes(kind) && !(kind === "speechToSpeech" && id === "codex")) return notFound();
+  const usesOpenAIRealtimeOAuth = kind === "speechToSpeech" && (id === "openai" || id === "codex");
+
+  const displayName = usesOpenAIRealtimeOAuth ? "OpenAI Codex" : provider.name;
+  const displayIcon = usesOpenAIRealtimeOAuth ? "/providers/codex.png" : `/providers/${provider.id}.png`;
+  const displayColor = usesOpenAIRealtimeOAuth ? (AI_PROVIDERS.codex?.color || "#3B82F6") : provider.color;
+  const displayTextIcon = usesOpenAIRealtimeOAuth ? (AI_PROVIDERS.codex?.textIcon || "CX") : (provider.textIcon || provider.id.slice(0, 2).toUpperCase());
 
   return (
     <div className="flex flex-col gap-8">
@@ -86,19 +97,19 @@ export default function MediaProviderDetailPage() {
 
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-          <div className="size-12  flex items-center justify-center shrink-0" style={{ backgroundColor: `${provider.color}15` }}>
+          <div className="size-12  flex items-center justify-center shrink-0" style={{ backgroundColor: `${displayColor}15` }}>
             <ProviderIcon
-              src={`/providers/${provider.id}.png`}
-              alt={provider.name}
+              src={displayIcon}
+              alt={displayName}
               size={48}
               className="object-contain  max-w-[48px] max-h-[48px]"
-              fallbackText={provider.textIcon || provider.id.slice(0, 2).toUpperCase()}
-              fallbackColor={provider.color}
+              fallbackText={displayTextIcon}
+              fallbackColor={displayColor}
             />
           </div>
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight">{provider.name}</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">{displayName}</h1>
               {!isCustom && !usesOpenAIRealtimeOAuth && provider.notice?.apiKeyUrl && (
                 <a
                   href={provider.notice.apiKeyUrl}
@@ -212,7 +223,7 @@ export default function MediaProviderDetailPage() {
           <StsExampleCard providerId={usesOpenAIRealtimeOAuth ? "codex" : id} />
           <RealtimePageClient
             providerId={usesOpenAIRealtimeOAuth ? "codex" : id}
-            providerName={usesOpenAIRealtimeOAuth ? "OpenAI" : provider.name}
+            providerName={displayName}
           />
         </>
       )}

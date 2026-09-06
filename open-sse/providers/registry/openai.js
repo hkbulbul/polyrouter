@@ -82,7 +82,7 @@ export default {
     baseUrl: "wss://api.openai.com/v1/realtime",
     mode: "WebSocket realtime",
     authType: "oauth",
-    authentication: "OpenAI sign-in (OAuth)",
+    authentication: "OpenAI Codex sign-in (OAuth)",
     formats: ["PCM16", "24 kHz"],
     defaultModel: "gpt-realtime-2",
   },

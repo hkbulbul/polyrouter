@@ -23,12 +23,18 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle, sp
   const providerInfo = AI_PROVIDERS[provider.id];
   const isNoAuth = !!providerInfo?.noAuth;
 
-  const connectionProviderId = kind === "speechToSpeech" && provider.id === "openai" ? "codex" : provider.id;
+  const isSpeechToSpeechOpenAI = kind === "speechToSpeech" && provider.id === "openai";
+  const connectionProviderId = isSpeechToSpeechOpenAI ? "codex" : provider.id;
   const providerConns = connections.filter((c) => c.provider === connectionProviderId);
   const connected = providerConns.filter((c) => { const s = getEffectiveStatus(c); return s === "active" || s === "success"; }).length;
   const error = providerConns.filter((c) => { const s = getEffectiveStatus(c); return s === "error" || s === "expired" || s === "unavailable"; }).length;
   const total = providerConns.length;
   const allDisabled = total > 0 && providerConns.every((c) => c.isActive === false);
+
+  const displayName = isSpeechToSpeechOpenAI ? "OpenAI Codex" : provider.name;
+  const displayIcon = isSpeechToSpeechOpenAI ? "/providers/codex.png" : `/providers/${provider.id}.png`;
+  const displayColor = isSpeechToSpeechOpenAI ? (AI_PROVIDERS.codex?.color || "#3B82F6") : provider.color;
+  const displayTextIcon = isSpeechToSpeechOpenAI ? (AI_PROVIDERS.codex?.textIcon || "CX") : (provider.textIcon || provider.id.slice(0, 2).toUpperCase());
 
   const handleToggleClick = (e) => {
     e.preventDefault();
@@ -92,19 +98,19 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle, sp
           <div className="flex min-w-0 items-center gap-3">
             <div
               className="size-8  flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `${provider.color?.length > 7 ? provider.color : (provider.color ?? "#888") + "15"}` }}
+              style={{ backgroundColor: `${displayColor?.length > 7 ? displayColor : (displayColor ?? "#888") + "15"}` }}
             >
               <ProviderIcon
-                src={`/providers/${provider.id}.png`}
-                alt={provider.name}
+                src={displayIcon}
+                alt={displayName}
                 size={30}
                 className="object-contain  max-w-[30px] max-h-[30px]"
-                fallbackText={provider.textIcon || provider.id.slice(0, 2).toUpperCase()}
-                fallbackColor={provider.color}
+                fallbackText={displayTextIcon}
+                fallbackColor={displayColor}
               />
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-sm">{provider.name}</h3>
+              <h3 className="font-semibold text-sm">{displayName}</h3>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 {isCustom && <Badge variant="default" size="sm">Custom</Badge>}
                 {renderStatus()}
@@ -234,12 +240,13 @@ export default function MediaProviderKindPage() {
   }));
 
   const getSponsorPos = (id) => sponsorsMap?.get(String(id).toLowerCase())?.position ?? 9999;
+  const getCardName = (p) => (kind === "speechToSpeech" && p.id === "openai" ? "OpenAI Codex" : (p.name || ""));
   const sortedProviders = [...providers].sort((a, b) => {
     const pa = getSponsorPos(a.id), pb = getSponsorPos(b.id);
     const sa = pa !== 9999, sb = pb !== 9999;
     if (sa !== sb) return sa ? -1 : 1;
     if (sa && pa !== pb) return pa - pb;
-    return (a.name || "").localeCompare(b.name || "");
+    return getCardName(a).localeCompare(getCardName(b));
   });
   const sortedCustomProviders = [...customProviders].sort((a, b) => {
     const pa = getSponsorPos(a.id), pb = getSponsorPos(b.id);
