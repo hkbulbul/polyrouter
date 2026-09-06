@@ -32,15 +32,16 @@ export function resolveProviderAlias(aliasOrId) {
  * Parse model string: "alias/model" or "provider/model" or just alias
  */
 export function parseModel(modelStr) {
-  if (!modelStr) {
+  if (!modelStr || typeof modelStr !== "string") {
     return { provider: null, model: null, isAlias: false, providerAlias: null };
   }
 
+  const trimmed = modelStr.trim();
   // Check if standard format: provider/model or alias/model
-  if (modelStr.includes("/")) {
-    const firstSlash = modelStr.indexOf("/");
-    const providerOrAlias = modelStr.slice(0, firstSlash);
-    const model = modelStr.slice(firstSlash + 1);
+  if (trimmed.includes("/")) {
+    const firstSlash = trimmed.indexOf("/");
+    const providerOrAlias = trimmed.slice(0, firstSlash).trim();
+    const model = trimmed.slice(firstSlash + 1).trim();
     const provider = resolveProviderAlias(providerOrAlias);
     return { provider, model, isAlias: false, providerAlias: providerOrAlias };
   }
@@ -48,7 +49,7 @@ export function parseModel(modelStr) {
   // Alias format (model alias, not provider alias)
   return {
     provider: null,
-    model: modelStr,
+    model: trimmed,
     isAlias: true,
     providerAlias: null,
   };

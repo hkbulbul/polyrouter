@@ -264,63 +264,27 @@ async function createBypassRequest(parsedUrl, realIP, options) {
       };
 
       const req = https.request(reqOptions, (res) => {
-        let rawBodyCache = null;
-        async function readBody() {
-          if (rawBodyCache !== null) return rawBodyCache;
-          const chunks = [];
-          for await (const chunk of res) chunks.push(chunk);
-          rawBodyCache = Buffer.concat(chunks).toString();
-          return rawBodyCache;
-        }
-
         const status = res.statusCode;
         const headerPairs = Object.entries(res.headers || {})
           .flatMap(([k, v]) => Array.isArray(v) ? v.map(x => [k, String(x)]) : [[k, String(v ?? "")]]);
         const responseHeaders = new Headers(headerPairs);
-        // Consume the native IncomingMessage body before wrapping with Web
-        // Readable so BaseExecutor's response.clone().text() stays compatible
-        // with standard fetch (used by 403/429 diagnostics and VALIDATION_REQUIRED).
-        let response;
-        const bodyText = async () => readBody();
-        const bodyJson = async () => JSON.parse(await bodyText());
-        response = new Response(rawBodyCache ?? "", {
+        const bodyStream = Readable.toWeb(res);
+        const response = new Response(bodyStream, {
           status,
           statusText: res.statusMessage || "",
           headers: responseHeaders,
         });
-        response.text = bodyText;
-        response.json = bodyJson;
-        // Future clones should also read from the cached payload so repeated
-        // parsing (e.g. Antigravity shouldRefreshResponse + parseError) is stable.
-        const originalClone = response.clone && response.clone.bind(response);
-        response.clone = () => {
-          if (typeof originalClone === "function" && rawBodyCache === null) {
-            try { return originalClone(); } catch {}
-          }
-          const clone = new Response(rawBodyCache ?? "", {
-            status,
-            statusText: res.statusMessage || "",
-            headers: new Headers(responseHeaders),
-          });
-          clone.text = bodyText;
-          clone.json = bodyJson;
-          clone.clone = response.clone;
-          return clone;
-        };
-        // Lazily drain the underlying stream to fill the cache if no text()/json()
-        // consumer does first, then fulfill the fetch.
-        readBody().then(() => {
-          resolve(response);
-        }).catch((err) => {
-          response = new Response(String(err?.message || "fetch failed"), {
-            status: 502,
-            headers: responseHeaders,
-          });
-          resolve(response);
-        });
-        // Keep body readable for streaming callers that pipe response.body
-        if (!res.readableEnded) res.resume();
+        resolve(response);
       });
+
+      if (options.signal) {
+        const onAbort = () => {
+          try { req.destroy(new Error("aborted")); } catch {}
+          try { socket.destroy(); } catch {}
+        };
+        if (options.signal.aborted) onAbort();
+        else options.signal.addEventListener("abort", onAbort, { once: true });
+      }
 
       req.on("error", reject);
       if (options.body) {
