@@ -1,16 +1,38 @@
-﻿name: Publish CLI to npm
+name: Publish CLI to npm
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type (calculates from latest npm version)"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+          - none
+      custom_version:
+        description: "Explicit custom version (e.g. 1.0.22, used only when bump is 'custom')"
+        required: false
+        default: ""
+        type: string
+      push_git_release:
+        description: "Commit version bump and push git tag back to repository"
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       NEXT_PUBLIC_GA_MEASUREMENT_ID: ${{ vars.POLYROUTER_GA_MEASUREMENT_ID }}
@@ -24,11 +46,51 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Determine and update package versions
+        id: versioning
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            echo "Triggered by tag: $TAG_VER"
+            node scripts/bump-version.mjs "$TAG_VER"
+          else
+            BUMP_TYPE="${{ github.event.inputs.bump || 'patch' }}"
+            CUSTOM_VER="${{ github.event.inputs.custom_version || '' }}"
+            echo "Triggered by workflow_dispatch: bump=$BUMP_TYPE, custom=$CUSTOM_VER"
+            node scripts/bump-version.mjs --from-npm "$BUMP_TYPE" "$CUSTOM_VER"
+          fi
+        shell: bash
+
+      - name: Commit version bump and push tag
+        if: |
+          github.event_name == 'workflow_dispatch' &&
+          (github.event.inputs.push_git_release == 'true' || github.event.inputs.push_git_release == true)
+        run: |
+          NEW_VER="${{ steps.versioning.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet package.json cli/package.json; then
+            git add package.json cli/package.json
+            git commit -m "chore(release): v${NEW_VER} [skip ci]"
+            git tag "v${NEW_VER}"
+            git push origin "HEAD:${{ github.ref_name }}" --tags
+            echo "Pushed version bump commit and tag v${NEW_VER} to ${{ github.ref_name }}"
+          elif ! git rev-parse "v${NEW_VER}" >/dev/null 2>&1; then
+            git tag "v${NEW_VER}"
+            git push origin "v${NEW_VER}"
+            echo "Pushed tag v${NEW_VER}"
+          fi
+        shell: bash
 
       - name: Install root dependencies
         run: npm install
@@ -54,6 +116,7 @@ jobs:
           echo "pkg=$pkg, local version=$ver, remote latest=$latest"
           if [ "$latest" = "$ver" ]; then
             echo "should_publish=false" >> $GITHUB_OUTPUT
+            echo "Version $ver already published on npm. Skipping publish."
           else
             echo "should_publish=true" >> $GITHUB_OUTPUT
           fi
