@@ -132,13 +132,15 @@ export async function POST(request) {
     parsed.model = model;
     parsed.model_provider = "polyrouter";
 
-    // Update or create polyrouter provider section (no api_key - Codex reads from auth.json)
+    // Update or create polyrouter provider section with bearer token and disabled openai auth
     // Ensure /v1 suffix is added only once
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
     setNestedSection(parsed, "model_providers.polyrouter", {
       name: "PolyRouter",
       base_url: normalizedBaseUrl,
       wire_api: "responses",
+      requires_openai_auth: false,
+      experimental_bearer_token: apiKey,
     });
 
     // Add subagent configuration

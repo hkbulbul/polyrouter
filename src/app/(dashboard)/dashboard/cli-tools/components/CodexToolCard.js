@@ -171,6 +171,8 @@ model_provider = "polyrouter"
 name = "PolyRouter"
 base_url = "${getEffectiveBaseUrl()}"
 wire_api = "responses"
+requires_openai_auth = false
+experimental_bearer_token = "${keyToUse}"
 
 [agents.subagent]
 model = "${effectiveSubagentModel}"
