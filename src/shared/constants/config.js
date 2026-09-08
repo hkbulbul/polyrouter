@@ -10,6 +10,7 @@ export const APP_CONFIG = {
 // GitHub configuration
 export const GITHUB_CONFIG = {
   changelogUrl: "https://raw.githubusercontent.com/hkbulbul/polyrouter/refs/heads/master/CHANGELOG.md",
+  issuesUrl: "https://github.com/hkbulbul/polyrouter/issues",
 };
 
 // Updater configuration
