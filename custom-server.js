@@ -191,17 +191,20 @@ if (fs.existsSync(standaloneServer)) {
   // Keep development manifests separate from the production build.
   process.env.NEXT_DIST_DIR = isProduction ? ".next" : (process.env.NEXT_DIST_DIR || ".next-dev");
   const next = require("next");
+  // Trae requires a literal IPv4 loopback callback (127.0.0.1). On Windows,
+  // binding "localhost" may select only ::1, making that callback unreachable.
+  const hostname = process.env.HOSTNAME || "127.0.0.1";
   const app = next({
     dev: !isProduction,
-    hostname: process.env.HOSTNAME || "localhost",
+    hostname,
     port: Number(process.env.PORT),
   });
   const handle = app.getRequestHandler();
   app.prepare().then(() => {
     const server = http.createServer(handle);
-    server.listen(Number(process.env.PORT), process.env.HOSTNAME || "localhost", () => {
+    server.listen(Number(process.env.PORT), hostname, () => {
       const mode = isProduction ? "production" : "development";
-      console.log(`▲ Next.js ${mode} server ready on http://localhost:${process.env.PORT}`);
+      console.log(`▲ Next.js ${mode} server ready on http://${hostname}:${process.env.PORT}`);
     });
   }).catch((error) => {
     console.error("[realtime] Failed to start Next.js server:", error?.message || error);

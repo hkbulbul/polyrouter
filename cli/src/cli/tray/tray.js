@@ -60,6 +60,7 @@ function buildMenuItems(port, autostartEnabled) {
   return [
     { title: `PolyRouter (Port ${port})`, tooltip: "Server is running", enabled: false },
     { title: "Open Dashboard", tooltip: "Open in browser", enabled: true },
+    { title: "Show Logs", tooltip: "View console logs", enabled: true },
     {
       title: autostartEnabled ? "✓ Auto-start Enabled" : "Enable Auto-start",
       tooltip: "Run on OS startup",
@@ -70,7 +71,7 @@ function buildMenuItems(port, autostartEnabled) {
 }
 
 // Menu item indexes
-const MENU_INDEX = { STATUS: 0, DASHBOARD: 1, AUTOSTART: 2, QUIT: 3 };
+const MENU_INDEX = { STATUS: 0, DASHBOARD: 1, LOGS: 2, AUTOSTART: 3, QUIT: 4 };
 
 /**
  * Get current autostart state
@@ -91,7 +92,9 @@ function handleClick(index, options, onAutostartToggle) {
   const { onQuit, onOpenDashboard, port } = options;
   if (index === MENU_INDEX.DASHBOARD) {
     if (onOpenDashboard) onOpenDashboard();
-    else openBrowser(`http://localhost:${port}/dashboard`);
+    else openBrowser(`http://127.0.0.1:${port}/dashboard`);
+  } else if (index === MENU_INDEX.LOGS) {
+    openBrowser(`http://127.0.0.1:${port}/dashboard/console-log`);
   } else if (index === MENU_INDEX.AUTOSTART) {
     const enabled = getAutostartEnabled();
     try {
@@ -256,8 +259,11 @@ function killTray() {
   if (!instance) return Promise.resolve();
 
   if (wasWin) {
-    try { instance.kill(); } catch (e) {}
-    return Promise.resolve();
+    try {
+      return Promise.resolve(instance.kill());
+    } catch (e) {
+      return Promise.resolve();
+    }
   }
 
   // Unix: get the Go tray child process handle.
@@ -313,7 +319,7 @@ function openBrowser(url) {
     cmd = `xdg-open "${url}"`;
   }
 
-  exec(cmd);
+  exec(cmd, { windowsHide: true }, () => {});
 }
 
 module.exports = {

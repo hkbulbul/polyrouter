@@ -62,9 +62,33 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
 
 $script:notifyIcon = New-Object System.Windows.Forms.NotifyIcon
-$script:notifyIcon.Icon = New-Object System.Drawing.Icon($IconPath)
+
+# Defensive icon loading: support .ico, convert bitmaps/pngs via GDI+ handle,
+# or fall back to SystemIcons::Application to avoid crashing the script.
+if ($IconPath -and (Test-Path $IconPath)) {
+  try {
+    if ($IconPath.ToLower().EndsWith('.ico')) {
+      $script:notifyIcon.Icon = New-Object System.Drawing.Icon($IconPath)
+    } else {
+      $bitmap = New-Object System.Drawing.Bitmap($IconPath)
+      $handle = $bitmap.GetHicon()
+      $script:notifyIcon.Icon = [System.Drawing.Icon]::FromHandle($handle)
+      $bitmap.Dispose()
+    }
+  } catch {
+    $script:notifyIcon.Icon = [System.Drawing.SystemIcons]::Application
+  }
+} else {
+  $script:notifyIcon.Icon = [System.Drawing.SystemIcons]::Application
+}
+
 $script:notifyIcon.Text = $Tooltip
 $script:notifyIcon.Visible = $true
+
+# Double click default action: trigger index 1 (Open Dashboard)
+$script:notifyIcon.Add_DoubleClick({
+  Write-Event @{ type = "click"; index = 1 }
+})
 
 $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
 $script:notifyIcon.ContextMenuStrip = $script:menu
