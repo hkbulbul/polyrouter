@@ -105,9 +105,18 @@ function getLanIp() {
   return null;
 }
 
-// Local URL stays "localhost"; warn separately when bound to all interfaces (network-exposed).
+// Local URL uses 127.0.0.1 on Windows to avoid dual-stack localhost resolution issues;
+// warn separately when bound to all interfaces (network-exposed).
 function getDisplayHost() {
-  return host === DEFAULT_HOST ? "localhost" : host;
+  if (host === DEFAULT_HOST) return "localhost";
+  return host;
+}
+
+function getLocalBrowserHost() {
+  if (process.platform === "win32") {
+    if (host === DEFAULT_HOST || host === "localhost") return "127.0.0.1";
+  }
+  return getDisplayHost();
 }
 const MAX_PORT_ATTEMPTS = 10;
 // Identifiers for killAllAppProcesses - only kill polyrouter specifically
@@ -588,7 +597,8 @@ function startServer(updatePromise) {
   // Accept either a Promise (parallel update check) or a resolved value.
   const latestVersionPromise = Promise.resolve(updatePromise);
   const displayHost = getDisplayHost();
-  const url = `http://${displayHost}:${port}/dashboard`;
+  const browserHost = getLocalBrowserHost();
+  const url = `http://${browserHost}:${port}/dashboard`;
   // Surface real network exposure when bound to all interfaces (default 0.0.0.0).
   if (host === DEFAULT_HOST) {
     const lanIp = getLanIp();

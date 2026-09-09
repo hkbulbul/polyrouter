@@ -32,7 +32,9 @@ function initWinTray(options) {
     psProcess = spawn(
       "powershell.exe",
       [
+        "-NoLogo",
         "-NoProfile",
+        "-NonInteractive",
         "-ExecutionPolicy", "Bypass",
         "-WindowStyle", "Hidden",
         "-InputFormat", "Text",
@@ -44,6 +46,7 @@ function initWinTray(options) {
       { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] }
     );
   } catch (err) {
+    process.stderr.write(`[polyrouter] failed to spawn tray process: ${err.message}\n`);
     return null;
   }
 
@@ -53,12 +56,21 @@ function initWinTray(options) {
       const evt = JSON.parse(line);
       if (evt.type === "click" && clickHandler) {
         clickHandler(evt.index);
+      } else if (evt.type === "error" && evt.message) {
+        process.stderr.write(`[polyrouter] tray error: ${evt.message}\n`);
       }
     } catch (e) {}
   });
 
-  psProcess.on("error", () => {});
-  psProcess.stderr.on("data", () => {});
+  psProcess.on("error", (err) => {
+    process.stderr.write(`[polyrouter] tray process error: ${err.message}\n`);
+  });
+  psProcess.stderr.on("data", (data) => {
+    const msg = data.toString().trim();
+    if (msg) {
+      process.stderr.write(`[polyrouter] tray: ${msg}\n`);
+    }
+  });
 
   // Send initial menu items
   items.forEach((item, index) => {
@@ -73,15 +85,37 @@ function initWinTray(options) {
       sendCommand({ action: "set-tooltip", text });
     },
     kill() {
-      try {
-        sendCommand({ action: "kill" });
-      } catch (e) {}
-      setTimeout(() => {
-        if (psProcess && !psProcess.killed) {
-          try { psProcess.kill(); } catch (e) {}
+      return new Promise((resolve) => {
+        try {
+          sendCommand({ action: "kill" });
+        } catch (e) {}
+
+        const proc = psProcess;
+        let finished = false;
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          psProcess = null;
+          resolve();
+        };
+
+        const timer = setTimeout(() => {
+          if (proc && !proc.killed) {
+            try { proc.kill(); } catch (e) {}
+          }
+          done();
+        }, 300);
+
+        if (proc) {
+          proc.once("exit", () => {
+            clearTimeout(timer);
+            done();
+          });
+        } else {
+          clearTimeout(timer);
+          done();
         }
-        psProcess = null;
-      }, 300);
+      });
     }
   };
 }

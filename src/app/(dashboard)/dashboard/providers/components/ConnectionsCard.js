@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getStatusVariant as getConnectionStatusVariant } from "@/shared/utils/connectionStatus";
 import PropTypes from "prop-types";
-import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal, Dropdown, DropdownItem, OAuthModal } from "@/shared/components";
+import { Card, Badge, Button, Modal, Select, Toggle, EditConnectionModal, ConfirmModal, Dropdown, DropdownItem, OAuthModal, TraeAuthModal } from "@/shared/components";
 import { OAUTH_PROVIDERS } from "@/shared/constants/providers";
 
 // ── CooldownTimer ──────────────────────────────────────────────
@@ -463,19 +463,30 @@ export default function ConnectionsCard({ providerId, authProviderId, isOAuth, s
       </Card>
 
       {isOAuth ? (
-        <OAuthModal
-          isOpen={showAddModal}
-          provider={connectionProviderId}
-          providerInfo={{
-            ...OAUTH_PROVIDERS[connectionProviderId],
-            name: providerId === "openai" ? "OpenAI" : OAUTH_PROVIDERS[connectionProviderId]?.name,
-          }}
-          onSuccess={() => {
-            fetch_();
-            setShowAddModal(false);
-          }}
-          onClose={() => setShowAddModal(false)}
-        />
+        connectionProviderId === "trae" ? (
+          <TraeAuthModal
+            isOpen={showAddModal}
+            onSuccess={() => {
+              fetch_();
+              setShowAddModal(false);
+            }}
+            onClose={() => setShowAddModal(false)}
+          />
+        ) : (
+          <OAuthModal
+            isOpen={showAddModal}
+            provider={connectionProviderId}
+            providerInfo={{
+              ...OAUTH_PROVIDERS[connectionProviderId],
+              name: providerId === "openai" ? "OpenAI" : OAUTH_PROVIDERS[connectionProviderId]?.name,
+            }}
+            onSuccess={() => {
+              fetch_();
+              setShowAddModal(false);
+            }}
+            onClose={() => setShowAddModal(false)}
+          />
+        )
       ) : (
         <AddApiKeyModal
           isOpen={showAddModal}

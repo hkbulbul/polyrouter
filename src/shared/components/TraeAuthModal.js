@@ -95,8 +95,10 @@ export default function TraeAuthModal({ isOpen, onSuccess, onClose }) {
     setStep("waiting");
     const tid = crypto.randomUUID();
     traceRef.current = tid;
-    const port = location.port || (location.protocol === "https:" ? "443" : "80");
-    const cb = "http://127.0.0.1:" + port + "/authorize";
+    // Trae only accepts a loopback callback using the literal IPv4 address.
+    // Keep the dashboard's actual port so custom CLI --port values still work.
+    const port = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
+    const cb = `http://127.0.0.1:${port}/authorize`;
     const url = buildAuthUrl(cb, tid);
     const w = window.open(url, "trae-oauth", "width=520,height=720");
     if (!w) {
@@ -172,7 +174,7 @@ export default function TraeAuthModal({ isOpen, onSuccess, onClose }) {
               </div>
               <div>
                 <p className="text-sm font-semibold">Authorize with browser</p>
-                <p className="text-xs text-text-muted">Sign in to trae.ai, then confirm. Callback is 127.0.0.1/authorize.</p>
+                <p className="text-xs text-text-muted">Sign in to trae.ai, then confirm. The callback returns to this PolyRouter dashboard.</p>
               </div>
             </div>
             <Button onClick={handleAuthorize} disabled={authorizing} fullWidth icon="open_in_new">
