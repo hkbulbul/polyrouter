@@ -73,6 +73,7 @@ function stampSocketIp(req) {
   delete req.headers["x-9r-via-proxy"];
   delete req.headers["x-9r-secure"];
   delete req.headers["x-9r-locality-proof"];
+  delete req.headers["x-9r-local"];
   req.headers["x-9r-real-ip"] = ip;
   req.headers["x-9r-locality-proof"] = process.env.LOCALITY_INTERNAL_SECRET;
   if (viaProxy) req.headers["x-9r-via-proxy"] = "1";

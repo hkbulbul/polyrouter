@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { getSettings, setInitialPasswordHash } from "@/lib/db/index.js";
-import { isLocalRequest } from "@/dashboardGuard";
+import { isLocalRequest, hasValidCliToken } from "@/dashboardGuard";
+import { clearAllLocks } from "@/lib/auth/loginLimiter";
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export async function POST(request) {
   try {
-    if (!isLocalRequest(request)) {
+    const settings = await getSettings();
+    const isFirstRun = !settings.password;
+    const isAuthorized = isLocalRequest(request) || (await hasValidCliToken(request)) || isFirstRun;
+    if (!isAuthorized) {
       return NextResponse.json({ error: "Password setup is local-only" }, { status: 403 });
     }
     const { password } = await request.json();
@@ -18,7 +22,6 @@ export async function POST(request) {
       );
     }
 
-    const settings = await getSettings();
     if (settings.password) {
       return NextResponse.json({ error: "Password is already configured" }, { status: 409 });
     }
@@ -28,6 +31,7 @@ export async function POST(request) {
     if (!wasSet) {
       return NextResponse.json({ error: "Password is already configured" }, { status: 409 });
     }
+    clearAllLocks();
     import("@/shared/services/installationTelemetry")
       .then(({ recordInstallationTelemetry }) => recordInstallationTelemetry("setup_complete"))
       .catch(() => {});
