@@ -80,9 +80,12 @@ async function resolveTargetIP(hostname) {
   const cached = cachedTargetIPs[hostname];
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.ip;
   const resolver = new dns.Resolver();
-  resolver.setServers(["8.8.8.8"]);
+  resolver.setServers(["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]);
   const resolve4 = promisify(resolver.resolve4.bind(resolver));
-  const addresses = await resolve4(hostname);
+  const addresses = await Promise.race([
+    resolve4(hostname),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("DNS query timeout")), 3000)),
+  ]);
   cachedTargetIPs[hostname] = { ip: addresses[0], ts: Date.now() };
   return cachedTargetIPs[hostname].ip;
 }

@@ -3,6 +3,50 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const dns = require("dns");
+
+if (typeof dns.setDefaultResultOrder === "function") {
+  dns.setDefaultResultOrder("ipv4first");
+}
+
+let ipv4Agent;
+try {
+  fetch("data:text/plain,init").catch(() => {});
+  const sym = Symbol.for("undici.globalDispatcher.1");
+  const Agent = globalThis[sym]?.constructor;
+  if (Agent) {
+    ipv4Agent = new Agent({
+      connect: {
+        autoSelectFamily: false,
+      },
+    });
+    globalThis[sym] = ipv4Agent;
+  }
+} catch {}
+
+if (typeof globalThis.fetch === "function") {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = function (input, init = {}) {
+    let headers;
+    if (init.headers instanceof Headers) {
+      headers = init.headers;
+    } else if (Array.isArray(init.headers)) {
+      headers = new Headers(init.headers);
+    } else if (init.headers && typeof init.headers === "object") {
+      headers = new Headers(init.headers);
+    } else {
+      headers = new Headers();
+    }
+    if (!headers.has("user-agent")) {
+      headers.set("user-agent", "polyrouter/1.0.25 (Node.js)");
+    }
+    const options = { ...init, headers };
+    if (ipv4Agent && !options.dispatcher) {
+      options.dispatcher = ipv4Agent;
+    }
+    return originalFetch.call(this, input, options);
+  };
+}
 
 // ─── Crash guard ──────────────────────────────────────────────────────────────
 // These handlers existed only in cli/cli.js (the launcher), so a stray rejection
