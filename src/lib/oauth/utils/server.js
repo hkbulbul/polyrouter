@@ -285,6 +285,8 @@ export function stopCodexProxy() {
     codexProxyTimeout = null;
   }
   if (codexProxyServer) {
+    try { codexProxyServer.closeIdleConnections?.(); } catch {}
+    try { codexProxyServer.closeAllConnections?.(); } catch {}
     codexProxyServer.close();
     codexProxyServer = null;
   }
@@ -425,6 +427,8 @@ export function stopXaiProxy() {
     xaiProxyTimeout = null;
   }
   if (xaiProxyServer) {
+    try { xaiProxyServer.closeIdleConnections?.(); } catch {}
+    try { xaiProxyServer.closeAllConnections?.(); } catch {}
     xaiProxyServer.close();
     xaiProxyServer = null;
   }
