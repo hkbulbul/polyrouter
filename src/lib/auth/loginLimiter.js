@@ -45,6 +45,10 @@ export function recordSuccess(ip) {
   attempts.delete(ip);
 }
 
+export function clearAllLocks() {
+  attempts.clear();
+}
+
 export function getClientIp(request) {
   // Trusted: set from TCP socket by custom-server.js (client cannot spoof).
   const realIp = request.headers.get("x-9r-real-ip");

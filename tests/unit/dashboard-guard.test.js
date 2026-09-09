@@ -444,7 +444,7 @@ describe("dashboard guard local-only access", () => {
     expect(response.status).toBe(403);
   });
 
-  it("strips locality proof before continuing", async () => {
+  it("strips locality proof and sets x-9r-local before continuing", async () => {
     mocks.getSettings.mockResolvedValue({ requireLogin: false });
 
     await proxy(request("/api/cli-tools/commandcode-settings", trustedHeaders()));
@@ -452,6 +452,7 @@ describe("dashboard guard local-only access", () => {
     const forwarded = mocks.next.mock.calls.at(-1)[0].request.headers;
     expect(forwarded.get("x-9r-locality-proof")).toBeNull();
     expect(forwarded.get("x-9r-real-ip")).toBe("127.0.0.1");
+    expect(forwarded.get("x-9r-local")).toBe("1");
   });
 
   it("allows setup-password through the public API allowlist for route-level checks", async () => {

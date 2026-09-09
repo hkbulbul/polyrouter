@@ -14,7 +14,7 @@ async function getCliToken() {
   return cachedCliToken;
 }
 
-async function hasValidCliToken(request) {
+export async function hasValidCliToken(request) {
   const token = request.headers.get(CLI_TOKEN_HEADER);
   if (!token) return false;
   return token === await getCliToken();
@@ -134,6 +134,9 @@ function hasLoopbackOrigin(request) {
 }
 
 export function isLocalRequest(request) {
+  if (request.headers.get("x-9r-local") === "1") {
+    return true;
+  }
   const expectedProof = process.env.LOCALITY_INTERNAL_SECRET;
   const actualProof = request.headers.get(LOCALITY_PROOF_HEADER);
   if (expectedProof && secretsMatch(actualProof, expectedProof)) {
@@ -148,6 +151,11 @@ export function isLocalRequest(request) {
 
 function nextWithoutLocalityProof(request) {
   const headers = new Headers(request.headers);
+  if (isLocalRequest(request)) {
+    headers.set("x-9r-local", "1");
+  } else {
+    headers.delete("x-9r-local");
+  }
   headers.delete(LOCALITY_PROOF_HEADER);
   return NextResponse.next({ request: { headers } });
 }
