@@ -7,8 +7,9 @@ const { getEndpoint } = require("../utils/endpoint");
 
 const COLORS = {
   reset: "\x1b[0m",
-  green: "\x1b[32m",
-  red: "\x1b[31m",
+  green: "\x1b[38;2;34;197;94m",
+  brand: "\x1b[38;2;34;197;94m",
+  red: "\x1b[38;2;239;68;68m",
   dim: "\x1b[2m",
   cyan: "\x1b[36m"
 };

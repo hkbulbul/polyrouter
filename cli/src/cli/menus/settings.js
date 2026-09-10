@@ -6,9 +6,10 @@ const { showMenuWithBack } = require("../utils/menuHelper");
 // ANSI colors
 const COLORS = {
   reset: "\x1b[0m",
-  green: "\x1b[32m",
-  red: "\x1b[31m",
-  yellow: "\x1b[33m",
+  green: "\x1b[38;2;34;197;94m",
+  brand: "\x1b[38;2;34;197;94m",
+  red: "\x1b[38;2;239;68;68m",
+  yellow: "\x1b[38;2;245;158;11m",
   dim: "\x1b[2m",
   cyan: "\x1b[36m"
 };
@@ -21,7 +22,7 @@ const DEFAULT_PASSWORD = "123456";
  */
 async function showSettingsMenu(breadcrumb = []) {
   await showMenuWithBack({
-    title: "⚙️  Settings",
+    title: "Settings & Tunnel",
     breadcrumb,
     headerContent: async (data) => {
       const lines = [];
@@ -29,23 +30,23 @@ async function showSettingsMenu(breadcrumb = []) {
       // Tunnel section
       const tunnel = data?.tunnel || {};
       if (tunnel.enabled && tunnel.publicUrl) {
-        lines.push(`  Endpoint: ${COLORS.green}${tunnel.publicUrl}/v1${COLORS.reset}`);
-        lines.push(`  Tunnel:   ${COLORS.green}ON${COLORS.reset} ${COLORS.dim}(${tunnel.shortId})${COLORS.reset}`);
+        lines.push(`Endpoint: ${COLORS.green}${tunnel.publicUrl}/v1${COLORS.reset}`);
+        lines.push(`Tunnel:   ${COLORS.green}Active${COLORS.reset} ${COLORS.dim}(${tunnel.shortId})${COLORS.reset}`);
       } else {
-        lines.push(`  Endpoint: http://localhost:20128/v1`);
-        lines.push(`  Tunnel:   ${COLORS.red}OFF${COLORS.reset} ${COLORS.dim}(local only)${COLORS.reset}`);
+        lines.push(`Endpoint: http://localhost:20128/v1`);
+        lines.push(`Tunnel:   ${COLORS.dim}Inactive (local only)${COLORS.reset}`);
       }
 
       // RTK section
       const rtkOn = data?.settings?.rtkEnabled !== false;
-      lines.push(`  RTK:      ${rtkOn ? `${COLORS.green}ON${COLORS.reset}` : `${COLORS.red}OFF${COLORS.reset}`} ${COLORS.dim}(Token Saver)${COLORS.reset}`);
+      lines.push(`RTK:      ${rtkOn ? `${COLORS.green}Enabled${COLORS.reset}` : `${COLORS.dim}Disabled${COLORS.reset}`} ${COLORS.dim}(Token Saver)${COLORS.reset}`);
       const headroomOn = data?.settings?.headroomEnabled === true;
-      lines.push(`  Headroom: ${headroomOn ? `${COLORS.green}ON${COLORS.reset}` : `${COLORS.red}OFF${COLORS.reset}`} ${COLORS.dim}(${data?.settings?.headroomUrl || "http://localhost:8787"})${COLORS.reset}`);
+      lines.push(`Headroom: ${headroomOn ? `${COLORS.green}Enabled${COLORS.reset}` : `${COLORS.dim}Disabled${COLORS.reset}`} ${COLORS.dim}(${data?.settings?.headroomUrl || "http://localhost:8787"})${COLORS.reset}`);
 
       // Auth mode section
       const authMode = data?.settings?.authMode || "password";
       const authColor = authMode === "password" ? COLORS.green : COLORS.yellow;
-      lines.push(`  Auth:     ${authColor}${authMode.toUpperCase()}${COLORS.reset} ${COLORS.dim}(login mode)${COLORS.reset}`);
+      lines.push(`Auth:     ${authColor}${authMode.toUpperCase()}${COLORS.reset} ${COLORS.dim}(login mode)${COLORS.reset}`);
 
       return lines.join("\n");
     },

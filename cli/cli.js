@@ -564,7 +564,7 @@ async function showInterfaceMenu(latestVersion) {
     serverUrl = `http://${displayHost}:${port}`;
   }
 
-  const subtitle = `🚀 Server: \x1b[32m${serverUrl}\x1b[0m`;
+  const subtitle = `Server: \x1b[38;2;34;197;94m${serverUrl}\x1b[0m`;
 
   const menuItems = [];
 
@@ -573,9 +573,9 @@ async function showInterfaceMenu(latestVersion) {
   }
 
   menuItems.push(
-    { label: "Web UI (Open in Browser)", icon: "🌐" },
-    { label: "Terminal UI (Interactive CLI)", icon: "💻" },
-    { label: "Hide to Tray (Background)", icon: "🔔" },
+    { label: "Web Dashboard       (Browser)", icon: "🌐" },
+    { label: "Terminal Console    (Interactive CLI)", icon: "💻" },
+    { label: "Minimize to Tray    (Background)", icon: "🔔" },
     { label: "Exit", icon: "🚪" }
   );
 
