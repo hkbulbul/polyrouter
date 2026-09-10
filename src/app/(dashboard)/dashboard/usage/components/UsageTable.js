@@ -3,12 +3,11 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import PropTypes from "prop-types";
 import Card from "@/shared/components/Card";
-import Badge from "@/shared/components/Badge";
 
 const fmt = (n) => new Intl.NumberFormat().format(n || 0);
-const fmtCost = (n) => `$${(n || 0).toFixed(2)}`;
+const fmtCost = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
-function fmtTime(iso) {
+export function fmtTime(iso) {
   if (!iso) return "Never";
   const diffMins = Math.floor((Date.now() - new Date(iso)) / 60000);
   if (diffMins < 1) return "Just now";
@@ -17,9 +16,21 @@ function fmtTime(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
+export { fmt, fmtCost };
+
 function SortIcon({ field, currentSort, currentOrder }) {
-  if (currentSort !== field) return <span className="ml-1 opacity-20">↕</span>;
-  return <span className="ml-1">{currentOrder === "asc" ? "↑" : "↓"}</span>;
+  if (currentSort !== field) {
+    return (
+      <span className="material-symbols-outlined ml-1 inline text-[13px] opacity-30 align-middle">
+        unfold_more
+      </span>
+    );
+  }
+  return (
+    <span className="material-symbols-outlined ml-1 inline text-[13px] text-brand-600 dark:text-brand-400 align-middle">
+      {currentOrder === "asc" ? "arrow_upward" : "arrow_downward"}
+    </span>
+  );
 }
 
 SortIcon.propTypes = {
@@ -29,22 +40,22 @@ SortIcon.propTypes = {
 };
 
 /**
- * Render 3 token or cost cells based on viewMode
+ * Render token or cost cells based on viewMode
  */
 function ValueCells({ item, viewMode, isSummary = false }) {
   if (viewMode === "tokens") {
     return (
       <>
-        <td className="px-6 py-3 text-right text-text-muted">
+        <td className="px-4 py-3 text-right font-mono text-text-muted">
           {isSummary && item.promptTokens === undefined ? "—" : fmt(item.promptTokens)}
         </td>
-        <td className="px-6 py-3 text-right text-text-muted">
+        <td className="px-4 py-3 text-right font-mono text-blue-600 dark:text-blue-400">
           {item.cachedTokens ? fmt(item.cachedTokens) : "—"}
         </td>
-        <td className="px-6 py-3 text-right text-text-muted">
+        <td className="px-4 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400">
           {isSummary && item.completionTokens === undefined ? "—" : fmt(item.completionTokens)}
         </td>
-        <td className="px-6 py-3 text-right font-medium">
+        <td className="px-4 py-3 text-right font-mono font-bold text-text-main">
           {fmt(item.totalTokens)}
         </td>
       </>
@@ -52,16 +63,16 @@ function ValueCells({ item, viewMode, isSummary = false }) {
   }
   return (
     <>
-      <td className="px-6 py-3 text-right text-text-muted">
+      <td className="px-4 py-3 text-right font-mono text-text-muted">
         {isSummary && item.inputCost === undefined ? "—" : fmtCost(item.inputCost)}
       </td>
-      <td className="px-6 py-3 text-right text-text-muted">
+      <td className="px-4 py-3 text-right font-mono text-blue-600 dark:text-blue-400">
         {item.cachedCost ? fmtCost(item.cachedCost) : "—"}
       </td>
-      <td className="px-6 py-3 text-right text-text-muted">
+      <td className="px-4 py-3 text-right font-mono text-emerald-600 dark:text-emerald-400">
         {isSummary && item.outputCost === undefined ? "—" : fmtCost(item.outputCost)}
       </td>
-      <td className="px-6 py-3 text-right font-medium text-warning">
+      <td className="px-4 py-3 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
         {fmtCost(item.totalCost || item.cost)}
       </td>
     </>
@@ -75,22 +86,7 @@ ValueCells.propTypes = {
 };
 
 /**
- * Reusable sortable usage table with expandable group rows.
- *
- * @param {object} props
- * @param {string} props.title - Table title
- * @param {Array} props.columns - Column definitions [{field, label}]
- * @param {Array} props.groupedData - Grouped data from groupDataByKey
- * @param {string} props.tableType - Table type key for sort URL params
- * @param {string} props.sortBy - Current sort field
- * @param {string} props.sortOrder - Current sort order
- * @param {function} props.onToggleSort - Sort toggle handler
- * @param {string} props.viewMode - "tokens" or "costs"
- * @param {string} props.storageKey - localStorage key for expanded state
- * @param {function} props.renderGroupLabel - Render group summary first cell content
- * @param {function} props.renderDetailCells - Render detail row custom cells (before value cells)
- * @param {function} props.renderSummaryCells - Render summary row cells after group label (placeholder cols)
- * @param {string} props.emptyMessage - Empty state message
+ * Reusable sortable usage breakdown table with search filter and expandable groups.
  */
 export default function UsageTable({
   title,
@@ -106,17 +102,16 @@ export default function UsageTable({
   renderSummaryCells,
   emptyMessage,
 }) {
-  const [expanded, setExpanded] = useState(new Set());
-
-  // Load expanded state from localStorage
-  useEffect(() => {
+  const [expanded, setExpanded] = useState(() => {
+    if (typeof window === "undefined") return new Set();
     try {
       const saved = localStorage.getItem(storageKey);
-      if (saved) setExpanded(new Set(JSON.parse(saved)));
-    } catch (e) {
-      console.error(`Failed to load ${storageKey}:`, e);
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
     }
-  }, [storageKey]);
+  });
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Save expanded state to localStorage
   useEffect(() => {
@@ -135,12 +130,20 @@ export default function UsageTable({
     });
   }, []);
 
+  const expandAll = useCallback(() => {
+    setExpanded(new Set(groupedData.map((g) => g.groupKey)));
+  }, [groupedData]);
+
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set());
+  }, []);
+
   const valueColumns = useMemo(() => {
     if (viewMode === "tokens") {
       return [
-        { field: "promptTokens", label: "Input Tokens" },
+        { field: "promptTokens", label: "Input" },
         { field: "cachedTokens", label: "Cached" },
-        { field: "completionTokens", label: "Output Tokens" },
+        { field: "completionTokens", label: "Output" },
         { field: "totalTokens", label: "Total Tokens" },
       ];
     }
@@ -152,76 +155,178 @@ export default function UsageTable({
     ];
   }, [viewMode]);
 
+  // Filter grouped data based on search
+  const filteredData = useMemo(() => {
+    if (!searchQuery.trim()) return groupedData;
+    const q = searchQuery.toLowerCase().trim();
+    return groupedData
+      .map((g) => {
+        const matchesGroup = g.groupKey.toLowerCase().includes(q);
+        const matchingItems = g.items.filter((item) => {
+          return (
+            (item.rawModel && item.rawModel.toLowerCase().includes(q)) ||
+            (item.provider && item.provider.toLowerCase().includes(q)) ||
+            (item.accountName && item.accountName.toLowerCase().includes(q)) ||
+            (item.keyName && item.keyName.toLowerCase().includes(q)) ||
+            (item.endpoint && item.endpoint.toLowerCase().includes(q))
+          );
+        });
+        if (matchesGroup || matchingItems.length > 0) {
+          return {
+            ...g,
+            items: matchesGroup ? g.items : matchingItems,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }, [groupedData, searchQuery]);
+
   const totalColSpan = columns.length + valueColumns.length;
 
   return (
-    <Card className="overflow-hidden">
-      <div className="p-4 border-b border-border bg-bg-subtle/50">
-        <h3 className="font-semibold">{title}</h3>
+    <Card className="overflow-hidden border border-border bg-surface shadow-[var(--shadow-soft)]" padding="none">
+      {/* Table Top Actions Bar */}
+      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between border-b border-border bg-bg-subtle/40">
+        <div className="flex items-center gap-2">
+          {title && <h3 className="text-sm font-semibold text-text-main">{title}</h3>}
+          <div className="relative flex-1 sm:w-64">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-text-muted">
+              search
+            </span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter items..."
+              className="h-8 w-full border border-border bg-surface pl-8 pr-7 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-main cursor-pointer"
+                aria-label="Clear search"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="flex items-center gap-1 px-2 py-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-main cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+            Expand all
+          </button>
+          <span className="text-border">|</span>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="flex items-center gap-1 px-2 py-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-main cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[14px]">unfold_less</span>
+            Collapse all
+          </button>
+        </div>
       </div>
+
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-bg-subtle/30 text-text-muted uppercase text-xs">
+        <table className="w-full text-left text-xs sm:text-sm">
+          <thead className="border-b border-border bg-surface-2/60 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.field}
-                  className={`px-6 py-3 cursor-pointer hover:bg-bg-subtle/50 ${col.align === "right" ? "text-right" : ""}`}
+                  className={`px-4 py-3 select-none cursor-pointer transition-colors hover:text-text-main ${
+                    col.align === "right" ? "text-right" : ""
+                  }`}
                   onClick={() => onToggleSort(tableType, col.field)}
                 >
-                  {col.label}{" "}
-                  <SortIcon field={col.field} currentSort={sortBy} currentOrder={sortOrder} />
+                  <span className="inline-flex items-center">
+                    {col.label}
+                    <SortIcon field={col.field} currentSort={sortBy} currentOrder={sortOrder} />
+                  </span>
                 </th>
               ))}
               {valueColumns.map((col) => (
                 <th
                   key={col.field}
-                  className="px-6 py-3 text-right cursor-pointer hover:bg-bg-subtle/50"
+                  className="px-4 py-3 select-none text-right cursor-pointer transition-colors hover:text-text-main"
                   onClick={() => onToggleSort(tableType, col.field)}
                 >
-                  {col.label}{" "}
-                  <SortIcon field={col.field} currentSort={sortBy} currentOrder={sortOrder} />
+                  <span className="inline-flex items-center justify-end">
+                    {col.label}
+                    <SortIcon field={col.field} currentSort={sortBy} currentOrder={sortOrder} />
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
-            {groupedData.map((group) => (
-              <Fragment key={group.groupKey}>
-                {/* Group summary row */}
-                <tr
-                  className="group-summary cursor-pointer hover:bg-bg-subtle/50 transition-colors"
-                  onClick={() => toggleGroup(group.groupKey)}
-                >
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`material-symbols-outlined text-[18px] text-text-muted transition-transform ${expanded.has(group.groupKey) ? "rotate-90" : ""}`}>
-                        chevron_right
-                      </span>
-                      <span className={`font-medium transition-colors ${group.summary.pending > 0 ? "text-primary" : ""}`}>
-                        {group.groupKey}
-                      </span>
-                    </div>
-                  </td>
-                  {renderSummaryCells(group)}
-                  <ValueCells item={group.summary} viewMode={viewMode} isSummary />
-                </tr>
-                {/* Detail rows */}
-                {expanded.has(group.groupKey) && group.items.map((item) => (
+          <tbody className="divide-y divide-border/60">
+            {filteredData.map((group) => {
+              const isExpanded = expanded.has(group.groupKey);
+              return (
+                <Fragment key={group.groupKey}>
+                  {/* Group summary row */}
                   <tr
-                    key={`detail-${item.key}`}
-                    className="group-detail hover:bg-bg-subtle/20 transition-colors"
+                    className="cursor-pointer bg-surface transition-colors hover:bg-surface-2/60"
+                    onClick={() => toggleGroup(group.groupKey)}
                   >
-                    {renderDetailCells(item)}
-                    <ValueCells item={item} viewMode={viewMode} />
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`material-symbols-outlined text-[18px] text-text-muted transition-transform duration-200 ${
+                            isExpanded ? "rotate-90 text-brand-600 dark:text-brand-400" : ""
+                          }`}
+                        >
+                          chevron_right
+                        </span>
+                        <span
+                          className={`font-semibold tracking-tight transition-colors ${
+                            group.summary.pending > 0 ? "text-brand-600 dark:text-brand-400" : "text-text-main"
+                          }`}
+                        >
+                          {group.groupKey}
+                        </span>
+                        <span className="bg-surface-2 px-1.5 py-0.2 text-[10px] font-mono text-text-muted">
+                          {group.items.length}
+                        </span>
+                      </div>
+                    </td>
+                    {renderSummaryCells(group)}
+                    <ValueCells item={group.summary} viewMode={viewMode} isSummary />
                   </tr>
-                ))}
-              </Fragment>
-            ))}
-            {groupedData.length === 0 && (
+
+                  {/* Detail rows */}
+                  {isExpanded &&
+                    group.items.map((item) => (
+                      <tr
+                        key={`detail-${item.key}`}
+                        className="bg-bg-subtle/30 transition-colors hover:bg-bg-subtle/70"
+                      >
+                        {renderDetailCells(item)}
+                        <ValueCells item={item} viewMode={viewMode} />
+                      </tr>
+                    ))}
+                </Fragment>
+              );
+            })}
+            {filteredData.length === 0 && (
               <tr>
-                <td colSpan={totalColSpan} className="px-6 py-8 text-center text-text-muted">
-                  {emptyMessage}
+                <td colSpan={totalColSpan} className="px-6 py-12 text-center text-text-muted">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-[32px] opacity-30">
+                      manage_search
+                    </span>
+                    <span className="text-sm">
+                      {searchQuery ? `No matches found for "${searchQuery}"` : emptyMessage}
+                    </span>
+                  </div>
                 </td>
               </tr>
             )}
@@ -233,12 +338,14 @@ export default function UsageTable({
 }
 
 UsageTable.propTypes = {
-  title: PropTypes.string.isRequired,
-  columns: PropTypes.arrayOf(PropTypes.shape({
-    field: PropTypes.string.isRequired,
-    label: PropTypes.string.isRequired,
-    align: PropTypes.string,
-  })).isRequired,
+  title: PropTypes.string,
+  columns: PropTypes.arrayOf(
+    PropTypes.shape({
+      field: PropTypes.string.isRequired,
+      label: PropTypes.string.isRequired,
+      align: PropTypes.string,
+    })
+  ).isRequired,
   groupedData: PropTypes.array.isRequired,
   tableType: PropTypes.string.isRequired,
   sortBy: PropTypes.string.isRequired,
@@ -248,8 +355,5 @@ UsageTable.propTypes = {
   storageKey: PropTypes.string.isRequired,
   renderDetailCells: PropTypes.func.isRequired,
   renderSummaryCells: PropTypes.func.isRequired,
-  emptyMessage: PropTypes.string.isRequired,
+  emptyMessage: PropTypes.string,
 };
-
-// Re-export utilities for use in UsageStats orchestrator
-export { fmt, fmtCost, fmtTime };

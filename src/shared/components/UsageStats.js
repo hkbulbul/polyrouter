@@ -12,6 +12,8 @@ function isLLMProvider(id) {
 }
 import Badge from "./Badge";
 import Card from "./Card";
+import SegmentedControl from "./SegmentedControl";
+import ProviderIcon from "./ProviderIcon";
 import OverviewCards from "@/app/(dashboard)/dashboard/usage/components/OverviewCards";
 import UsageTable, { fmt, fmtTime } from "@/app/(dashboard)/dashboard/usage/components/UsageTable";
 import dynamic from "next/dynamic";
@@ -41,40 +43,75 @@ function TimeAgo({ timestamp }) {
 
 function RecentRequests({ requests = [] }) {
   return (
-    <Card className="flex min-w-0 flex-col overflow-hidden" padding="sm" style={{ height: 480 }}>
+    <Card className="flex min-w-0 flex-col overflow-hidden border border-border bg-surface shadow-[var(--shadow-soft)]" padding="none" style={{ height: 480 }}>
       {/* Header */}
-      <div className="px-1 py-2 border-b border-border shrink-0">
-        <span className="text-xs font-semibold text-text-muted uppercase tracking-wide">Recent Requests</span>
+      <div className="flex items-center justify-between border-b border-border bg-surface-2/40 px-4 py-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px] text-text-muted">history</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+            Recent Requests
+          </span>
+        </div>
+        {requests.length > 0 && (
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-mono text-text-muted">
+            {requests.length} stream items
+          </span>
+        )}
       </div>
 
       {!requests.length ? (
-        <div className="flex-1 flex items-center justify-center text-text-muted text-sm">No requests yet.</div>
+        <div className="flex-1 flex flex-col items-center justify-center text-text-muted text-sm p-4 text-center">
+          <span className="material-symbols-outlined text-[32px] opacity-30 mb-2">stream</span>
+          <span>No requests recorded yet.</span>
+          <span className="text-xs text-text-muted mt-1">Live requests will appear here in real-time.</span>
+        </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          <table className="w-full min-w-[300px] border-collapse text-xs">
-            <thead className="sticky top-0 bg-bg z-10">
+          <table className="w-full min-w-[320px] border-collapse text-xs">
+            <thead className="sticky top-0 bg-surface-2/80 backdrop-blur-xs z-10 text-[11px] font-semibold text-text-muted uppercase tracking-wider">
               <tr className="border-b border-border">
-                <th className="py-1.5 text-left font-semibold text-text-muted w-2"></th>
-                <th className="py-1.5 text-left font-semibold text-text-muted">Model</th>
-                <th className="py-1.5 text-right font-semibold text-text-muted whitespace-nowrap">In / Out</th>
-                <th className="py-1.5 text-right font-semibold text-text-muted">When</th>
+                <th className="py-2 pl-3 text-left w-2"></th>
+                <th className="py-2 px-2 text-left">Model</th>
+                <th className="py-2 px-2 text-right whitespace-nowrap">Prompt / Output</th>
+                <th className="py-2 pr-3 text-right">When</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border/50">
+            <tbody className="divide-y divide-border/50 font-mono">
               {requests.map((r, i) => {
                 const ok = !r.status || r.status === "ok" || r.status === "success";
                 return (
-                  <tr key={i} className="hover:bg-bg-subtle transition-colors">
-                    <td className="py-1.5">
-                      <span className={`block w-1.5 h-1.5 rounded-full ${ok ? "bg-success" : "bg-error"}`} />
+                  <tr key={i} className="hover:bg-surface-2/60 transition-colors">
+                    <td className="py-2 pl-3">
+                      <span
+                        className={`block size-2 rounded-full ${
+                          ok ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]" : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.4)]"
+                        }`}
+                        title={ok ? "Success" : "Error"}
+                      />
                     </td>
-                    <td className="py-1.5 font-mono truncate max-w-[120px]" title={r.model}>{r.model}</td>
-                    <td className="py-1.5 text-right whitespace-nowrap">
+                    <td className="py-2 px-2 max-w-[140px]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {r.provider && (
+                          <ProviderIcon
+                            providerId={r.provider}
+                            size={16}
+                            className="size-4 shrink-0 object-contain rounded-xs"
+                            fallbackText={(r.provider || "?").slice(0, 2).toUpperCase()}
+                          />
+                        )}
+                        <span className="truncate font-sans font-medium text-text-main" title={r.model}>
+                          {r.model}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 text-right whitespace-nowrap tabular-nums">
                       <span className="text-blue-600 dark:text-blue-400 font-medium">{fmt(r.promptTokens)}↑</span>
                       {" / "}
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{fmt(r.completionTokens)}↓</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">{fmt(r.completionTokens)}↓</span>
                     </td>
-                    <td className="py-1.5 text-right text-text-muted whitespace-nowrap"><TimeAgo timestamp={r.timestamp} /></td>
+                    <td className="py-2 pr-3 text-right text-text-muted whitespace-nowrap font-sans text-[11px]">
+                      <TimeAgo timestamp={r.timestamp} />
+                    </td>
                   </tr>
                 );
               })}
@@ -186,10 +223,10 @@ const ENDPOINT_COLUMNS = [
 ];
 
 const TABLE_OPTIONS = [
-  { value: "model", label: "Usage by Model" },
-  { value: "account", label: "Usage by Account" },
-  { value: "apiKey", label: "Usage by API Key" },
-  { value: "endpoint", label: "Usage by Endpoint" },
+  { value: "model", label: "By Model", icon: "neurology" },
+  { value: "account", label: "By Account", icon: "manage_accounts" },
+  { value: "apiKey", label: "By API Key", icon: "vpn_key" },
+  { value: "endpoint", label: "By Endpoint", icon: "api" },
 ];
 
 const PERIODS = [
@@ -254,10 +291,11 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
 
   // Fetch filtered stats via REST when period changes
   useEffect(() => {
+    let active = true;
+
     // First load: show full spinner; subsequent: show subtle fetching indicator
     if (isInitialLoad.current) {
       isInitialLoad.current = false;
-      setLoading(true);
     } else {
       setFetching(true);
     }
@@ -265,16 +303,22 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
     fetch(`/api/usage/stats?period=${period}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data) {
+        if (data && active) {
           hasLoadedStats.current = true;
           setStats((prev) => ({ ...prev, ...data }));
         }
       })
       .catch(() => {})
       .finally(() => {
-        setLoading(false);
-        setFetching(false);
+        if (active) {
+          setLoading(false);
+          setFetching(false);
+        }
       });
+
+    return () => {
+      active = false;
+    };
   }, [period]);
 
   // SSE connection - real-time updates for activeRequests + recentRequests only
@@ -338,7 +382,12 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
           renderDetailCells: (item) => (
             <>
               <td className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}>{item.rawModel}</td>
-              <td className="px-6 py-3"><Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">{item.provider}</Badge></td>
+              <td className="px-6 py-3">
+                <div className="flex items-center gap-1.5">
+                  <ProviderIcon providerId={item.provider} size={15} />
+                  <Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">{item.provider}</Badge>
+                </div>
+              </td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
             </>
@@ -373,7 +422,12 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
             <>
               <td className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}>{item.accountName || `Account ${item.connectionId?.slice(0, 8)}...`}</td>
               <td className={`px-6 py-3 font-medium transition-colors ${item.pending > 0 ? "text-primary" : ""}`}>{item.rawModel}</td>
-              <td className="px-6 py-3"><Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">{item.provider}</Badge></td>
+              <td className="px-6 py-3">
+                <div className="flex items-center gap-1.5">
+                  <ProviderIcon providerId={item.provider} size={15} />
+                  <Badge variant={item.pending > 0 ? "primary" : "neutral"} size="sm">{item.provider}</Badge>
+                </div>
+              </td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
             </>
@@ -398,7 +452,12 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
             <>
               <td className="px-6 py-3 font-medium">{item.keyName}</td>
               <td className="px-6 py-3">{item.rawModel}</td>
-              <td className="px-6 py-3"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
+              <td className="px-6 py-3">
+                <div className="flex items-center gap-1.5">
+                  <ProviderIcon providerId={item.provider} size={15} />
+                  <Badge variant="neutral" size="sm">{item.provider}</Badge>
+                </div>
+              </td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
             </>
@@ -424,7 +483,12 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
             <>
               <td className="px-6 py-3 font-medium font-mono text-sm">{item.endpoint}</td>
               <td className="px-6 py-3">{item.rawModel}</td>
-              <td className="px-6 py-3"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
+              <td className="px-6 py-3">
+                <div className="flex items-center gap-1.5">
+                  <ProviderIcon providerId={item.provider} size={15} />
+                  <Badge variant="neutral" size="sm">{item.provider}</Badge>
+                </div>
+              </td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
             </>
@@ -447,18 +511,12 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
       {/* Period selector (hidden when controlled by parent) */}
       {!hidePeriodSelector && (
         <div className="flex w-full items-center gap-2 sm:w-auto sm:self-end">
-          <div className="grid flex-1 grid-cols-6 items-center gap-1  border border-border bg-bg-subtle p-1 sm:flex sm:flex-none">
-            {PERIODS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
-                disabled={fetching}
-                className={` px-3 py-1 text-sm font-medium transition-colors ${period === p.value ? "bg-primary text-white shadow-sm" : "text-text-muted hover:bg-bg-hover hover:text-text"}`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={PERIODS}
+            value={period}
+            onChange={setPeriod}
+            size="sm"
+          />
           {fetching && (
             <span className="material-symbols-outlined text-[16px] text-text-muted animate-spin">progress_activity</span>
           )}
@@ -486,31 +544,24 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
 
       {/* Table with dropdown selector */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <select
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <SegmentedControl
+            options={TABLE_OPTIONS}
             value={tableView}
-            onChange={(e) => setTableView(e.target.value)}
-            className="w-full  border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-main focus:outline-none focus:ring-2 focus:ring-primary/50 sm:w-auto"
-            style={{ colorScheme: 'auto' }}
-          >
-            {TABLE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <div className="grid grid-cols-2 items-center gap-1  border border-border bg-bg-subtle p-1 sm:flex">
-            <button
-              onClick={() => setViewMode("costs")}
-              className={`px-3 py-1  text-sm font-medium transition-colors ${viewMode === "costs" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
-            >
-              Costs
-            </button>
-            <button
-              onClick={() => setViewMode("tokens")}
-              className={`px-3 py-1  text-sm font-medium transition-colors ${viewMode === "tokens" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
-            >
-              Tokens
-            </button>
-          </div>
+            onChange={setTableView}
+            size="sm"
+            className="w-full sm:w-auto"
+          />
+          <SegmentedControl
+            options={[
+              { value: "costs", label: "Costs", icon: "attach_money" },
+              { value: "tokens", label: "Tokens", icon: "data_usage" },
+            ]}
+            value={viewMode}
+            onChange={setViewMode}
+            size="sm"
+            className="w-full sm:w-auto self-start sm:self-auto"
+          />
         </div>
         {loading ? spinner : activeTableConfig && (
           <UsageTable
