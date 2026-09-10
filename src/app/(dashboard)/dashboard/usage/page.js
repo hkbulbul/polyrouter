@@ -42,25 +42,31 @@ function UsageContent() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
-      {/* Tabs + period selector on same row */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      {/* Top Header / Navigation Bar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
         <SegmentedControl
           options={[
-            { value: "overview", label: "Overview" },
-            { value: "details", label: "Details" },
+            { value: "overview", label: "Overview", icon: "dashboard" },
+            { value: "details", label: "Request Details", icon: "receipt_long" },
+            { value: "logs", label: "Live Logs", icon: "terminal" },
           ]}
           value={activeTab}
           onChange={handleTabChange}
           className="w-full sm:w-auto"
         />
         {activeTab === "overview" && (
-          <SegmentedControl
-            options={PERIODS}
-            value={period}
-            onChange={setPeriod}
-            size="sm"
-            className="w-full sm:w-auto"
-          />
+          <div className="flex items-center gap-2 self-start sm:self-auto overflow-x-auto max-w-full pb-1 sm:pb-0">
+            <span className="text-xs font-semibold text-text-muted uppercase tracking-wider hidden md:inline">
+              Range:
+            </span>
+            <SegmentedControl
+              options={PERIODS}
+              value={period}
+              onChange={setPeriod}
+              size="sm"
+              className="w-full sm:w-auto"
+            />
+          </div>
         )}
       </div>
 
@@ -69,8 +75,16 @@ function UsageContent() {
           <UsageStats period={period} setPeriod={setPeriod} hidePeriodSelector />
         </Suspense>
       )}
-      {activeTab === "logs" && <RequestLogger />}
-      {activeTab === "details" && <RequestDetailsTab />}
+      {activeTab === "logs" && (
+        <Suspense fallback={<CardSkeleton />}>
+          <RequestLogger />
+        </Suspense>
+      )}
+      {activeTab === "details" && (
+        <Suspense fallback={<CardSkeleton />}>
+          <RequestDetailsTab />
+        </Suspense>
+      )}
     </div>
   );
 }
