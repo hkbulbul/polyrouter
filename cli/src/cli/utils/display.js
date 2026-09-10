@@ -1,24 +1,26 @@
 const { formatNumber } = require("./format");
 
-// ANSI color codes
+// ANSI color codes matching PolyRouter design language
 const COLORS = {
   reset: "\x1b[0m",
-  success: "\x1b[32m",
-  error: "\x1b[31m",
-  warning: "\x1b[33m",
+  success: "\x1b[38;2;34;197;94m", // #22c55e
+  error: "\x1b[38;2;239;68;68m",   // #ef4444
+  warning: "\x1b[38;2;245;158;11m", // #f59e0b
   info: "\x1b[36m",
   dim: "\x1b[2m",
   bold: "\x1b[1m",
   bright: "\x1b[1m",
-  cyan: "\x1b[36m"
+  cyan: "\x1b[36m",
+  brand: "\x1b[38;2;34;197;94m",
+  brandDark: "\x1b[38;2;22;163;74m"
 };
 
-// Box drawing characters
+// Rounded box drawing characters for modern clean aesthetics
 const BOX_CHARS = {
-  topLeft: "┌",
-  topRight: "┐",
-  bottomLeft: "└",
-  bottomRight: "┘",
+  topLeft: "╭",
+  topRight: "╮",
+  bottomLeft: "╰",
+  bottomRight: "╯",
   horizontal: "─",
   vertical: "│"
 };
@@ -133,17 +135,18 @@ function clearScreen() {
 }
 
 /**
- * Show menu header with title and subtitle
+ * Show menu header with title and subtitle in PolyRouter style
  * @param {string} title - Main title
  * @param {string} subtitle - Optional subtitle
  */
 function showHeader(title, subtitle) {
-  console.log(`\n${"=".repeat(60)}`);
-  console.log(`  ${COLORS.bright}${COLORS.cyan}${title}${COLORS.reset}`);
+  const width = 50;
+  console.log(`\n${COLORS.dim}╭${"─".repeat(width)}╮${COLORS.reset}`);
+  console.log(`${COLORS.dim}│${COLORS.reset}   ${COLORS.brand}●${COLORS.reset} ${COLORS.bright}${title}${COLORS.reset}`);
   if (subtitle) {
-    console.log(`  ${COLORS.dim}${subtitle}${COLORS.reset}`);
+    console.log(`${COLORS.dim}│${COLORS.reset}   ${COLORS.dim}${subtitle}${COLORS.reset}`);
   }
-  console.log(`${"=".repeat(60)}\n`);
+  console.log(`${COLORS.dim}╰${"─".repeat(width)}╯${COLORS.reset}\n`);
 }
 
 module.exports = {

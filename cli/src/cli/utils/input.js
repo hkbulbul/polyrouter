@@ -14,8 +14,12 @@ const COLORS = {
   bgGreen: "\x1b[42m",
   bgBlue: "\x1b[44m",
   black: "\x1b[30m",
-  terracotta: "\x1b[38;2;217;119;87m",
-  bgTerracotta: "\x1b[48;2;217;119;87m"
+  brand: "\x1b[38;2;34;197;94m", // #22c55e (PolyRouter brand green)
+  brandHover: "\x1b[38;2;74;222;128m", // #4ade80 (PolyRouter brand hover)
+  bgBrand: "\x1b[48;2;34;197;94m", // #22c55e background
+  brandDark: "\x1b[38;2;22;163;74m", // #16a34a (Primary green)
+  terracotta: "\x1b[38;2;34;197;94m", // Backward compatibility alias
+  bgTerracotta: "\x1b[48;2;34;197;94m"
 };
 
 // Prime stdin once globally. Toggling raw mode between menus adds latency on
@@ -85,9 +89,16 @@ async function pause(message = "Press Enter to continue...") {
 }
 
 /**
- * Interactive arrow-key menu. Renders ★/☆ icons; selected line uses reverse+bright
- * (no underline). Uses readline keypress + raw 'data' fallback to prevent
- * arrow-key escape sequence leaks on macOS.
+ * Strip ANSI escape codes to calculate visual string length
+ */
+function stripAnsi(str) {
+  if (typeof str !== "string") return "";
+  return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+/**
+ * Interactive arrow-key menu styled with PolyRouter design language.
+ * Clean modern bordered card layout with brand accents.
  */
 async function selectMenu(title, items, defaultIndex = 0, subtitle = "", headerContent = "", breadcrumb = []) {
   return new Promise((resolve) => {
@@ -100,25 +111,91 @@ async function selectMenu(title, items, defaultIndex = 0, subtitle = "", headerC
     const renderMenu = () => {
       if (!isActive) return;
       process.stdout.write("\x1b[2J\x1b[H");
-      const width = Math.min(process.stdout.columns || 40, 40);
-      console.log(`\n${COLORS.terracotta}${"=".repeat(width)}${COLORS.reset}`);
-      console.log(`  ${COLORS.bright}${COLORS.terracotta}${title}${COLORS.reset}`);
-      if (subtitle) console.log(`  ${COLORS.dim}${subtitle}${COLORS.reset}`);
-      console.log(`${COLORS.terracotta}${"=".repeat(width)}${COLORS.reset}`);
-      if (breadcrumb.length > 0) console.log(`  ${COLORS.dim}${breadcrumb.join(" > ")}${COLORS.reset}`);
-      console.log();
-      if (headerContent) { console.log(headerContent); console.log(); }
 
-      const isWin = process.platform === "win32";
+      const termWidth = process.stdout.columns || 80;
+      // Fixed comfortable card width, responsive to smaller terminals
+      const cardWidth = Math.max(48, Math.min(termWidth - 4, 64));
+      const innerWidth = cardWidth - 2;
+
+      const lines = [];
+
+      // Top border: ╭──────────────────────────────╮
+      lines.push(`${COLORS.dim}╭${"─".repeat(innerWidth)}╮${COLORS.reset}`);
+
+      // Brand Title line: │  ● PolyRouter  v1.0.28   │
+      // If title includes version or subpage, format gracefully
+      let headerTitle = title;
+      if (headerTitle.startsWith("Choose Interface")) {
+        headerTitle = `${COLORS.brand}●${COLORS.reset} ${COLORS.bright}${COLORS.brand}Poly${COLORS.reset}${COLORS.bright}Router${COLORS.reset} ${COLORS.dim}${title.replace("Choose Interface ", "")}${COLORS.reset}`;
+      } else {
+        headerTitle = `${COLORS.brand}●${COLORS.reset} ${COLORS.bright}${title}${COLORS.reset}`;
+      }
+
+      const visualHeaderLen = stripAnsi(headerTitle).length;
+      const rightPad = Math.max(0, innerWidth - 3 - visualHeaderLen);
+      lines.push(`${COLORS.dim}│${COLORS.reset}   ${headerTitle}${" ".repeat(rightPad)}${COLORS.dim}│${COLORS.reset}`);
+
+      // Subtitle (e.g. server URL or status)
+      if (subtitle) {
+        const visualSubLen = stripAnsi(subtitle).length;
+        const subPad = Math.max(0, innerWidth - 3 - visualSubLen);
+        lines.push(`${COLORS.dim}│${COLORS.reset}   ${subtitle}${" ".repeat(subPad)}${COLORS.dim}│${COLORS.reset}`);
+      }
+
+      // Breadcrumb path
+      if (breadcrumb.length > 0) {
+        const bcText = `${COLORS.dim}${breadcrumb.join(" › ")}${COLORS.reset}`;
+        const visualBcLen = stripAnsi(bcText).length;
+        const bcPad = Math.max(0, innerWidth - 3 - visualBcLen);
+        lines.push(`${COLORS.dim}│${COLORS.reset}   ${bcText}${" ".repeat(bcPad)}${COLORS.dim}│${COLORS.reset}`);
+      }
+
+      // Header content (Endpoint, tunnel status, keys, etc.)
+      if (headerContent) {
+        lines.push(`${COLORS.dim}├${"─".repeat(innerWidth)}┤${COLORS.reset}`);
+        const headerLines = String(headerContent).split("\n");
+        for (const hLine of headerLines) {
+          const visLen = stripAnsi(hLine).length;
+          const pad = Math.max(0, innerWidth - 3 - visLen);
+          lines.push(`${COLORS.dim}│${COLORS.reset}   ${hLine}${" ".repeat(pad)}${COLORS.dim}│${COLORS.reset}`);
+        }
+      }
+
+      // Divider before items
+      lines.push(`${COLORS.dim}├${"─".repeat(innerWidth)}┤${COLORS.reset}`);
+      lines.push(`${COLORS.dim}│${" ".repeat(innerWidth)}│${COLORS.reset}`);
+
+      // Render Menu Items
       items.forEach((item, index) => {
         const isSelected = index === selectedIndex;
-        const icon = isSelected ? (isWin ? ">" : "★") : (isWin ? " " : "☆");
+        const iconPrefix = isSelected
+          ? `${COLORS.brand}❯${COLORS.reset}`
+          : " ";
+
+        let itemDisplay = "";
         if (isSelected) {
-          console.log(` ${COLORS.reverse}${COLORS.bright}${icon} ${item.label}${COLORS.reset}`);
+          itemDisplay = `${COLORS.bright}${COLORS.brand}${item.label}${COLORS.reset}`;
         } else {
-          console.log(`  ${icon} ${item.label}`);
+          itemDisplay = `${COLORS.dim}${item.label}${COLORS.reset}`;
         }
+
+        const fullItemLine = ` ${iconPrefix}  ${itemDisplay}`;
+        const visualItemLen = stripAnsi(fullItemLine).length;
+        const pad = Math.max(0, innerWidth - visualItemLen);
+        lines.push(`${COLORS.dim}│${COLORS.reset}${fullItemLine}${" ".repeat(pad)}${COLORS.dim}│${COLORS.reset}`);
       });
+
+      // Bottom padding & help hint
+      lines.push(`${COLORS.dim}│${" ".repeat(innerWidth)}│${COLORS.reset}`);
+      const hint = `${COLORS.dim}Use ↑/↓ to navigate • Enter to select • Esc to back${COLORS.reset}`;
+      const visualHintLen = stripAnsi(hint).length;
+      const hintPad = Math.max(0, innerWidth - 3 - visualHintLen);
+      lines.push(`${COLORS.dim}│${COLORS.reset}   ${hint}${" ".repeat(hintPad)}${COLORS.dim}│${COLORS.reset}`);
+
+      // Bottom border: ╰──────────────────────────────╯
+      lines.push(`${COLORS.dim}╰${"─".repeat(innerWidth)}╯${COLORS.reset}`);
+
+      console.log("\n" + lines.join("\n"));
     };
 
     const cleanup = () => {
