@@ -109,6 +109,7 @@ const hasValidHeaders = (entry) => {
 
 const authModeFor = (entry) => {
   if (entry.headers !== undefined) return hasValidHeaders(entry) ? "custom" : "invalid";
+  if (entry.apiKey === undefined) return "stored";
   if (entry.apiKey === false) return "keyless";
   if (entry.apiKey === `$${COMMAND_CODE_ENV_KEY}`) return "environment";
   if (isApiKeyReference(entry.apiKey)) return "custom";
@@ -133,11 +134,14 @@ const normalizeAuthMode = (value, baseURL, ownership) => {
     return value;
   }
 
-  if (value !== "keyless" && value !== "environment") {
-    conflict("INVALID_AUTH_MODE", 'authMode must be "keyless", "environment", or valid "preserve"');
+  if (!["keyless", "stored", "environment"].includes(value)) {
+    conflict(
+      "INVALID_AUTH_MODE",
+      'authMode must be "keyless", "stored", "environment", or valid "preserve"',
+    );
   }
   if (value === "keyless" && !isLoopbackUrl(baseURL)) {
-    conflict("REMOTE_KEY_REQUIRED", "Remote PolyRouter endpoints require POLYROUTER_API_KEY authentication");
+    conflict("REMOTE_KEY_REQUIRED", "Remote PolyRouter endpoints require API-key authentication");
   }
   return value;
 };
@@ -216,9 +220,12 @@ export function applyCommandCodeConfig(content = "{}", input = {}) {
   const authMode = normalizeAuthMode(input.authMode, baseURL, ownership);
   const previous = ownership.owned ? ownership.entry : {};
   const previousModels = isPlainObject(previous.models) ? previous.models : {};
+  const previousApiKey = previous.apiKey;
   const previousHeaders = previous.headers;
   const activePrevious = { ...previous };
+  delete activePrevious.apiKey;
   delete activePrevious.headers;
+  delete activePrevious.models;
   delete activePrevious.disabled;
   delete activePrevious.enabled;
   const nextModels = Object.fromEntries(models.map((model) => {
@@ -239,8 +246,14 @@ export function applyCommandCodeConfig(content = "{}", input = {}) {
     [COMMAND_CODE_MANAGED_FIELD]: true,
     baseURL,
     ...(authMode === "preserve"
-      ? (previousHeaders === undefined ? {} : { headers: previousHeaders })
-      : { apiKey: authMode === "keyless" ? false : `$${COMMAND_CODE_ENV_KEY}` }),
+      ? (previousHeaders === undefined
+        ? { apiKey: previousApiKey }
+        : { headers: previousHeaders })
+      : authMode === "keyless"
+        ? { apiKey: false }
+        : authMode === "environment"
+          ? { apiKey: `$${COMMAND_CODE_ENV_KEY}` }
+          : {}),
     models: nextModels,
   };
   const nextConfig = {

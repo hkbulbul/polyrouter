@@ -144,7 +144,7 @@ export default function ToolDetailClient({ toolId, machineId }) {
       case "grok-build":
         return <GrokBuildToolCard {...commonProps} activeProviders={getActiveProviders()} hasActiveProviders={hasActiveProviders} cloudEnabled={cloudEnabled} />;
       case "commandcode":
-        return <CommandCodeToolCard {...commonProps} activeProviders={getActiveProviders()} requireApiKey={requireApiKey} />;
+        return <CommandCodeToolCard {...commonProps} activeProviders={getActiveProviders()} requireApiKey={requireApiKey} cloudEnabled={cloudEnabled} />;
       default:
         return <DefaultToolCard toolId={toolId} {...commonProps} activeProviders={getActiveProviders()} cloudEnabled={cloudEnabled} tunnelEnabled={tunnelEnabled} />;
     }

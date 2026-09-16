@@ -16,7 +16,6 @@ import {
   applyCommandCodeConfig,
   inspectCommandCodeConfig,
   isCommandCodeVersionSupported,
-  normalizeCommandCodeBaseUrl,
   resetCommandCodeConfig,
 } from "@/lib/commandCodeConfig.js";
 
@@ -28,7 +27,11 @@ const AUTH_PATH = path.join(CONFIG_DIR, "auth.json");
 const LOCK_PATH = `${CONFIG_PATH}.polyrouter.lock`;
 const LOCK_TIMEOUT_MS = 5000;
 const LOCK_RETRY_MS = 50;
+const MAX_API_KEY_LENGTH = 4096;
 let mutationQueue = Promise.resolve();
+
+const isPlainObject = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const serializeMutation = (operation) => {
   const run = mutationQueue.then(operation, operation);
@@ -50,7 +53,7 @@ const withConfigLock = async (operation) => {
       if (Date.now() >= deadline) {
         throw new CommandCodeConfigError(
           "CONFIG_BUSY",
-          "Command Code providers.json is being updated; try again",
+          "Command Code settings are being updated; try again",
         );
       }
       await wait(LOCK_RETRY_MS);
@@ -148,11 +151,11 @@ const detectCommandCode = async () => {
   };
 };
 
-const readConfig = async () => {
+const readFileState = async (filePath) => {
   try {
     const [content, stat] = await Promise.all([
-      fs.readFile(CONFIG_PATH, "utf-8"),
-      fs.stat(CONFIG_PATH),
+      fs.readFile(filePath, "utf-8"),
+      fs.stat(filePath),
     ]);
     return { content, exists: true, mode: stat.mode & 0o777 };
   } catch (error) {
@@ -161,62 +164,210 @@ const readConfig = async () => {
   }
 };
 
-const inspectStoredProviderCredential = async () => {
+const readConfig = () => readFileState(CONFIG_PATH);
+
+const readAuth = async () => {
+  let state;
   try {
-    const auth = JSON.parse(await fs.readFile(AUTH_PATH, "utf-8"));
-    const credential = auth && typeof auth === "object" && !Array.isArray(auth)
-      ? auth[COMMAND_CODE_PROVIDER_ID]
-      : null;
+    state = await readFileState(AUTH_PATH);
+  } catch {
     return {
-      present: Boolean(
-        credential
-        && typeof credential === "object"
-        && !Array.isArray(credential)
-        && credential.type === "api"
-        && typeof credential.key === "string"
-        && credential.key.length > 0,
-      ),
-      readable: true,
+      content: null,
+      exists: null,
+      mode: 0o600,
+      data: null,
+      readable: false,
     };
-  } catch (error) {
-    if (error.code === "ENOENT") return { present: false, readable: true };
-    return { present: false, readable: false };
+  }
+
+  try {
+    const data = JSON.parse(state.content);
+    if (!isPlainObject(data)) throw new Error("Invalid auth root");
+    return { ...state, data, readable: true };
+  } catch {
+    return { ...state, data: null, readable: false };
   }
 };
 
-const revisionFor = ({ content, exists: fileExists }) =>
-  createHash("sha256").update(`${fileExists ? "present" : "missing"}\0${content}`).digest("hex");
+const inspectStoredProviderCredential = (auth) => {
+  if (!auth.readable) {
+    return { entryPresent: false, present: false, readable: false };
+  }
+  const entryPresent = Object.prototype.hasOwnProperty.call(
+    auth.data,
+    COMMAND_CODE_PROVIDER_ID,
+  );
+  const credential = auth.data[COMMAND_CODE_PROVIDER_ID];
+  return {
+    entryPresent,
+    present: Boolean(
+      isPlainObject(credential)
+      && credential.type === "api"
+      && typeof credential.key === "string"
+      && credential.key.length > 0,
+    ),
+    readable: true,
+  };
+};
+
+const revisionPart = (state) => {
+  if (state.content === null) return "unreadable";
+  return `${state.exists ? "present" : "missing"}\0${state.content}`;
+};
+
+const revisionFor = (config, auth) => createHash("sha256")
+  .update(`config\0${revisionPart(config)}\0auth\0${revisionPart(auth)}`)
+  .digest("hex");
+
+const readCurrentFiles = async () => {
+  const [config, auth] = await Promise.all([readConfig(), readAuth()]);
+  return { config, auth };
+};
 
 const assertExpectedRevision = (expectedRevision, current) => {
-  if (typeof expectedRevision !== "string" || expectedRevision !== revisionFor(current)) {
+  if (typeof expectedRevision !== "string"
+    || expectedRevision !== revisionFor(current.config, current.auth)) {
     throw new CommandCodeConfigError(
       "STALE_CONFIG",
-      "Command Code providers.json changed externally; review and apply again",
+      "Command Code settings changed externally; review and apply again",
     );
   }
 };
 
-const atomicWriteConfig = async (content, expectedRevision, current) => {
-  await fs.mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+const assertReadableAuth = (auth) => {
+  if (!auth.readable) {
+    throw new CommandCodeConfigError(
+      "AUTH_FILE_UNREADABLE",
+      "Command Code auth.json must contain a readable JSON object before PolyRouter can update credentials",
+    );
+  }
+};
 
-  const temporaryPath = path.join(CONFIG_DIR, `.providers.json.${process.pid}.${randomUUID()}.tmp`);
+const normalizeApiKey = (value) => {
+  if (typeof value !== "string") {
+    throw new CommandCodeConfigError("API_KEY_REQUIRED", "Select a PolyRouter API key");
+  }
+  const apiKey = value.trim();
+  if (!apiKey) {
+    throw new CommandCodeConfigError("API_KEY_REQUIRED", "Select a PolyRouter API key");
+  }
+  if (apiKey.length > MAX_API_KEY_LENGTH || /[\x00-\x1f\x7f]/.test(apiKey)) {
+    throw new CommandCodeConfigError("INVALID_API_KEY", "The selected PolyRouter API key is invalid");
+  }
+  return apiKey;
+};
+
+const updateAuth = (auth, authMode, apiKey) => {
+  assertReadableAuth(auth);
+  if (authMode === "preserve") return auth;
+
+  const data = { ...auth.data };
+  if (authMode === "stored") {
+    data[COMMAND_CODE_PROVIDER_ID] = {
+      type: "api",
+      key: normalizeApiKey(apiKey),
+    };
+  } else {
+    delete data[COMMAND_CODE_PROVIDER_ID];
+  }
+
+  const nextExists = Object.keys(data).length > 0;
+  return {
+    content: nextExists ? `${JSON.stringify(data, null, 2)}\n` : "{}",
+    exists: nextExists,
+    mode: auth.mode,
+    data,
+    readable: true,
+  };
+};
+
+const writeTemporaryFile = async (filePath, content, mode) => {
   let handle;
   try {
-    handle = await fs.open(temporaryPath, "wx", current.mode);
+    handle = await fs.open(filePath, "wx", mode);
     await handle.writeFile(content, "utf-8");
-    await handle.chmod(current.mode);
+    await handle.chmod(mode);
     await handle.sync();
-    await handle.close();
-    handle = null;
-
-    // ponytail: Cooperative locks cannot block external editors; upgrade when Node exposes conditional replace.
-    const latest = await readConfig();
-    assertExpectedRevision(expectedRevision, latest);
-    await fs.rename(temporaryPath, CONFIG_PATH);
   } finally {
-    if (handle) await handle.close().catch(() => {});
-    await fs.unlink(temporaryPath).catch(() => {});
+    await handle?.close().catch(() => {});
   }
+};
+
+const commitSettings = async ({
+  expectedRevision,
+  current,
+  configContent,
+  configExists = true,
+  authNext = current.auth,
+}) => {
+  await fs.mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  const transactionId = `${process.pid}.${randomUUID()}`;
+  const entries = [
+    {
+      target: CONFIG_PATH,
+      current: current.config,
+      next: { content: configContent, exists: configExists, mode: current.config.mode },
+      temporary: path.join(CONFIG_DIR, `.providers.json.${transactionId}.tmp`),
+      backup: path.join(CONFIG_DIR, `.providers.json.${transactionId}.bak`),
+    },
+    {
+      target: AUTH_PATH,
+      current: current.auth,
+      next: authNext,
+      temporary: path.join(CONFIG_DIR, `.auth.json.${transactionId}.tmp`),
+      backup: path.join(CONFIG_DIR, `.auth.json.${transactionId}.bak`),
+    },
+  ].filter((entry) => entry.current.exists !== entry.next.exists
+    || entry.current.content !== entry.next.content);
+
+  const prepared = [];
+  const backedUp = [];
+  const installed = [];
+  try {
+    for (const entry of entries) {
+      if (!entry.next.exists) continue;
+      await writeTemporaryFile(entry.temporary, entry.next.content, entry.next.mode);
+      prepared.push(entry);
+    }
+
+    const latest = await readCurrentFiles();
+    assertExpectedRevision(expectedRevision, latest);
+
+    for (const entry of entries) {
+      if (!entry.current.exists) continue;
+      await fs.rename(entry.target, entry.backup);
+      backedUp.push(entry);
+    }
+    for (const entry of entries) {
+      if (!entry.next.exists) continue;
+      await fs.rename(entry.temporary, entry.target);
+      installed.push(entry);
+    }
+    for (const entry of backedUp) {
+      await fs.unlink(entry.backup).catch(() => {});
+    }
+  } catch (error) {
+    for (const entry of [...installed].reverse()) {
+      await fs.unlink(entry.target).catch(() => {});
+    }
+    for (const entry of [...backedUp].reverse()) {
+      await fs.rename(entry.backup, entry.target).catch(() => {});
+    }
+    throw error;
+  } finally {
+    for (const entry of prepared) {
+      await fs.unlink(entry.temporary).catch(() => {});
+    }
+  }
+
+  return {
+    config: {
+      content: configContent,
+      exists: configExists,
+      mode: current.config.mode,
+    },
+    auth: authNext,
+  };
 };
 
 const versionWarnings = (detection) => {
@@ -249,6 +400,7 @@ const conflictResponse = (error) => {
     "INVALID_AUTH_MODE",
     "REMOTE_KEY_REQUIRED",
     "API_KEY_REQUIRED",
+    "INVALID_API_KEY",
     "PROVIDER_NOT_FOUND",
     "INVALID_OWNERSHIP_MARKER",
     "INVALID_PROVIDER",
@@ -266,52 +418,74 @@ const inspectSafely = (config) => {
   }
 };
 
+const buildStatus = ({ detection, config, auth, dashboardSettings }) => {
+  const { inspection, configError } = inspectSafely(config);
+  const credential = inspectStoredProviderCredential(auth);
+  const warnings = versionWarnings(detection);
+  if (configError) warnings.push(configError.message);
+  if (inspection?.collision) warnings.push('The provider ID "polyrouter" is already used by another configuration.');
+  warnings.push(...(inspection?.warnings || []));
+
+  const apiKeyRequired = dashboardSettings?.requireApiKey === true;
+  let settings = inspection?.settings || null;
+  if (settings && credential.present) {
+    settings = { ...settings, authMode: "stored" };
+  }
+
+  if (!credential.readable) {
+    warnings.push("Command Code auth.json is unreadable or invalid. Repair it before applying or resetting PolyRouter credentials.");
+  } else if (credential.entryPresent && !credential.present) {
+    warnings.push("Command Code has an invalid polyrouter credential. Select an API key and click Apply to replace it.");
+  } else if (settings?.authMode === "stored" && !credential.present) {
+    warnings.push("Command Code does not have a stored PolyRouter API key. Select one and click Apply.");
+  }
+  if (inspection?.hasPolyRouter && apiKeyRequired && settings?.authMode === "keyless") {
+    warnings.push("PolyRouter now requires an API key. Select stored API-key authentication and click Apply.");
+  }
+
+  const authCompatible = settings?.authMode === "stored"
+    ? credential.present
+    : settings?.authMode === "keyless"
+      ? !apiKeyRequired
+      : settings?.authMode !== "invalid";
+  const compatible = Boolean(
+    inspection?.hasPolyRouter
+    && settings?.baseUrlValid
+    && !settings.disabled
+    && settings.models.length > 0
+    && authCompatible,
+  );
+
+  return {
+    installed: detection.installed,
+    version: detection.version,
+    updateRequired: detection.installed && !isCommandCodeVersionSupported(detection.version),
+    hasPolyRouter: inspection?.hasPolyRouter || false,
+    compatible,
+    apiKeyRequired,
+    collision: inspection?.collision || false,
+    storedCredential: credential.present,
+    credentialEntryPresent: credential.entryPresent,
+    credentialStateKnown: credential.readable,
+    settings,
+    revision: revisionFor(config, auth),
+    warnings,
+  };
+};
+
 export async function GET() {
   try {
-    const [detection, config, dashboardSettings, storedCredential] = await Promise.all([
+    const [detection, current, dashboardSettings] = await Promise.all([
       detectCommandCode(),
-      readConfig(),
+      readCurrentFiles(),
       getSettings(),
-      inspectStoredProviderCredential(),
     ]);
-    const { inspection, configError } = inspectSafely(config);
-    const warnings = versionWarnings(detection);
-    if (configError) warnings.push(configError.message);
-    if (inspection?.collision) warnings.push('The provider ID "polyrouter" is already used by another configuration.');
-    warnings.push(...(inspection?.warnings || []));
-    const apiKeyRequired = dashboardSettings?.requireApiKey === true;
-    const settings = inspection?.settings || null;
-    const compatible = Boolean(
-      inspection?.hasPolyRouter
-      && settings?.baseUrlValid
-      && !settings.disabled
-      && settings.models.length > 0
-      && settings.authMode !== "invalid"
-      && !(apiKeyRequired && settings.authMode === "keyless"),
-    );
-    if (inspection?.hasPolyRouter && apiKeyRequired && settings?.authMode === "keyless") {
-      warnings.push("PolyRouter now requires an API key. Choose environment authentication and click Apply.");
-    }
-    if (storedCredential.present) {
-      warnings.push("Command Code has a stored polyrouter credential. It overrides providers.json authentication; clear or replace it through /connect before changing the endpoint or authentication.");
-    } else if (!storedCredential.readable) {
-      warnings.push("Command Code auth.json could not be inspected. Endpoint and authentication changes are blocked until the file is readable.");
-    }
-
-    return NextResponse.json({
-      installed: detection.installed,
-      version: detection.version,
-      updateRequired: detection.installed && !isCommandCodeVersionSupported(detection.version),
-      hasPolyRouter: inspection?.hasPolyRouter || false,
-      compatible,
-      apiKeyRequired,
-      collision: inspection?.collision || false,
-      storedCredential: storedCredential.present,
-      credentialStateKnown: storedCredential.readable,
-      settings,
-      revision: revisionFor(config),
-      warnings,
-    });
+    return NextResponse.json(buildStatus({
+      detection,
+      config: current.config,
+      auth: current.auth,
+      dashboardSettings,
+    }));
   } catch (error) {
     console.log("Error checking Command Code settings:", error);
     return NextResponse.json({ error: "Failed to check Command Code settings" }, { status: 500 });
@@ -330,74 +504,76 @@ export async function POST(request) {
     }
 
     return await serializeMutation(() => withConfigLock(async () => {
-      const [config, settings, storedCredential] = await Promise.all([
-        readConfig(),
+      const [current, dashboardSettings] = await Promise.all([
+        readCurrentFiles(),
         getSettings(),
-        inspectStoredProviderCredential(),
       ]);
-      assertExpectedRevision(body.expectedRevision, config);
+      assertExpectedRevision(body.expectedRevision, current);
 
       if (body.mode === "adopt") {
-        const result = adoptCommandCodeConfig(config.content);
-        await atomicWriteConfig(result.content, body.expectedRevision, config);
+        const result = adoptCommandCodeConfig(current.config.content);
+        const committed = await commitSettings({
+          expectedRevision: body.expectedRevision,
+          current,
+          configContent: result.content,
+        });
         const inspection = inspectCommandCodeConfig(result.content);
+        const credential = inspectStoredProviderCredential(committed.auth);
         return NextResponse.json({
           success: true,
           operation: "adopt",
-          revision: revisionFor({ content: result.content, exists: true }),
-          settings: inspection.settings,
+          revision: revisionFor(committed.config, committed.auth),
+          settings: credential.present
+            ? { ...inspection.settings, authMode: "stored" }
+            : inspection.settings,
           warnings: inspection.warnings,
-          storedCredential: storedCredential.present,
-          credentialStateKnown: storedCredential.readable,
+          storedCredential: credential.present,
+          credentialStateKnown: credential.readable,
           message: "Existing polyrouter provider adopted. Review it, then click Apply to update it.",
         });
       }
 
-      if (body.authMode === "keyless" && settings?.requireApiKey === true) {
+      assertReadableAuth(current.auth);
+      if (body.authMode === "keyless" && dashboardSettings?.requireApiKey === true) {
         throw new CommandCodeConfigError(
           "API_KEY_REQUIRED",
           "Keyless Command Code access is disabled while PolyRouter requires API keys",
         );
       }
 
-      const currentInspection = inspectCommandCodeConfig(config.content);
-      if (storedCredential.present || !storedCredential.readable) {
-        const baseUrl = normalizeCommandCodeBaseUrl(body.baseUrl);
-        const currentBaseUrl = currentInspection.settings?.baseUrlValid
-          ? currentInspection.settings.baseUrl
-          : null;
-        const authMode = body.authMode === "preserve"
-          ? currentInspection.settings?.authMode
-          : body.authMode;
-        if (!currentInspection.hasPolyRouter
-          || baseUrl !== currentBaseUrl
-          || authMode !== currentInspection.settings?.authMode) {
-          throw new CommandCodeConfigError(
-            "STORED_CREDENTIAL_CONFLICT",
-            storedCredential.present
-              ? "Clear or replace the stored polyrouter credential through Command Code /connect before changing the endpoint or authentication"
-              : "Command Code auth.json must be readable before changing the endpoint or authentication",
-          );
-        }
+      const credential = inspectStoredProviderCredential(current.auth);
+      if (body.authMode === "preserve" && credential.entryPresent) {
+        throw new CommandCodeConfigError(
+          "STORED_CREDENTIAL_CONFLICT",
+          "Choose stored API-key authentication to replace the existing Command Code credential",
+        );
       }
 
-      const result = applyCommandCodeConfig(config.content, {
+      const result = applyCommandCodeConfig(current.config.content, {
         baseUrl: body.baseUrl,
         models: body.models,
         authMode: body.authMode,
       });
-      await atomicWriteConfig(result.content, body.expectedRevision, config);
-      const writtenConfig = { content: result.content, exists: true };
+      const authNext = updateAuth(current.auth, body.authMode, body.apiKey);
+      const committed = await commitSettings({
+        expectedRevision: body.expectedRevision,
+        current,
+        configContent: result.content,
+        authNext,
+      });
       const inspection = inspectCommandCodeConfig(result.content);
+      const storedCredential = inspectStoredProviderCredential(committed.auth);
       const modelCount = Object.keys(result.entry.models).length;
       return NextResponse.json({
         success: true,
         operation: result.operation,
-        revision: revisionFor(writtenConfig),
-        settings: inspection.settings,
+        revision: revisionFor(committed.config, committed.auth),
+        settings: body.authMode === "stored"
+          ? { ...inspection.settings, authMode: "stored" }
+          : inspection.settings,
         warnings: inspection.warnings,
         storedCredential: storedCredential.present,
-      credentialStateKnown: storedCredential.readable,
+        credentialStateKnown: storedCredential.readable,
         message: `PolyRouter provider ${result.operation === "create" ? "added" : "updated"} with ${modelCount} model${modelCount === 1 ? "" : "s"}. Reopen /model or /connect in Command Code and select a polyrouter/<model-id> model.`,
       });
     }));
@@ -420,22 +596,33 @@ export async function DELETE(request) {
     requireSupportedInstallation(detection);
 
     return await serializeMutation(() => withConfigLock(async () => {
-      const config = await readConfig();
-      assertExpectedRevision(body.expectedRevision, config);
-      const result = resetCommandCodeConfig(config.content);
-      if (!result.changed) {
+      const current = await readCurrentFiles();
+      assertExpectedRevision(body.expectedRevision, current);
+      assertReadableAuth(current.auth);
+
+      const result = resetCommandCodeConfig(current.config.content);
+      const authNext = updateAuth(current.auth, "keyless");
+      const authChanged = authNext.exists !== current.auth.exists
+        || authNext.content !== current.auth.content;
+      if (!result.changed && !authChanged) {
         return NextResponse.json({
           success: true,
-          revision: revisionFor(config),
-          message: "No PolyRouter provider was configured",
+          revision: revisionFor(current.config, current.auth),
+          message: "No PolyRouter provider or credential was configured",
         });
       }
 
-      await atomicWriteConfig(result.content, body.expectedRevision, config);
+      const committed = await commitSettings({
+        expectedRevision: body.expectedRevision,
+        current,
+        configContent: result.content,
+        configExists: result.changed ? true : current.config.exists,
+        authNext,
+      });
       return NextResponse.json({
         success: true,
-        revision: revisionFor({ content: result.content, exists: true }),
-        message: "PolyRouter provider removed. Reopen /model or /connect in Command Code.",
+        revision: revisionFor(committed.config, committed.auth),
+        message: "PolyRouter provider and stored credential removed. Reopen /model or /connect in Command Code.",
       });
     }));
   } catch (error) {
