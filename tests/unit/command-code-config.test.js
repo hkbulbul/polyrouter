@@ -102,6 +102,14 @@ describe("commandCodeConfig", () => {
     expect(apply(first).content).toBe(first);
   });
 
+  it("uses Command Code native stored credentials without an inline apiKey", () => {
+    const result = apply("{}", { ...INPUT, authMode: "stored" });
+
+    expect(result.entry).not.toHaveProperty("apiKey");
+    expect(inspectCommandCodeConfig(result.content).settings.authMode).toBe("stored");
+    expect(apply(result.content, { ...INPUT, authMode: "stored" }).content).toBe(result.content);
+  });
+
   it("rejects invalid model arrays and elements", () => {
     for (const models of [undefined, null, [], "model", [""], [null], [`ok/model`, `bad\nmodel`]]) {
       expectConfigError(
@@ -305,8 +313,9 @@ describe("commandCodeConfig", () => {
       return inspectCommandCodeConfig(JSON.stringify(config));
     };
 
+    expect(inspectAuth({}).settings.authMode).toBe("stored");
+
     for (const authentication of [
-      {},
       { apiKey: "raw-secret" },
       { apiKey: "$9INVALID" },
       { apiKey: "{env:INVALID-NAME}" },

@@ -1,5 +1,8 @@
 # Unreleased
 
+## Fixes
+- **Command Code API key setup**: automatically store the selected PolyRouter key in Command Code's native provider credential store, so new Command Code processes work without manually setting `POLYROUTER_API_KEY`; preserve unrelated login/provider credentials and remove only PolyRouter-owned data on reset.
+
 # v1.0.21 (CLI) - 2026-09-05
 
 ## Features

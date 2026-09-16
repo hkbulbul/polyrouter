@@ -8,12 +8,66 @@ const mocks = vi.hoisted(() => {
     authExists: false,
     authError: null,
     mode: 0o600,
-    temporaryContent: "",
+    authMode: 0o600,
+    transientFiles: new Map(),
     renames: 0,
+    authWrites: 0,
     locked: false,
     afterSync: null,
+    failRenameTo: null,
   };
   const enoent = () => Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+  const pathType = (filePath) => {
+    const value = String(filePath);
+    if (value.endsWith("providers.json")) return "config";
+    if (value.endsWith("auth.json")) return "auth";
+    return "transient";
+  };
+  const readStored = (filePath) => {
+    const type = pathType(filePath);
+    if (type === "config") {
+      if (!state.exists) throw enoent();
+      return { content: state.content, mode: state.mode };
+    }
+    if (type === "auth") {
+      if (state.authError) throw state.authError;
+      if (!state.authExists) throw enoent();
+      return { content: state.authContent, mode: state.authMode };
+    }
+    const stored = state.transientFiles.get(String(filePath));
+    if (!stored) throw enoent();
+    return stored;
+  };
+  const writeStored = (filePath, stored) => {
+    const type = pathType(filePath);
+    if (type === "config") {
+      state.content = stored.content;
+      state.mode = stored.mode;
+      state.exists = true;
+      return;
+    }
+    if (type === "auth") {
+      state.authContent = stored.content;
+      state.authMode = stored.mode;
+      state.authExists = true;
+      return;
+    }
+    state.transientFiles.set(String(filePath), stored);
+  };
+  const deleteStored = (filePath) => {
+    const type = pathType(filePath);
+    if (type === "config") {
+      if (!state.exists) throw enoent();
+      state.exists = false;
+      return;
+    }
+    if (type === "auth") {
+      if (!state.authExists) throw enoent();
+      state.authExists = false;
+      return;
+    }
+    if (!state.transientFiles.delete(String(filePath))) throw enoent();
+  };
 
   return {
     state,
@@ -25,21 +79,9 @@ const mocks = vi.hoisted(() => {
         if (String(filePath).endsWith("package.json")) {
           return JSON.stringify({ name: "command-code", version: "1.32.1" });
         }
-        if (String(filePath).endsWith("providers.json")) {
-          if (!state.exists) throw enoent();
-          return state.content;
-        }
-        if (String(filePath).endsWith("auth.json")) {
-          if (state.authError) throw state.authError;
-          if (!state.authExists) throw enoent();
-          return state.authContent;
-        }
-        throw enoent();
+        return readStored(filePath).content;
       }),
-      stat: vi.fn(async (filePath) => {
-        if (!String(filePath).endsWith("providers.json") || !state.exists) throw enoent();
-        return { mode: state.mode };
-      }),
+      stat: vi.fn(async (filePath) => ({ mode: readStored(filePath).mode })),
       realpath: vi.fn(async () => { throw enoent(); }),
       mkdir: vi.fn(async (filePath) => {
         if (!String(filePath).endsWith(".polyrouter.lock")) return;
@@ -48,19 +90,35 @@ const mocks = vi.hoisted(() => {
         }
         state.locked = true;
       }),
-      open: vi.fn(async () => ({
-        writeFile: vi.fn(async (content) => { state.temporaryContent = content; }),
-        chmod: vi.fn(async () => undefined),
-        sync: vi.fn(async () => { await state.afterSync?.(); }),
-        close: vi.fn(async () => undefined),
-      })),
-      rename: vi.fn(async () => {
-        state.content = state.temporaryContent;
-        state.exists = true;
-        state.renames += 1;
+      open: vi.fn(async (filePath, _flags, mode) => {
+        const key = String(filePath);
+        if (state.transientFiles.has(key)) {
+          throw Object.assign(new Error("EEXIST"), { code: "EEXIST" });
+        }
+        state.transientFiles.set(key, { content: "", mode });
+        return {
+          writeFile: vi.fn(async (content) => {
+            state.transientFiles.set(key, { ...state.transientFiles.get(key), content });
+          }),
+          chmod: vi.fn(async (nextMode) => {
+            state.transientFiles.set(key, { ...state.transientFiles.get(key), mode: nextMode });
+          }),
+          sync: vi.fn(async () => { await state.afterSync?.(key); }),
+          close: vi.fn(async () => undefined),
+        };
+      }),
+      rename: vi.fn(async (from, to) => {
+        if (state.failRenameTo && String(to).endsWith(state.failRenameTo)) {
+          throw Object.assign(new Error("EIO"), { code: "EIO" });
+        }
+        const stored = readStored(from);
+        deleteStored(from);
+        writeStored(to, stored);
+        if (String(to).endsWith("providers.json")) state.renames += 1;
+        if (String(to).endsWith("auth.json")) state.authWrites += 1;
       }),
       chmod: vi.fn(async () => undefined),
-      unlink: vi.fn(async () => undefined),
+      unlink: vi.fn(async (filePath) => { deleteStored(filePath); }),
       rmdir: vi.fn(async () => { state.locked = false; }),
     },
   };
@@ -111,10 +169,13 @@ beforeEach(() => {
   mocks.state.authExists = false;
   mocks.state.authError = null;
   mocks.state.mode = 0o600;
-  mocks.state.temporaryContent = "";
+  mocks.state.authMode = 0o600;
+  mocks.state.transientFiles = new Map();
   mocks.state.renames = 0;
+  mocks.state.authWrites = 0;
   mocks.state.locked = false;
   mocks.state.afterSync = null;
+  mocks.state.failRenameTo = null;
   mocks.getSettings.mockResolvedValue({ requireApiKey: false });
   mocks.execFile.mockImplementation((_file, _args, _options, callback) => callback(new Error("not found")));
 });
@@ -256,7 +317,7 @@ describe("Command Code settings route", () => {
     expect(response.body.apiKeyRequired).toBe(true);
     expect(response.body.settings.authMode).toBe("keyless");
     expect(response.body.warnings).toContain(
-      "PolyRouter now requires an API key. Choose environment authentication and click Apply.",
+      "PolyRouter now requires an API key. Select stored API-key authentication and click Apply.",
     );
   });
 
@@ -308,85 +369,156 @@ describe("Command Code settings route", () => {
     const response = await GET();
 
     expect(response.body.storedCredential).toBe(true);
-    expect(response.body.warnings).toContain(
-      "Command Code has a stored polyrouter credential. It overrides providers.json authentication; clear or replace it through /connect before changing the endpoint or authentication.",
-    );
+    expect(response.body.credentialStateKnown).toBe(true);
     expect(JSON.stringify(response.body)).not.toContain("secret");
   });
 
-  it("fails closed for endpoint and authentication changes when auth.json is unreadable", async () => {
-    const created = await POST(request(applyBody(await getRevision(), {
-      models: ["first/model"],
-      authMode: "environment",
-    })));
-    mocks.state.authError = Object.assign(new Error("EACCES"), { code: "EACCES" });
-
-    const status = await GET();
-    expect(status.status).toBe(200);
-    expect(status.body.storedCredential).toBe(false);
-    expect(status.body.credentialStateKnown).toBe(false);
-    expect(status.body.warnings).toContain(
-      "Command Code auth.json could not be inspected. Endpoint and authentication changes are blocked until the file is readable.",
-    );
-
-    const changed = await POST(request(applyBody(created.body.revision, {
-      baseUrl: "https://router.example/v1",
-      models: ["first/model"],
-      authMode: "environment",
-    })));
-    expect(changed.status).toBe(409);
-    expect(changed.body.code).toBe("STORED_CREDENTIAL_CONFLICT");
-  });
-
-  it("blocks endpoint or authentication changes while a stored credential overrides them", async () => {
-    const configured = JSON.parse((await POST(request(applyBody(await getRevision(), {
-      models: ["first/model"],
-      authMode: "environment",
-    })))).body.settings ? mocks.state.content : "{}");
-    expect(configured.provider.polyrouter.apiKey).toBe("$POLYROUTER_API_KEY");
+  it("automatically stores the selected key and preserves unrelated auth data", async () => {
     mocks.state.authExists = true;
     mocks.state.authContent = JSON.stringify({
-      polyrouter: { type: "api", key: "stored-polyrouter-secret" },
+      apiKey: "command-code-login",
+      userId: "user-1",
+      other: { type: "api", key: "other-provider-key" },
     });
+    const selectedKey = "sk-polyrouter-selected";
 
-    const revision = await getRevision();
-    const endpointChange = await POST(request(applyBody(revision, {
-      baseUrl: "https://router.example/v1",
+    const response = await POST(request(applyBody(await getRevision(), {
       models: ["first/model"],
-      authMode: "environment",
+      authMode: "stored",
+      apiKey: selectedKey,
     })));
-    const authChange = await POST(request(applyBody(revision, {
+
+    expect(response.status).toBe(200);
+    expect(response.body.settings.authMode).toBe("stored");
+    expect(response.body.storedCredential).toBe(true);
+    expect(JSON.stringify(response.body)).not.toContain(selectedKey);
+    expect(JSON.parse(mocks.state.content).provider.polyrouter).not.toHaveProperty("apiKey");
+    expect(JSON.parse(mocks.state.authContent)).toEqual({
+      apiKey: "command-code-login",
+      userId: "user-1",
+      other: { type: "api", key: "other-provider-key" },
+      polyrouter: { type: "api", key: selectedKey },
+    });
+    expect(mocks.state.renames).toBe(1);
+    expect(mocks.state.authWrites).toBe(1);
+  });
+
+  it("rotates only the PolyRouter credential and keeps model Apply idempotent", async () => {
+    const first = await POST(request(applyBody(await getRevision(), {
+      models: ["first/model"],
+      authMode: "stored",
+      apiKey: "first-key",
+    })));
+    const firstConfig = mocks.state.content;
+
+    const repeated = await POST(request(applyBody(first.body.revision, {
+      models: ["first/model"],
+      authMode: "stored",
+      apiKey: "first-key",
+    })));
+    expect(repeated.status).toBe(200);
+    expect(mocks.state.content).toBe(firstConfig);
+    expect(mocks.state.renames).toBe(1);
+    expect(mocks.state.authWrites).toBe(1);
+
+    const rotated = await POST(request(applyBody(repeated.body.revision, {
+      models: ["first/model", "second/model"],
+      authMode: "stored",
+      apiKey: "second-key",
+    })));
+    expect(rotated.status).toBe(200);
+    expect(rotated.body.settings.models).toEqual(["first/model", "second/model"]);
+    expect(JSON.parse(mocks.state.authContent).polyrouter.key).toBe("second-key");
+    expect(JSON.stringify(rotated.body)).not.toContain("second-key");
+  });
+
+  it("rejects missing or invalid stored API keys without writing", async () => {
+    const revision = await getRevision();
+    const missing = await POST(request(applyBody(revision, {
+      authMode: "stored",
+      apiKey: "",
+    })));
+    const invalid = await POST(request(applyBody(revision, {
+      authMode: "stored",
+      apiKey: "bad\nkey",
+    })));
+
+    expect(missing.status).toBe(400);
+    expect(missing.body.code).toBe("API_KEY_REQUIRED");
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.code).toBe("INVALID_API_KEY");
+    expect(mocks.state.renames).toBe(0);
+    expect(mocks.state.authWrites).toBe(0);
+  });
+
+  it("fails closed when auth.json is unreadable or malformed", async () => {
+    mocks.state.authExists = true;
+    mocks.state.authContent = "{";
+    const status = await GET();
+
+    expect(status.status).toBe(200);
+    expect(status.body.credentialStateKnown).toBe(false);
+    expect(status.body.warnings).toContain(
+      "Command Code auth.json is unreadable or invalid. Repair it before applying or resetting PolyRouter credentials.",
+    );
+
+    const changed = await POST(request(applyBody(status.body.revision, {
+      authMode: "stored",
+      apiKey: "selected-key",
+    })));
+    expect(changed.status).toBe(409);
+    expect(changed.body.code).toBe("AUTH_FILE_UNREADABLE");
+    expect(mocks.state.renames).toBe(0);
+  });
+
+  it("keyless Apply removes only the stored PolyRouter credential", async () => {
+    const stored = await POST(request(applyBody(await getRevision(), {
+      models: ["first/model"],
+      authMode: "stored",
+      apiKey: "stored-key",
+    })));
+    const auth = JSON.parse(mocks.state.authContent);
+    auth.apiKey = "command-code-login";
+    auth.other = { type: "api", key: "other-key" };
+    mocks.state.authContent = JSON.stringify(auth);
+    const revision = await getRevision();
+
+    const response = await POST(request(applyBody(revision, {
       models: ["first/model"],
       authMode: "keyless",
     })));
 
-    expect(endpointChange.status).toBe(409);
-    expect(endpointChange.body.code).toBe("STORED_CREDENTIAL_CONFLICT");
-    expect(authChange.status).toBe(409);
-    expect(authChange.body.code).toBe("STORED_CREDENTIAL_CONFLICT");
-    expect(mocks.state.renames).toBe(1);
-  });
-
-  it("allows models-only Apply when a stored credential exists", async () => {
-    const created = await POST(request(applyBody(await getRevision(), {
-      models: ["first/model"],
-      authMode: "environment",
-    })));
-    mocks.state.authExists = true;
-    mocks.state.authContent = JSON.stringify({
-      polyrouter: { type: "api", key: "stored-polyrouter-secret" },
-    });
-
-    const response = await POST(request(applyBody(created.body.revision, {
-      models: ["first/model", "second/model"],
-      authMode: "environment",
-    })));
-
+    expect(stored.status).toBe(200);
     expect(response.status).toBe(200);
-    expect(response.body.storedCredential).toBe(true);
-    expect(response.body.settings.models).toEqual(["first/model", "second/model"]);
-    expect(JSON.stringify(response.body)).not.toContain("secret");
+    expect(response.body.settings.authMode).toBe("keyless");
+    expect(response.body.storedCredential).toBe(false);
+    expect(JSON.parse(mocks.state.content).provider.polyrouter.apiKey).toBe(false);
+    expect(JSON.parse(mocks.state.authContent)).toEqual({
+      apiKey: "command-code-login",
+      other: { type: "api", key: "other-key" },
+    });
   });
+
+  it("rolls back providers.json when installing auth.json fails", async () => {
+    mocks.state.exists = true;
+    mocks.state.content = '{"existing":true}';
+    mocks.state.authExists = true;
+    mocks.state.authContent = JSON.stringify({ apiKey: "command-code-login" });
+    const originalConfig = mocks.state.content;
+    const originalAuth = mocks.state.authContent;
+    mocks.state.failRenameTo = "auth.json";
+
+    const response = await POST(request(applyBody(await getRevision(), {
+      authMode: "stored",
+      apiKey: "selected-key",
+    })));
+
+    expect(response.status).toBe(500);
+    expect(mocks.state.content).toBe(originalConfig);
+    expect(mocks.state.authContent).toBe(originalAuth);
+    expect(mocks.state.locked).toBe(false);
+  });
+
 
   it("requires explicit adoption before changing a markerless provider", async () => {
     mocks.state.exists = true;

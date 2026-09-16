@@ -10,6 +10,7 @@ import {
   ModelSelectModal,
 } from "@/shared/components";
 import BaseUrlSelect from "./BaseUrlSelect";
+import ApiKeySelect from "./ApiKeySelect";
 
 const ENDPOINT = "/api/cli-tools/commandcode-settings";
 const ENV_KEY = "POLYROUTER_API_KEY";
@@ -46,6 +47,8 @@ export default function CommandCodeToolCard({
   onToggle,
   activeProviders,
   requireApiKey,
+  apiKeys,
+  cloudEnabled,
   tunnelEnabled,
   tunnelPublicUrl,
   tailscaleEnabled,
@@ -58,7 +61,11 @@ export default function CommandCodeToolCard({
   const [baseUrl, setBaseUrl] = useState("");
   const [selectedModels, setSelectedModels] = useState([]);
   const [modelInput, setModelInput] = useState("");
-  const [authMode, setAuthMode] = useState(requireApiKey ? "environment" : "keyless");
+  const [authMode, setAuthMode] = useState(requireApiKey ? "stored" : "keyless");
+  const [userSelectedApiKey, setUserSelectedApiKey] = useState(null);
+  const defaultApiKey = apiKeys?.[0]?.key || (!cloudEnabled ? "sk_polyrouter" : "");
+  const selectedApiKey = userSelectedApiKey ?? defaultApiKey;
+  const setSelectedApiKey = setUserSelectedApiKey;
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -72,15 +79,15 @@ export default function CommandCodeToolCard({
     if (!data.settings) {
       setBaseUrl("");
       setSelectedModels([]);
-      setAuthMode(data.apiKeyRequired ? "environment" : "keyless");
+      setAuthMode(data.apiKeyRequired ? "stored" : "keyless");
       return;
     }
     setBaseUrl(data.settings.baseUrl || "");
     setSelectedModels(data.settings.models || []);
     if (data.settings.authMode === "custom") {
       setAuthMode("preserve");
-    } else if (data.settings.authMode === "environment") {
-      setAuthMode("environment");
+    } else if (["stored", "environment"].includes(data.settings.authMode)) {
+      setAuthMode("stored");
     } else if (data.settings.authMode === "keyless") {
       setAuthMode("keyless");
     }
@@ -148,8 +155,8 @@ export default function CommandCodeToolCard({
       && nextEndpoint.normalized === configuredEndpoint.normalized;
     setBaseUrl(value);
     setAuthMode((current) => {
-      if (current === "preserve" && !nextMatchesConfigured) return "environment";
-      if (current === "keyless" && nextEndpoint.remote) return "environment";
+      if (current === "preserve" && !nextMatchesConfigured) return "stored";
+      if (current === "keyless" && nextEndpoint.remote) return "stored";
       return current;
     });
     setMessage(null);
@@ -225,6 +232,7 @@ export default function CommandCodeToolCard({
           baseUrl,
           models: selectedModels,
           authMode,
+          ...(authMode === "stored" ? { apiKey: selectedApiKey } : {}),
           expectedRevision: status?.revision,
         }),
       });
@@ -289,9 +297,11 @@ export default function CommandCodeToolCard({
     api: "openai-completions",
     polyrouterManaged: true,
     baseURL: baseUrl || "http://127.0.0.1:20128/v1",
-    ...(authMode === "preserve"
-      ? {}
-      : { apiKey: authMode === "keyless" ? false : `$${ENV_KEY}` }),
+    ...(authMode === "keyless"
+      ? { apiKey: false }
+      : authMode === "environment"
+        ? { apiKey: `$${ENV_KEY}` }
+        : {}),
     models: Object.fromEntries(
       (selectedModels.length ? selectedModels : ["provider/model-id"])
         .map((model) => [model, {}]),
@@ -306,14 +316,25 @@ export default function CommandCodeToolCard({
         ? `Keep the existing apiKey and headers fields unchanged. Merge only:\n${JSON.stringify(providerSnippet, null, 2)}`
         : JSON.stringify({ provider: { polyrouter: providerSnippet } }, null, 2),
     },
-    {
-      filename: "Bash / zsh (when API-key authentication is enabled)",
-      content: `export ${ENV_KEY}="<POLYROUTER_API_KEY>"\ncommand-code`,
-    },
-    {
-      filename: "PowerShell (when API-key authentication is enabled)",
-      content: `$env:${ENV_KEY} = "<POLYROUTER_API_KEY>"\ncommand-code`,
-    },
+    ...(authMode === "stored" ? [{
+      filename: "~/.commandcode/auth.json (merge this field)",
+      content: JSON.stringify({
+        polyrouter: {
+          type: "api",
+          key: selectedApiKey || "<POLYROUTER_API_KEY>",
+        },
+      }, null, 2),
+    }] : []),
+    ...(authMode === "environment" ? [
+      {
+        filename: "Bash / zsh",
+        content: `export ${ENV_KEY}="<POLYROUTER_API_KEY>"\ncommand-code`,
+      },
+      {
+        filename: "PowerShell",
+        content: `$env:${ENV_KEY} = "<POLYROUTER_API_KEY>"\ncommand-code`,
+      },
+    ] : []),
   ];
 
   const supported = status?.installed && !status?.updateRequired;
@@ -329,6 +350,7 @@ export default function CommandCodeToolCard({
     && selectedModels.length > 0
     && Boolean(status?.revision)
     && (!keylessDisabled || authMode !== "keyless")
+    && (authMode !== "stored" || Boolean(selectedApiKey.trim()))
     && (authMode !== "preserve" || customAuthUnchanged);
 
   return (
@@ -417,17 +439,26 @@ export default function CommandCodeToolCard({
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <select value={authMode} onChange={(event) => { setAuthMode(event.target.value); setMessage(null); }} className="w-full px-2 py-2 bg-surface border border-border text-xs sm:py-1.5">
                     {customAuthUnchanged && <option value="preserve">Keep existing custom authentication</option>}
+                    <option value="stored">Stored API key (automatic)</option>
                     <option value="keyless" disabled={keylessDisabled}>Keyless local endpoint</option>
                     <option value="environment">Environment variable: {ENV_KEY}</option>
                   </select>
                 </div>
+
+                {authMode === "stored" && (
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-start sm:gap-2">
+                    <span className="text-xs font-semibold text-text-main sm:pt-2 sm:text-right sm:text-sm">API Key</span>
+                    <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:mt-2 sm:inline">arrow_forward</span>
+                    <ApiKeySelect value={selectedApiKey} onChange={setSelectedApiKey} apiKeys={apiKeys} cloudEnabled={cloudEnabled} />
+                  </div>
+                )}
               </div>
 
               {!endpoint.valid && baseUrl && <p className="p-2 bg-red-500/10 text-xs text-red-600">Use loopback HTTP or remote HTTPS without credentials, query parameters, or fragments.</p>}
-              {apiKeyRequired && status?.settings?.authMode === "keyless" && authMode === "keyless" && <p className="p-2 bg-yellow-500/10 text-xs text-yellow-700 dark:text-yellow-300">This saved keyless configuration is incompatible because PolyRouter now requires an API key. Select environment authentication, then click Apply.</p>}
-              {status?.storedCredential && <p className="p-2 bg-yellow-500/10 text-xs text-yellow-700 dark:text-yellow-300">Command Code has a stored polyrouter credential. It overrides this setting. Clear or replace it through /connect before changing the endpoint or authentication. PolyRouter reads only whether it exists; it never returns or modifies the key.</p>}
-              {status?.credentialStateKnown === false && <p className="p-2 bg-yellow-500/10 text-xs text-yellow-700 dark:text-yellow-300">Command Code auth.json could not be inspected. Endpoint and authentication changes are blocked until it is readable.</p>}
-              {authMode === "environment" && <p className="p-2 bg-blue-500/10 text-xs text-blue-700 dark:text-blue-300">Set {ENV_KEY} before starting Command Code. PolyRouter never writes the raw key.</p>}
+              {apiKeyRequired && status?.settings?.authMode === "keyless" && authMode === "keyless" && <p className="p-2 bg-yellow-500/10 text-xs text-yellow-700 dark:text-yellow-300">This saved keyless configuration is incompatible because PolyRouter now requires an API key. Select stored API-key authentication, then click Apply.</p>}
+              {authMode === "stored" && <p className="p-2 bg-blue-500/10 text-xs text-blue-700 dark:text-blue-300">Apply stores this key in Command Code&apos;s native auth.json provider credential. Existing Command Code login and other provider credentials stay unchanged.</p>}
+              {status?.credentialStateKnown === false && <p className="p-2 bg-yellow-500/10 text-xs text-yellow-700 dark:text-yellow-300">Command Code auth.json is unreadable or invalid. Repair it before applying or resetting PolyRouter credentials.</p>}
+              {authMode === "environment" && <p className="p-2 bg-blue-500/10 text-xs text-blue-700 dark:text-blue-300">Command Code will read {ENV_KEY} from the environment of every new process.</p>}
               {authMode === "preserve" && <p className="p-2 bg-blue-500/10 text-xs text-blue-700 dark:text-blue-300">Existing custom authentication stays unchanged. Changing the endpoint requires choosing authentication again.</p>}
               {status.warnings?.map((warning) => <p key={warning} className="p-2 bg-yellow-500/10 text-xs text-yellow-700 dark:text-yellow-300">{warning}</p>)}
 
@@ -437,7 +468,7 @@ export default function CommandCodeToolCard({
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button variant="primary" size="sm" onClick={handleApply} disabled={!canApply || working || status.collision} loading={working}><span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply</Button>
-                <Button variant="outline" size="sm" onClick={() => setResetModalOpen(true)} disabled={!status.hasPolyRouter || working}><span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset</Button>
+                <Button variant="outline" size="sm" onClick={() => setResetModalOpen(true)} disabled={(!status.hasPolyRouter && !status.storedCredential && !status.credentialEntryPresent) || working}><span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset</Button>
                 <Button variant="ghost" size="sm" onClick={() => setManualModalOpen(true)}><span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual config</Button>
               </div>
             </>
@@ -459,7 +490,7 @@ export default function CommandCodeToolCard({
         title="Select Models for Command Code"
       />
       <ManualConfigModal isOpen={manualModalOpen} onClose={() => setManualModalOpen(false)} title="Command Code - Manual Configuration" configs={manualConfigs} />
-      <ConfirmModal isOpen={resetModalOpen} onClose={() => setResetModalOpen(false)} onConfirm={handleReset} loading={working} title="Remove PolyRouter from Command Code?" confirmText="Remove provider" message={`Switch active Command Code sessions away from polyrouter/* first. This removes only PolyRouter's ${resetModels} entry from providers.json. Stored credentials in auth.json remain and can be cleared through Command Code /connect.`} />
+      <ConfirmModal isOpen={resetModalOpen} onClose={() => setResetModalOpen(false)} onConfirm={handleReset} loading={working} title="Remove PolyRouter from Command Code?" confirmText="Remove provider" message={`Switch active Command Code sessions away from polyrouter/* first. This removes only PolyRouter's ${resetModels} provider entry and stored credential. Existing Command Code login and other provider credentials stay unchanged.`} />
     </Card>
   );
 }
