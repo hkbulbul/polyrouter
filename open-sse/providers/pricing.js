@@ -284,34 +284,40 @@ export function formatCost(cost) {
  * @returns {number} cost in dollars
  */
 export function calculateCostFromTokens(tokens, pricing) {
-  if (!tokens || !pricing) return 0;
+  return calculateCostBreakdownFromTokens(tokens, pricing)?.totalCost ?? 0;
+}
 
-  let cost = 0;
-
-  const inputTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
-  const cachedTokens = tokens.cached_tokens || tokens.cache_read_input_tokens || 0;
-  const cacheCreationTokens = tokens.cache_creation_input_tokens || 0;
-  // prompt_tokens is cache-inclusive (see canonicalizeUsage): cached + cache_creation
-  // are subsets, so subtract both to avoid charging them at the full input rate.
-  const nonCachedInput = Math.max(0, inputTokens - cachedTokens - cacheCreationTokens);
-
-  cost += nonCachedInput * (pricing.input / 1000000);
-
-  if (cachedTokens > 0) {
-    cost += cachedTokens * ((pricing.cached || pricing.input) / 1000000);
-  }
-
-  const outputTokens = tokens.completion_tokens || tokens.output_tokens || 0;
-  cost += outputTokens * (pricing.output / 1000000);
-
-  const reasoningTokens = tokens.reasoning_tokens || 0;
-  if (reasoningTokens > 0) {
-    cost += reasoningTokens * ((pricing.reasoning || pricing.output) / 1000000);
-  }
-
-  if (cacheCreationTokens > 0) {
-    cost += cacheCreationTokens * ((pricing.cache_creation || pricing.input) / 1000000);
-  }
-
-  return cost;
+// Expects cache-inclusive prompt_tokens (canonicalizeUsage). Keep component and
+// aggregate accounting together; in particular an explicit zero rate is free.
+export function calculateCostBreakdownFromTokens(tokens, pricing) {
+  if (!tokens || !pricing) return null;
+  const validRate = (rate) => typeof rate === "number" && Number.isFinite(rate) && rate >= 0;
+  const rates = {
+    input: pricing.input,
+    output: pricing.output,
+    cached: pricing.cached ?? pricing.input,
+    cache_creation: pricing.cache_creation ?? pricing.input,
+    reasoning: pricing.reasoning ?? pricing.output,
+  };
+  if (!Object.values(rates).every(validRate)) return null;
+  const count = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const input = count(tokens.prompt_tokens ?? tokens.input_tokens);
+  const cached = count(tokens.cached_tokens ?? tokens.cache_read_input_tokens);
+  const creation = count(tokens.cache_creation_input_tokens);
+  const output = count(tokens.completion_tokens ?? tokens.output_tokens);
+  const reasoning = count(tokens.reasoning_tokens);
+  // OpenAI reports reasoning as an output subset; Gemini reports it separately.
+  const regularOutput = tokens.reasoning_tokens_included ? Math.max(0, output - reasoning) : output;
+  const components = {
+    input: Math.max(0, input - cached - creation) * rates.input / 1_000_000,
+    cached: cached * rates.cached / 1_000_000,
+    cacheCreation: creation * rates.cache_creation / 1_000_000,
+    output: regularOutput * rates.output / 1_000_000,
+    reasoning: reasoning * rates.reasoning / 1_000_000,
+  };
+  const inputCost = components.input + components.cached + components.cacheCreation;
+  const outputCost = components.output + components.reasoning;
+  const totalCost = inputCost + outputCost;
+  if (!Number.isFinite(totalCost)) return null;
+  return { inputCost, outputCost, totalCost, components, rates };
 }

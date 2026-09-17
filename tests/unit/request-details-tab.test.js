@@ -29,6 +29,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
+  adapter?.close();
   if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
   if (originalDataDir === undefined) delete process.env.DATA_DIR;
   else process.env.DATA_DIR = originalDataDir;
@@ -200,6 +201,54 @@ describe("token helpers — render-time crash safety", () => {
 
   it("toLocaleString on helper result never throws", () => {
     expect(() => getInputTokens(undefined).toLocaleString()).not.toThrow();
+  });
+});
+
+describe("request cost persistence", () => {
+  const tokens = { prompt_tokens: 330, completion_tokens: 50, cached_tokens: 200, cache_creation_input_tokens: 30 };
+
+  it("stores exact input/output components and preserves historical pricing", async () => {
+    await db.updatePricing({ "cost-test": { priced: { input: 3, output: 15, cached: 0.3, cache_creation: 3.75 } } });
+    await saveDetail({ id: "cost-recorded", provider: "cost-test", model: "priced", tokens });
+    const first = await db.getRequestDetailById("cost-recorded");
+    expect(first.costBreakdown.inputCost).toBeCloseTo(0.0004725, 12);
+    expect(first.costBreakdown.outputCost).toBeCloseTo(0.00075, 12);
+    expect(first.costBreakdown.totalCost).toBeCloseTo(0.0012225, 12);
+    expect(first.costBreakdown).toMatchObject({ pricingFound: true, usageAvailable: true, basis: "recorded" });
+    await db.saveRequestUsage({ provider: "cost-test", model: "priced", tokens });
+    const history = await db.getUsageHistory({ provider: "cost-test" });
+    expect(history[0].cost).toBeCloseTo(first.costBreakdown.totalCost, 12);
+    await db.updatePricing({ "cost-test": { priced: { input: 100, output: 100 } } });
+    expect((await db.getRequestDetailById("cost-recorded")).costBreakdown).toEqual(first.costBreakdown);
+  });
+
+  it("estimates legacy records with current pricing without rewriting them", async () => {
+    const legacy = { id: "cost-legacy", provider: "cost-test", model: "priced", tokens: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 200 } };
+    adapter.run(`INSERT INTO requestDetails(id, timestamp, provider, model, data) VALUES(?, ?, ?, ?, ?)`,
+      [legacy.id, new Date().toISOString(), legacy.provider, legacy.model, JSON.stringify(legacy)]);
+    const result = await db.getRequestDetails({ provider: "cost-test" });
+    const detail = result.details.find((row) => row.id === legacy.id);
+    expect(detail.costBreakdown).toMatchObject({ basis: "current-pricing", pricingFound: true });
+    expect(detail.costBreakdown.inputCost).toBeCloseTo(0.03, 12);
+    expect(JSON.parse(adapter.get(`SELECT data FROM requestDetails WHERE id = ?`, [legacy.id]).data)).not.toHaveProperty("costBreakdown");
+  });
+
+  it("updates a streaming placeholder with its final cost", async () => {
+    await db.saveRequestDetail({ id: "cost-stream", provider: "openai", model: "gpt-4o", tokens: {} });
+    await saveDetail({ id: "cost-stream", provider: "openai", model: "gpt-4o", tokens: { prompt_tokens: 100, completion_tokens: 50 } });
+    const detail = await db.getRequestDetailById("cost-stream");
+    expect(detail.costBreakdown.usageAvailable).toBe(true);
+    expect(detail.costBreakdown.totalCost).toBeCloseTo(0.00075, 12);
+  });
+
+  it("distinguishes unavailable usage, unknown pricing, and free requests", async () => {
+    await db.updatePricing({ "cost-test": { free: { input: 0, output: 0 } } });
+    await saveDetail({ id: "cost-free", provider: "cost-test", model: "free", tokens: { prompt_tokens: 100, completion_tokens: 5 } });
+    await saveDetail({ id: "cost-unknown", provider: "cost-test", model: "no-price-xyz", tokens });
+    await saveDetail({ id: "cost-error", provider: "openai", model: "gpt-4o", status: "error", tokens: { prompt_tokens: 0, completion_tokens: 0 } });
+    expect((await db.getRequestDetailById("cost-free")).costBreakdown).toMatchObject({ totalCost: 0, pricingFound: true, usageAvailable: true });
+    expect((await db.getRequestDetailById("cost-unknown")).costBreakdown).toMatchObject({ totalCost: null, pricingFound: false });
+    expect((await db.getRequestDetailById("cost-error")).costBreakdown).toMatchObject({ totalCost: null, usageAvailable: false });
   });
 });
 

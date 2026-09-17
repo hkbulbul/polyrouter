@@ -9,6 +9,7 @@ import ProviderIcon from "@/shared/components/ProviderIcon";
 import Pagination from "@/shared/components/Pagination";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { cn } from "@/shared/utils/cn";
+import { getRequestCostPresentation } from "@/shared/utils/requestCost";
 import { AI_PROVIDERS, getProviderByAlias } from "@/shared/constants/providers";
 
 let providerNameCache = null;
@@ -125,6 +126,123 @@ function getInputTokens(tokens) {
   // rows don't under-report input.
   const cache = getCachedTokens(tokens);
   return prompt < cache ? cache : prompt;
+}
+
+function getStatusPresentation(status, error) {
+  const normalizedStatus = typeof status === "string" ? status.toLowerCase() : "";
+  const isSuccess = normalizedStatus === "success" || normalizedStatus === "ok" || (!normalizedStatus && !error);
+  const isError = normalizedStatus === "error" || normalizedStatus === "failed" || Boolean(error);
+
+  return {
+    label: status || (isError ? "failed" : "success"),
+    variant: isSuccess ? "success" : isError ? "error" : "default"
+  };
+}
+
+function RequestCostCell({ costBreakdown }) {
+  const cost = getRequestCostPresentation(costBreakdown);
+
+  return (
+    <td
+      className="px-4 py-3 text-right font-mono text-xs text-text-main"
+      title={cost.available ? "Rate-based estimate; not a provider invoice." : cost.reason}
+    >
+      <div className="flex flex-col items-end gap-0.5 leading-tight">
+        <span className="font-semibold">{cost.total}</span>
+        <span className="text-[10px] text-text-muted">
+          {cost.available ? `Input ${cost.input} · Output ${cost.output}` : cost.reason}
+        </span>
+      </div>
+    </td>
+  );
+}
+
+function RequestCostBreakdown({ costBreakdown }) {
+  const cost = getRequestCostPresentation(costBreakdown);
+  const componentRows = [
+    ["Input", cost.components?.input],
+    ["Cached", cost.components?.cached],
+    ["Cache creation", cost.components?.cacheCreation],
+    ["Output", cost.components?.output],
+    ["Reasoning", cost.components?.reasoning]
+  ];
+  const rateRows = [
+    ["Input", cost.rates?.input],
+    ["Cached", cost.rates?.cached],
+    ["Cache creation", cost.rates?.cacheCreation],
+    ["Output", cost.rates?.output],
+    ["Reasoning", cost.rates?.reasoning]
+  ];
+  const hasRates = rateRows.some(([, value]) => value && value !== "—");
+
+  return (
+    <div className="border border-border bg-surface-2/30 p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="material-symbols-outlined text-[18px] text-text-muted">payments</span>
+        <span className="font-semibold text-sm text-text-main">Cost (USD)</span>
+        <Badge variant={cost.available ? "info" : "default"} size="sm">
+          {cost.available ? "Estimate" : "Unavailable"}
+        </Badge>
+        {cost.basis === "current-pricing" && (
+          <Badge variant="warning" size="sm">Current pricing</Badge>
+        )}
+      </div>
+
+      <p className="mb-4 text-xs text-text-muted">
+        Rate-based estimate; not a provider invoice.
+        {cost.estimated ? " Token usage is estimated." : ""}
+      </p>
+
+      <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+        <div>
+          <span className="block text-xs text-text-muted">Total</span>
+          <span className="font-mono font-semibold text-text-main">{cost.total}</span>
+        </div>
+        <div>
+          <span className="block text-xs text-text-muted">Input</span>
+          <span className="font-mono text-text-main">{cost.input}</span>
+        </div>
+        <div>
+          <span className="block text-xs text-text-muted">Output</span>
+          <span className="font-mono text-text-main">{cost.output}</span>
+        </div>
+      </div>
+
+      {cost.available ? (
+        <>
+          <div className="mt-4 border-t border-border pt-3">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Component breakdown</h4>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-5">
+              {componentRows.map(([label, value]) => (
+                <div key={label}>
+                  <span className="block text-xs text-text-muted">{label}</span>
+                  <span className="font-mono text-text-main">{value || "—"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {hasRates && (
+            <details className="mt-4 border-t border-border pt-3">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-text-muted hover:text-text-main">
+                Rates per 1M tokens
+              </summary>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-5">
+                {rateRows.map(([label, value]) => (
+                  <div key={label}>
+                    <span className="block text-xs text-text-muted">{label}</span>
+                    <span className="font-mono text-text-main">{value || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </>
+      ) : (
+        <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">{cost.reason}</p>
+      )}
+    </div>
+  );
 }
 
 export default function RequestDetailsTab() {
@@ -324,7 +442,7 @@ export default function RequestDetailsTab() {
 
       <Card padding="none" className="border border-border bg-surface shadow-[var(--shadow-soft)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px] text-left text-xs sm:text-sm">
+          <table className="w-full min-w-[1040px] text-left text-xs sm:text-sm">
             <thead className="border-b border-border bg-surface-2/60 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
               <tr>
                 <th className="px-4 py-3">Timestamp</th>
@@ -335,6 +453,7 @@ export default function RequestDetailsTab() {
                 <th className="px-4 py-3 text-right">Cached</th>
                 <th className="px-4 py-3 text-right">Cache Creation</th>
                 <th className="px-4 py-3 text-right">Output Tokens</th>
+                <th className="px-4 py-3 text-right">Cost (USD)</th>
                 <th className="px-4 py-3">Latency</th>
                 <th className="px-4 py-3 text-center">Action</th>
               </tr>
@@ -342,7 +461,7 @@ export default function RequestDetailsTab() {
             <tbody className="divide-y divide-border/60">
               {loading ? (
                 <tr>
-                  <td colSpan="10" className="p-12 text-center text-text-muted">
+                  <td colSpan="11" className="p-12 text-center text-text-muted">
                     <div className="flex items-center justify-center gap-2">
                       <span className="material-symbols-outlined animate-spin text-[24px] text-brand-500">progress_activity</span>
                       <span>Loading request records...</span>
@@ -351,7 +470,7 @@ export default function RequestDetailsTab() {
                 </tr>
               ) : details.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="p-12 text-center text-text-muted">
+                  <td colSpan="11" className="p-12 text-center text-text-muted">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <span className="material-symbols-outlined text-[32px] opacity-30">receipt_long</span>
                       <span>No request details found</span>
@@ -360,7 +479,7 @@ export default function RequestDetailsTab() {
                 </tr>
               ) : (
                 details.map((detail, index) => {
-                  const isSuccess = detail.status === "success" || detail.status === "ok" || (!detail.status && !detail.error);
+                  const status = getStatusPresentation(detail.status, detail.error);
                   return (
                     <tr
                       key={`${detail.id}-${index}`}
@@ -382,8 +501,8 @@ export default function RequestDetailsTab() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <Badge variant={isSuccess ? "success" : "error"} size="sm" dot>
-                          {detail.status || (isSuccess ? "success" : "failed")}
+                        <Badge variant={status.variant} size="sm" dot>
+                          {status.label}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-xs text-text-main">
@@ -398,6 +517,7 @@ export default function RequestDetailsTab() {
                       <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400">
                         {detail.tokens?.completion_tokens?.toLocaleString() || 0}
                       </td>
+                      <RequestCostCell costBreakdown={detail.costBreakdown} />
                       <td className="px-4 py-3 text-xs text-text-muted font-mono">
                         <div className="flex flex-col gap-0.5 leading-tight">
                           <span>TTFT: <strong className="text-text-main">{detail.latency?.ttft || 0}ms</strong></span>
@@ -503,6 +623,8 @@ export default function RequestDetailsTab() {
                 </span>
               </div>
             </div>
+
+            <RequestCostBreakdown costBreakdown={selectedDetail.costBreakdown} />
 
             {selectedDetail.pxpipe && (
               <div className=" border border-black/5 dark:border-white/5 p-4">

@@ -1,5 +1,6 @@
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
+import { calculateRequestCost } from "../helpers/requestCost.js";
 
 const DEFAULT_MAX_RECORDS = 200;
 const DEFAULT_BATCH_SIZE = 20;
@@ -42,6 +43,7 @@ async function getObservabilityConfig() {
 let writeBuffer = [];
 let flushTimer = null;
 let isFlushing = false;
+let saveSequence = Promise.resolve();
 
 function sanitizeHeaders(headers) {
   if (!headers || typeof headers !== "object") return {};
@@ -75,7 +77,7 @@ async function flushToDatabase() {
   try {
     // Drain entire buffer (loop in case more pushed during await)
     while (writeBuffer.length > 0) {
-      const items = writeBuffer.splice(0, writeBuffer.length);
+      const items = await Promise.all(writeBuffer.splice(0, writeBuffer.length));
       const db = await getAdapter();
       const config = await getObservabilityConfig();
 
@@ -94,6 +96,7 @@ async function flushToDatabase() {
             status: item.status || null,
             latency: item.latency || {},
             tokens: item.tokens || {},
+            costBreakdown: item.costBreakdown,
             request: truncateField(item.request, config.maxJsonSize),
             providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
             providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
@@ -124,22 +127,32 @@ async function flushToDatabase() {
 }
 
 export async function saveRequestDetail(detail) {
-  const config = await getObservabilityConfig();
-  if (!config.enabled) return;
+  // Serialize the lightweight enqueue step. Callers intentionally do not await
+  // this function on streaming paths, so config lookups must not reorder rows.
+  let enqueue;
+  enqueue = saveSequence.then(async () => {
+    const config = await getObservabilityConfig();
+    if (!config.enabled) return;
 
-  writeBuffer.push(detail);
+    // Queue promises in arrival order so a slower pricing lookup for the initial
+    // streaming placeholder can never overwrite the completed record.
+    writeBuffer.push(calculateRequestCost(detail.provider, detail.model, detail.tokens)
+      .then((costBreakdown) => ({ ...detail, costBreakdown })));
 
-  // Trigger immediate flush if batch threshold reached.
-  // flushToDatabase() drains entire buffer in a loop, so all pushes during await are persisted.
-  if (writeBuffer.length >= config.batchSize) {
-    if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-    flushToDatabase().catch((e) => console.error("[requestDetailsRepo] flush err:", e));
-  } else if (!flushTimer) {
-    flushTimer = setTimeout(() => {
-      flushTimer = null;
-      flushToDatabase().catch(() => {});
-    }, config.flushIntervalMs);
-  }
+    // Trigger immediate flush if batch threshold reached.
+    // flushToDatabase() drains entire buffer in a loop, so all pushes during await are persisted.
+    if (writeBuffer.length >= config.batchSize) {
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      flushToDatabase().catch((e) => console.error("[requestDetailsRepo] flush err:", e));
+    } else if (!flushTimer) {
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        flushToDatabase().catch(() => {});
+      }, config.flushIntervalMs);
+    }
+  });
+  saveSequence = enqueue.catch(() => {});
+  return enqueue;
 }
 
 export async function getRequestDetails(filter = {}) {
@@ -167,7 +180,7 @@ export async function getRequestDetails(filter = {}) {
     `SELECT data FROM requestDetails ${where} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset]
   );
-  const details = rows.map((r) => parseJson(r.data, {}));
+  const details = await Promise.all(rows.map((r) => withRequestCost(parseJson(r.data, {}))));
 
   return {
     details,
@@ -181,10 +194,19 @@ export async function getDistinctProviders() {
   return rows.map((r) => r.provider);
 }
 
+async function withRequestCost(detail) {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return {};
+  if (detail.costBreakdown || !detail.model) return detail;
+  return {
+    ...detail,
+    costBreakdown: await calculateRequestCost(detail.provider, detail.model, detail.tokens, "current-pricing"),
+  };
+}
+
 export async function getRequestDetailById(id) {
   const db = await getAdapter();
   const row = db.get(`SELECT data FROM requestDetails WHERE id = ?`, [id]);
-  return row ? parseJson(row.data, null) : null;
+  return row ? withRequestCost(parseJson(row.data, null)) : null;
 }
 
 const _shutdownHandler = async () => {
