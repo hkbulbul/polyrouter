@@ -141,6 +141,10 @@ export function normalizeUsage(usage) {
   }
 
   if (Object.keys(normalized).length === 0) return null;
+  if (usage.estimated === true) normalized.estimated = true;
+  if (typeof usage.reasoning_tokens_included === "boolean") {
+    normalized.reasoning_tokens_included = usage.reasoning_tokens_included;
+  }
   return normalized;
 }
 
@@ -166,7 +170,7 @@ export function canonicalizeUsage(usage) {
 
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
   const completion = num(usage.completion_tokens ?? usage.output_tokens);
-  const reasoning = num(usage.reasoning_tokens);
+  const reasoning = num(usage.reasoning_tokens ?? usage.completion_tokens_details?.reasoning_tokens ?? usage.output_tokens_details?.reasoning_tokens);
   // Fall back to the nested prompt_tokens_details.cache_creation_tokens shape
   // (buildUsage()'s OpenAI-forwarding format) when the top-level field is
   // absent, so callers that pass a buildUsage() object through don't silently
@@ -190,7 +194,7 @@ export function canonicalizeUsage(usage) {
     prompt = prompt + cached + cacheCreation;
   } else {
     // OpenAI/Gemini path (or already-canonical input): prompt already includes cached_tokens.
-    cached = num(usage.cached_tokens);
+    cached = num(usage.cached_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? usage.input_tokens_details?.cached_tokens);
   }
 
   const result = {
@@ -203,6 +207,12 @@ export function canonicalizeUsage(usage) {
     cache_creation_input_tokens: cacheCreation,
   };
   if (reasoning > 0) result.reasoning_tokens = reasoning;
+  if (usage.estimated === true) result.estimated = true;
+  if (typeof usage.reasoning_tokens_included === "boolean") {
+    result.reasoning_tokens_included = usage.reasoning_tokens_included;
+  } else if (usage.completion_tokens_details?.reasoning_tokens !== undefined || usage.output_tokens_details?.reasoning_tokens !== undefined) {
+    result.reasoning_tokens_included = true;
+  }
   return result;
 }
 
@@ -268,6 +278,7 @@ export function extractUsage(chunk) {
       completion_tokens: usage.output_tokens || usage.completion_tokens || 0,
       cached_tokens: cachedTokens,
       reasoning_tokens: usage.output_tokens_details?.reasoning_tokens,
+      reasoning_tokens_included: true,
       prompt_tokens_details: cachedTokens ? { cached_tokens: cachedTokens } : undefined
     });
   }
@@ -324,6 +335,8 @@ export function mergeUsage(prev, next) {
     // chunk can't poison the whole accumulation (Math.max(x, NaN) is NaN).
     if (typeof v === "number" && Number.isFinite(v)) {
       merged[k] = Math.max(typeof merged[k] === "number" ? merged[k] : 0, v);
+    } else if (typeof v === "boolean") {
+      merged[k] = v;
     } else if (v && typeof v === "object") {
       merged[k] = v; // nested details objects: take latest
     }

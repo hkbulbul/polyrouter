@@ -132,21 +132,9 @@ async function ensureRingInitialized() {
 }
 
 async function calculateCost(provider, model, tokens) {
-  if (!tokens || !provider || !model) return 0;
-  try {
-    const { getPricingForModel } = await import("./pricingRepo.js");
-    const pricing = await getPricingForModel(provider, model);
-    if (!pricing) return 0;
-
-    // Delegate the actual math to the single source of truth (avoids the two
-    // copies drifting apart — see open-sse/providers/pricing.js for the
-    // cache-inclusive prompt_tokens convention this assumes).
-    const { calculateCostFromTokens } = await import("open-sse/providers/pricing.js");
-    return calculateCostFromTokens(tokens, pricing);
-  } catch (e) {
-    console.error("Error calculating cost:", e);
-    return 0;
-  }
+  const { calculateRequestCost } = await import("../helpers/requestCost.js");
+  const breakdown = await calculateRequestCost(provider, model, tokens);
+  return breakdown.totalCost ?? 0;
 }
 
 export function trackPendingRequest(model, provider, connectionId, started, error = false) {
