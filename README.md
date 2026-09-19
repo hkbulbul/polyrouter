@@ -27,7 +27,6 @@ PolyRouter is a **local AI gateway** and **OpenAI-compatible API router**. It ex
 
 Everything runs on your machine: OAuth and API-key connections, model combos with fallback, multi-account routing, token refresh, quota monitoring, and local SQLite-backed state.
 
-> **Fork notice:** PolyRouter is a fork of [9Router](https://github.com/decolua/9router) — the excellent MIT-licensed local AI router by [decolua](https://github.com/decolua). PolyRouter builds on that foundation with its own routing, provider, and dashboard work. Go thank them with a ⭐.
 
 ## Quick Start
 
@@ -111,8 +110,15 @@ PolyRouter works with anything that speaks an OpenAI-compatible API or a configu
 
 40+ providers via OAuth, API keys, and compatible endpoints.
 
-- **OAuth providers:** Claude Code, Codex, GitHub Copilot, Cursor, Antigravity, Kimchi, and more.
-- **API-key providers:** OpenAI, Anthropic, Gemini, DeepSeek, Groq, xAI, Mistral, Perplexity, Together AI, Fireworks, Cerebras, Cohere, NVIDIA, GLM, Kimi, MiniMax, OpenRouter, FreeModel, SiliconFlow, Nebius, Chutes, Hyperbolic, and more.
+| | | | | |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="./public/providers/openai.png" alt="OpenAI" width="36"/> <br/> **OpenAI** | <img src="./public/providers/claude.png" alt="Anthropic" width="36"/> <br/> **Anthropic** | <img src="./public/providers/gemini.png" alt="Gemini" width="36"/> <br/> **Gemini** | <img src="./public/providers/groq.png" alt="Groq" width="36"/> <br/> **Groq** | <img src="./public/providers/deepseek.png" alt="DeepSeek" width="36"/> <br/> **DeepSeek** |
+| <img src="./public/providers/xai.png" alt="xAI" width="36"/> <br/> **xAI** | <img src="./public/providers/mistral.png" alt="Mistral" width="36"/> <br/> **Mistral** | <img src="./public/providers/perplexity.png" alt="Perplexity" width="36"/> <br/> **Perplexity** | <img src="./public/providers/together.png" alt="Together AI" width="36"/> <br/> **Together AI** | <img src="./public/providers/fireworks.png" alt="Fireworks" width="36"/> <br/> **Fireworks** |
+| <img src="./public/providers/cerebras.png" alt="Cerebras" width="36"/> <br/> **Cerebras** | <img src="./public/providers/cohere.png" alt="Cohere" width="36"/> <br/> **Cohere** | <img src="./public/providers/nvidia.png" alt="NVIDIA" width="36"/> <br/> **NVIDIA** | <img src="./public/providers/glm.png" alt="GLM" width="36"/> <br/> **GLM** | <img src="./public/providers/kimi.png" alt="Kimi" width="36"/> <br/> **Kimi** |
+| <img src="./public/providers/minimax.png" alt="MiniMax" width="36"/> <br/> **MiniMax** | <img src="./public/providers/openrouter.png" alt="OpenRouter" width="36"/> <br/> **OpenRouter** | <img src="./public/providers/nebius.png" alt="Nebius" width="36"/> <br/> **Nebius** | <img src="./public/providers/chutes.png" alt="Chutes" width="36"/> <br/> **Chutes** | <img src="./public/providers/hyperbolic.png" alt="Hyperbolic" width="36"/> <br/> **Hyperbolic** |
+
+**Plus OAuth providers:** Claude Code, Codex, GitHub Copilot, Cursor, Antigravity, Kimchi, Qwen, Kiro, iFlow, LongCat, and more.
+
 - **Free & subscription workflows:** mix supported accounts in model combos with ordered fallback.
 
 ## API Examples

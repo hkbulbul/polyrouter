@@ -57,6 +57,19 @@ Model:    a provider model or a custom model combo
 
 Works with compatible tools such as **Claude Code, Codex, Cursor, Cline, OpenClaw, OpenCode, Continue, Roo Code, Kilo Code, and GitHub Copilot**.
 
+## Supported Providers
+
+40+ providers via OAuth, API keys, and compatible endpoints.
+
+| | | | | |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/openai.png" alt="OpenAI" width="36"/> <br/> **OpenAI** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/claude.png" alt="Anthropic" width="36"/> <br/> **Anthropic** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/gemini.png" alt="Gemini" width="36"/> <br/> **Gemini** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/groq.png" alt="Groq" width="36"/> <br/> **Groq** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/deepseek.png" alt="DeepSeek" width="36"/> <br/> **DeepSeek** |
+| <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/xai.png" alt="xAI" width="36"/> <br/> **xAI** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/mistral.png" alt="Mistral" width="36"/> <br/> **Mistral** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/perplexity.png" alt="Perplexity" width="36"/> <br/> **Perplexity** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/together.png" alt="Together AI" width="36"/> <br/> **Together AI** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/fireworks.png" alt="Fireworks" width="36"/> <br/> **Fireworks** |
+| <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/cerebras.png" alt="Cerebras" width="36"/> <br/> **Cerebras** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/cohere.png" alt="Cohere" width="36"/> <br/> **Cohere** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/nvidia.png" alt="NVIDIA" width="36"/> <br/> **NVIDIA** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/glm.png" alt="GLM" width="36"/> <br/> **GLM** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/kimi.png" alt="Kimi" width="36"/> <br/> **Kimi** |
+| <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/minimax.png" alt="MiniMax" width="36"/> <br/> **MiniMax** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/openrouter.png" alt="OpenRouter" width="36"/> <br/> **OpenRouter** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/nebius.png" alt="Nebius" width="36"/> <br/> **Nebius** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/chutes.png" alt="Chutes" width="36"/> <br/> **Chutes** | <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/providers/hyperbolic.png" alt="Hyperbolic" width="36"/> <br/> **Hyperbolic** |
+
+**Plus OAuth providers:** Claude Code, Codex, GitHub Copilot, Cursor, Antigravity, Kimchi, Qwen, Kiro, iFlow, LongCat, and more.
+
 ## Features
 
 - **One endpoint, many providers** — 40+ AI providers through OAuth, API keys, and compatible endpoints
