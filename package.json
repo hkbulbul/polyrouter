@@ -2,6 +2,7 @@
   "name": "polyrouter-app",
   "version": "1.0.32",
   "description": "PolyRouter local AI gateway dashboard and OpenAI-compatible API router",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "node custom-server.js",

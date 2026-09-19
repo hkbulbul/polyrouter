@@ -46,7 +46,7 @@
     "oauth",
     "cli"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.25.12",
     "nodemon": "^3.1.14"

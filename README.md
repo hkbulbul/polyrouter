@@ -12,7 +12,7 @@
   [![GitHub stars](https://img.shields.io/github/stars/hkbulbul/polyrouter?style=flat&logo=github)](https://github.com/hkbulbul/polyrouter/stargazers)
   [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/c5Sgutjkw)
   [![Node](https://img.shields.io/node/v/polyrouter?logo=node.js&label=node)](https://www.npmjs.com/package/polyrouter)
-  [![License](https://img.shields.io/badge/license-proprietary-blue)](./LICENSE)
+  [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
   Route, translate, and optimize AI requests locally — with OAuth & API-key connections,
   multi-account failover, token optimization, SQLite persistence, and real-time usage tracking.
@@ -26,6 +26,8 @@
 PolyRouter is a **local AI gateway** and **OpenAI-compatible API router**. It exposes a single `/v1` endpoint on your machine, then routes AI traffic to your configured providers while translating request and response formats when needed. Connect AI coding tools and applications to multiple providers without reconfiguring endpoints for every provider or account.
 
 Everything runs on your machine: OAuth and API-key connections, model combos with fallback, multi-account routing, token refresh, quota monitoring, and local SQLite-backed state.
+
+> **Fork notice:** PolyRouter is a fork of [9Router](https://github.com/decolua/9router) — the excellent MIT-licensed local AI router by [decolua](https://github.com/decolua). PolyRouter builds on that foundation with its own routing, provider, and dashboard work. Go thank them with a ⭐.
 
 ## Quick Start
 
@@ -246,4 +248,8 @@ An OpenAI-compatible `/v1` API. Provider-specific formats are translated as requ
 
 ## License
 
-PolyRouter is **source-available, proprietary software** — see [LICENSE](./LICENSE). All rights reserved. Unauthorized copying, redistribution, modification, sublicensing, or commercial use is prohibited except where expressly authorized by the owner.
+PolyRouter is released under the [MIT License](./LICENSE).
+
+PolyRouter is a fork of [9Router](https://github.com/decolua/9router) by decolua and contributors, also MIT-licensed — their upstream copyright notice is retained in our LICENSE file as required.
+
+You are free to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of this software under the MIT terms.

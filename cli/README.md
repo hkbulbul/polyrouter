@@ -12,12 +12,15 @@
   [![GitHub stars](https://img.shields.io/github/stars/hkbulbul/polyrouter?style=flat&logo=github)](https://github.com/hkbulbul/polyrouter/stargazers)
   [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/c5Sgutjkw)
   [![Node](https://img.shields.io/node/v/polyrouter?logo=node.js&label=node)](https://www.npmjs.com/package/polyrouter)
+  [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 </div>
 
 ---
 
 PolyRouter is a **local AI gateway** for AI coding tools and applications. The CLI starts the PolyRouter dashboard and a single OpenAI-compatible `/v1` API endpoint, then routes requests across your configured AI providers — with format translation, OAuth/API-key connections, multi-account routing, model fallback, token optimization, quota tracking, and local SQLite persistence.
+
+> **Fork notice:** PolyRouter is a fork of [9Router](https://github.com/decolua/9router) — the MIT-licensed local AI router by [decolua](https://github.com/decolua). PolyRouter builds on that foundation with its own routing, provider, and dashboard work.
 
 ## Install
 
@@ -144,4 +147,8 @@ Official npm releases can send minimal **anonymous lifecycle telemetry** (a rand
 
 ## License
 
-PolyRouter is **source-available, proprietary software** — see [LICENSE](https://raw.githubusercontent.com/hkbulbul/polyrouter/master/LICENSE). All rights reserved. Unauthorized copying, redistribution, modification, sublicensing, or commercial use is prohibited except where expressly authorized by the owner.
+MIT — see [LICENSE](https://raw.githubusercontent.com/hkbulbul/polyrouter/master/LICENSE).
+
+PolyRouter is a fork of [9Router](https://github.com/decolua/9router) by decolua and contributors, also MIT-licensed — their upstream copyright notice is retained in our LICENSE file as required.
+
+You are free to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of this software under the MIT terms.
