@@ -313,6 +313,23 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
           </div>
         )}
         <HeaderSearch />
+        <a
+          href="https://discord.gg/c5Sgutjkw"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-center justify-center size-10 rounded-full text-text-muted"
+          aria-label="Join the PolyRouter Discord community"
+          title="Join the PolyRouter Discord community"
+        >
+          <svg
+            className="size-5 transition-colors duration-200 group-hover:text-[#5865F2]"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M19.54 5.19A16.9 16.9 0 0 0 15.4 3.9a11.9 11.9 0 0 0-.53 1.08 15.7 15.7 0 0 0-5.74 0A11.9 11.9 0 0 0 8.6 3.9a16.9 16.9 0 0 0-4.14 1.29C1.84 9.08 1.13 12.88 1.48 16.63a16.9 16.9 0 0 0 5.1 2.58c.62-.84 1.17-1.73 1.64-2.67a10.4 10.4 0 0 1-1.63-.78l.4-.31a11.96 11.96 0 0 0 10.02 0l.4.31c-.52.31-1.06.57-1.63.78.47.94 1.02 1.83 1.64 2.67a16.9 16.9 0 0 0 5.1-2.58c.41-4.35-.7-8.11-2.98-11.44ZM8.5 14.75c-.98 0-1.79-.9-1.79-2s.79-2 1.79-2 1.8.9 1.79 2c0 1.1-.8 2-1.79 2Zm7 0c-.98 0-1.79-.9-1.79-2s.79-2 1.79-2 1.8.9 1.79 2c0 1.1-.8 2-1.79 2Z" />
+          </svg>
+        </a>
         <button
           type="button"
           onClick={() => setBugModalOpen(true)}
