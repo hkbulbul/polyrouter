@@ -1,4 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import commandCodeProvider from "../../open-sse/providers/registry/commandcode.js";
+import { MITM_DNS_BYPASS_HOSTS } from "../../open-sse/config/networkConstants.js";
+
+const COMMANDCODE_API_URL = commandCodeProvider.transport.baseUrl;
+const COMMANDCODE_HOSTNAME = new URL(COMMANDCODE_API_URL).hostname;
 
 const mocks = vi.hoisted(() => ({
   agentOptions: [],
@@ -55,15 +60,19 @@ beforeEach(() => {
 });
 
 describe("proxyAwareFetch CommandCode DNS fallback", () => {
-  it("offers every public IPv4 address to Undici for the CommandCode API", async () => {
-    await proxyAwareFetch("https://api.commandcode.ai/alpha/generate", { method: "POST" });
+  it("derives the CommandCode bypass hostname from its provider transport", () => {
+    expect(MITM_DNS_BYPASS_HOSTS).toContain(COMMANDCODE_HOSTNAME);
+  });
 
-    expect(mocks.resolve4).toHaveBeenCalledWith("api.commandcode.ai");
+  it("offers every public IPv4 address to Undici for the CommandCode API", async () => {
+    await proxyAwareFetch(COMMANDCODE_API_URL, { method: "POST" });
+
+    expect(mocks.resolve4).toHaveBeenCalledWith(COMMANDCODE_HOSTNAME);
     const dispatcher = mocks.fetch.mock.calls[0][1].dispatcher;
     expect(dispatcher.options.connect.autoSelectFamily).toBe(true);
 
     const lookup = vi.fn();
-    dispatcher.options.connect.lookup("api.commandcode.ai", { all: true }, lookup);
+    dispatcher.options.connect.lookup(COMMANDCODE_HOSTNAME, { all: true }, lookup);
     expect(lookup).toHaveBeenCalledWith(null, [
       { address: "172.67.167.23", family: 4 },
       { address: "104.21.49.202", family: 4 },
@@ -71,7 +80,7 @@ describe("proxyAwareFetch CommandCode DNS fallback", () => {
   });
 
   it("does not apply the bypass to a lookalike hostname", async () => {
-    await proxyAwareFetch("https://api.commandcode.ai.example.com/alpha/generate", { method: "POST" });
+    await proxyAwareFetch(`https://${COMMANDCODE_HOSTNAME}.example.com/alpha/generate`, { method: "POST" });
 
     expect(mocks.resolve4).not.toHaveBeenCalled();
     const dispatcher = mocks.fetch.mock.calls[0][1].dispatcher;
