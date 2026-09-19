@@ -1,6 +1,23 @@
-# PolyRouter CLI — Local AI Gateway and OpenAI-Compatible API Router
+<div align="center">
 
-PolyRouter is a local AI gateway for AI coding tools and applications. The CLI starts the PolyRouter dashboard and a single OpenAI-compatible `/v1` API endpoint, then routes requests across configured AI providers with format translation, OAuth/API-key connections, multi-account routing, model fallback, token optimization, quota tracking, and local SQLite persistence.
+  <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/polyrouter-logo.png" alt="PolyRouter — local AI gateway and OpenAI-compatible API router" width="140"/>
+
+  # PolyRouter
+
+  **One local endpoint for 40+ AI providers, AI coding tools, and model-fallback workflows.**
+
+  [![npm version](https://img.shields.io/npm/v/polyrouter?color=cb3837&logo=npm)](https://www.npmjs.com/package/polyrouter)
+  [![npm downloads](https://img.shields.io/npm/dm/polyrouter?color=cb3837&logo=npm&label=downloads%2Fmonth)](https://www.npmjs.com/package/polyrouter)
+  [![npm total downloads](https://img.shields.io/npm/dt/polyrouter?color=cb3837&logo=npm&label=total)](https://www.npmjs.com/package/polyrouter)
+  [![GitHub stars](https://img.shields.io/github/stars/hkbulbul/polyrouter?style=flat&logo=github)](https://github.com/hkbulbul/polyrouter/stargazers)
+  [![Discord](https://img.shields.io/badge/Discord-join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/c5Sgutjkw)
+  [![Node](https://img.shields.io/node/v/polyrouter?logo=node.js&label=node)](https://www.npmjs.com/package/polyrouter)
+
+</div>
+
+---
+
+PolyRouter is a **local AI gateway** for AI coding tools and applications. The CLI starts the PolyRouter dashboard and a single OpenAI-compatible `/v1` API endpoint, then routes requests across your configured AI providers — with format translation, OAuth/API-key connections, multi-account routing, model fallback, token optimization, quota tracking, and local SQLite persistence.
 
 ## Install
 
@@ -17,8 +34,10 @@ npx polyrouter
 
 After startup:
 
-- **Dashboard:** `http://localhost:20128/dashboard`
-- **OpenAI-compatible API:** `http://localhost:20128/v1`
+| What | Where |
+|---|---|
+| Dashboard | `http://localhost:20128/dashboard` |
+| OpenAI-compatible API | `http://localhost:20128/v1` |
 
 ## Connect an AI Coding Tool
 
@@ -29,22 +48,22 @@ After startup:
 
 ```text
 Endpoint: http://localhost:20128/v1
-API key:  Your PolyRouter dashboard API key
-Model:    A provider model or custom model combo
+API key:  your PolyRouter API key
+Model:    a provider model or a custom model combo
 ```
 
-PolyRouter works with compatible tools such as **Claude Code, Codex, Cursor, Cline, OpenClaw, OpenCode, Continue, Roo Code, Kilo Code, and GitHub Copilot**.
+Works with compatible tools such as **Claude Code, Codex, Cursor, Cline, OpenClaw, OpenCode, Continue, Roo Code, Kilo Code, and GitHub Copilot**.
 
 ## Features
 
-- Local OpenAI-compatible AI gateway and API router
-- 40+ AI providers through OAuth, API keys, and compatible endpoints
-- Automatic request and response format translation
-- Model-combo fallback and multi-account routing
-- OAuth token refresh and provider quota monitoring
-- RTK token optimization for tool-result payloads
-- Local SQLite settings and provider configuration
-- Usage, token, cost, and reset-time tracking in the dashboard
+- **One endpoint, many providers** — 40+ AI providers through OAuth, API keys, and compatible endpoints
+- **Automatic fallback** — model combos fall back in order when a provider is down or out of quota
+- **Multi-account routing** — multiple provider accounts with round-robin or priority behavior
+- **Format translation** — automatic request/response translation between provider formats
+- **OAuth token refresh** and provider quota monitoring
+- **RTK token optimization** — compresses tool-result payloads before they reach an LLM
+- **Usage tracking** — tokens, cost, provider quotas, and reset times in the dashboard
+- **Local SQLite persistence** — settings and provider configuration stay on your machine
 
 ## CLI Options
 
@@ -83,19 +102,14 @@ Stop PolyRouter first, including its tray/background process, then run:
 
 ```bash
 npm install -g polyrouter@latest --prefer-online
-```
-
-`--prefer-online` asks npm to revalidate registry metadata instead of relying on a stale cache when possible. It does not bypass permissions, file locks, or registry/network failures. On Windows, an `EBUSY` or `EPERM` error means PolyRouter, Node, a terminal, or security software still has files open in npm's global package directory—close the locking process and retry rather than deleting the installation manually.
-
-Restart the gateway after updating:
-
-```bash
 polyrouter
 ```
 
+`--prefer-online` asks npm to revalidate registry metadata instead of relying on a stale cache when possible. It does not bypass permissions, file locks, or registry/network failures. On Windows, an `EBUSY` or `EPERM` error means PolyRouter, Node, a terminal, or security software still has files open in npm's global package directory — close the locking process and retry rather than deleting the installation manually.
+
 ## Local Data and SQLite
 
-PolyRouter keeps its primary settings, provider configuration, and SQLite database on the machine that runs the gateway unless you intentionally enable a remote feature.
+PolyRouter keeps its settings, provider configuration, and SQLite database on the machine that runs the gateway unless you intentionally enable a remote feature.
 
 Default application-data locations:
 
@@ -110,13 +124,16 @@ $DATA_DIR/db/data.sqlite
 
 Set the `DATA_DIR` environment variable to use another writable location.
 
+## Telemetry
+
+Official npm releases can send minimal **anonymous lifecycle telemetry** (a random installation UUID, event name, timestamp, version). It never sends prompts, requests, models, providers, credentials, raw IPs, or machine identifiers. Disable it in **Dashboard → Profile → Anonymous Telemetry**, or set `POLYROUTER_PUBLIC_TELEMETRY=false` before startup. See the [Privacy Policy](https://github.com/hkbulbul/polyrouter#installation-telemetry) for details.
+
 ## Documentation and Support
 
-- [Project README](../README.md)
-- [Docker deployment and persistence](../DOCKER.md)
-- [Environment configuration](../.env.example)
-
-For installation, configuration, or licensing assistance, contact the PolyRouter owner through your authorized distribution channel.
+- 📖 [Project README](https://github.com/hkbulbul/polyrouter#readme) — full docs, providers, self-hosting
+- 🐳 [Docker deployment](https://github.com/hkbulbul/polyrouter/blob/master/DOCKER.md)
+- 💬 [Discord](https://discord.gg/c5Sgutjkw) — questions, help, and announcements
+- 🐛 [Issues](https://github.com/hkbulbul/polyrouter/issues)
 
 ## Security
 
@@ -127,6 +144,4 @@ For installation, configuration, or licensing assistance, contact the PolyRouter
 
 ## License
 
-PolyRouter is proprietary, closed-source software. All rights reserved.
-
-Unauthorized copying, redistribution, modification, sublicensing, or commercial use is prohibited except where expressly authorized by the owner.
+PolyRouter is **source-available, proprietary software** — see [LICENSE](https://raw.githubusercontent.com/hkbulbul/polyrouter/master/LICENSE). All rights reserved. Unauthorized copying, redistribution, modification, sublicensing, or commercial use is prohibited except where expressly authorized by the owner.
