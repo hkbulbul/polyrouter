@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import dns from "dns";
 import { Agent, setGlobalDispatcher, ProxyAgent } from "undici";
 import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
+import { MITM_DNS_BYPASS_HOSTS } from "../config/networkConstants.js";
 import { dbg } from "./debugLog.js";
 
 // Ensure Node DNS resolution prioritizes IPv4 over IPv6 when both are available
@@ -30,19 +31,24 @@ const defaultDirectAgent = new Agent({
   },
 });
 
-function getBypassAgent(realIP) {
-  let agent = bypassAgents.get(realIP);
+function getBypassAgent(realIPs) {
+  const addresses = [...new Set(realIPs)].map(address => ({ address, family: 4 }));
+  const cacheKey = addresses.map(({ address }) => address).join(",");
+  let agent = bypassAgents.get(cacheKey);
   if (!agent) {
     if (bypassAgents.size >= MEMORY_CONFIG.proxyDispatchersMaxSize) {
       bypassAgents.delete(bypassAgents.keys().next().value);
     }
     agent = new Agent({
       connect: {
-        autoSelectFamily: false,
-        lookup: (_hostname, _opts, cb) => cb(null, [{ address: realIP, family: 4 }]),
+        autoSelectFamily: true,
+        lookup: (_hostname, options, cb) => {
+          if (options?.all) cb(null, addresses);
+          else cb(null, addresses[0].address, addresses[0].family);
+        },
       },
     });
-    bypassAgents.set(realIP, agent);
+    bypassAgents.set(cacheKey, agent);
   }
   return agent;
 }
@@ -141,14 +147,6 @@ async function tryGotScrapingFetch(url, options) {
 
 // DNS cache — use Map to avoid prototype pollution via malformed hostnames
 const DNS_CACHE = new Map();
-const MITM_BYPASS_HOSTS = [
-  "cloudcode-pa.googleapis.com",
-  "daily-cloudcode-pa.googleapis.com",
-  "api.individual.githubcopilot.com",
-  "q.us-east-1.amazonaws.com",
-  "codewhisperer.us-east-1.amazonaws.com",
-  "api2.cursor.sh",
-];
 const PUBLIC_DNS_SERVERS = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"];
 const HTTPS_PORT = 443;
 const HTTP_SUCCESS_MIN = 200;
@@ -162,9 +160,9 @@ function normalizeString(value) {
 /**
  * Resolve real IP using Public DNS (bypass system DNS)
  */
-async function resolveRealIP(hostname) {
+async function resolveRealIPs(hostname) {
   const cached = DNS_CACHE.get(hostname);
-  if (cached && Date.now() < cached.expiry) return cached.ip;
+  if (cached && Date.now() < cached.expiry) return cached.ips;
 
   try {
     const dns = await import("dns");
@@ -176,15 +174,15 @@ async function resolveRealIP(hostname) {
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("DNS query timeout")), 3000)
     );
-    const addresses = await Promise.race([resolvePromise, timeoutPromise]);
-    if (addresses?.[0]) {
-      DNS_CACHE.set(hostname, { ip: addresses[0], expiry: Date.now() + MEMORY_CONFIG.dnsCacheTtlMs });
-      return addresses[0];
+    const addresses = [...new Set(await Promise.race([resolvePromise, timeoutPromise]))];
+    if (addresses.length > 0) {
+      DNS_CACHE.set(hostname, { ips: addresses, expiry: Date.now() + MEMORY_CONFIG.dnsCacheTtlMs });
+      return addresses;
     }
   } catch (error) {
     console.warn(`[ProxyFetch] DNS resolve failed for ${hostname}:`, error.message);
   }
-  return null;
+  return [];
 }
 
 /**
@@ -192,8 +190,7 @@ async function resolveRealIP(hostname) {
  */
 function shouldBypassMitmDns(url) {
   try {
-    const hostname = new URL(url).hostname;
-    return MITM_BYPASS_HOSTS.some(host => hostname.includes(host));
+    return MITM_DNS_BYPASS_HOSTS.has(new URL(url).hostname.toLowerCase());
   } catch { return false; }
 }
 
@@ -329,9 +326,9 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
     // No proxy — manually resolve real IP to bypass DNS spoof
     try {
       const parsedUrl = new URL(targetUrl);
-      const realIP = await resolveRealIP(parsedUrl.hostname);
-      if (realIP) {
-        const dispatcher = getBypassAgent(realIP);
+      const realIPs = await resolveRealIPs(parsedUrl.hostname);
+      if (realIPs.length > 0) {
+        const dispatcher = getBypassAgent(realIPs);
         return await originalFetch(url, { ...effectiveOptions, dispatcher });
       }
     } catch (error) {

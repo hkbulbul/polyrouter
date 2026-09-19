@@ -23,8 +23,9 @@ export default {
     format: "commandcode",
     forceStream: true,
     headers: {
-      "x-command-code-version": "0.25.7",
+      "x-command-code-version": "1.58.0",
       "x-cli-environment": "cli",
+      "User-Agent": "cli",
     },
   },
   models: [
@@ -32,6 +33,7 @@ export default {
     { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
     { id: "moonshotai/Kimi-K2.6", name: "Kimi K2.6" },
     { id: "moonshotai/Kimi-K2.5", name: "Kimi K2.5" },
+    { id: "glm-5.3-flash", name: "GLM 5.3 Flash", upstreamModelId: "z-ai/glm-5.3-flash" },
     { id: "zai-org/GLM-5.1", name: "GLM 5.1" },
     { id: "zai-org/GLM-5", name: "GLM 5" },
     { id: "MiniMaxAI/MiniMax-M2.7", name: "MiniMax M2.7" },

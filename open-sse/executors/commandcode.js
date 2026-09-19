@@ -21,6 +21,9 @@ export class CommandCodeExecutor extends BaseExecutor {
   }
 
   transformRequest(model, body, stream, credentials) {
+    // The CommandCode API reads the nested params.model. chatCore adds a generic
+    // top-level model for most providers, but CommandCode's native client omits it.
+    delete body.model;
     body.stream = true;
     return body;
   }
@@ -37,6 +40,11 @@ export class CommandCodeExecutor extends BaseExecutor {
 
     if (stream) headers["Accept"] = "text/event-stream";
     return headers;
+  }
+
+  async shouldRefreshResponse() {
+    // CommandCode uses a static user API key; a 401/403 cannot be refreshed.
+    return false;
   }
 
   async execute(opts) {

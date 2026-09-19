@@ -1,6 +1,7 @@
 # Unreleased
 
 ## Fixes
+- **Command Code model routing**: map `cmc/glm-5.3-flash` to Command Code's canonical `z-ai/glm-5.3-flash` identifier, preserve Command Code's native nested-model request envelope and current client identity headers, fall back across all public DNS addresses when a Cloudflare edge is unreachable, and skip futile token-refresh retries for static API-key 401/403 responses.
 - **Command Code API key setup**: automatically store the selected PolyRouter key in Command Code's native provider credential store, so new Command Code processes work without manually setting `POLYROUTER_API_KEY`; preserve unrelated login/provider credentials and remove only PolyRouter-owned data on reset.
 
 # v1.0.21 (CLI) - 2026-09-05
