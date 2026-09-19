@@ -98,6 +98,8 @@ graphify-out/*
 .impeccable/
 .codex/
 .cursor/
+.vscode/
+.mcp.json
 .preview-data/
 testsprite_tests/
 data/chatgpt-web-sessions/
