@@ -4,7 +4,7 @@
 
   # PolyRouter
 
-  **One local endpoint for 40+ AI providers, AI coding tools, and model-fallback workflows.**
+  **One local endpoint for 60+ AI providers, AI coding tools, and model-fallback workflows.**
 
   [![npm version](https://img.shields.io/npm/v/polyrouter?color=cb3837&logo=npm)](https://www.npmjs.com/package/polyrouter)
   [![npm downloads](https://img.shields.io/npm/dm/polyrouter?color=cb3837&logo=npm&label=downloads%2Fmonth)](https://www.npmjs.com/package/polyrouter)
@@ -59,7 +59,7 @@ Works with compatible tools such as **Claude Code, Codex, Cursor, Cline, OpenCla
 
 ## Supported Providers
 
-40+ providers via OAuth, API keys, and compatible endpoints.
+60+ providers via OAuth, API keys, and compatible endpoints.
 
 | | | | | |
 |:---:|:---:|:---:|:---:|:---:|
@@ -72,7 +72,7 @@ Works with compatible tools such as **Claude Code, Codex, Cursor, Cline, OpenCla
 
 ## Features
 
-- **One endpoint, many providers** — 40+ AI providers through OAuth, API keys, and compatible endpoints
+- **One endpoint, many providers** — 60+ AI providers through OAuth, API keys, and compatible endpoints
 - **Automatic fallback** — model combos fall back in order when a provider is down or out of quota
 - **Multi-account routing** — multiple provider accounts with round-robin or priority behavior
 - **Format translation** — automatic request/response translation between provider formats
