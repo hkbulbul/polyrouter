@@ -1,7 +1,7 @@
 {
   "name": "polyrouter",
   "version": "1.0.33",
-  "description": "Local AI gateway and OpenAI-compatible API router for AI coding tools and 40+ providers",
+  "description": "Local AI gateway and OpenAI-compatible API router for AI coding tools and 60+ providers",
   "bin": {
     "polyrouter": "./cli.js"
   },
@@ -46,7 +46,7 @@
     "oauth",
     "cli"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "esbuild": "^0.25.12",
     "nodemon": "^3.1.14"

@@ -93,5 +93,16 @@ graphify-out/*
 .PR/
 .next-analyze/*
 
+# Local-only tool state (personal machine)
+.commandcode/
+.impeccable/
+.codex/
+.cursor/
+.vscode/
+.mcp.json
+.preview-data/
+testsprite_tests/
+data/chatgpt-web-sessions/
+
 # Sentry Config File
 .env.sentry-build-plugin
