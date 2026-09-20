@@ -1,8 +1,8 @@
 <div align="center">
 
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/polyrouter-logo-white.png"/>
-    <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/polyrouter-logo.png" alt="PolyRouter — local AI gateway and OpenAI-compatible API router" width="140"/>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/polyrouter-logo-white.png?v=1.0.36"/>
+    <img src="https://raw.githubusercontent.com/hkbulbul/polyrouter/master/public/polyrouter-logo.png?v=1.0.36" alt="PolyRouter — local AI gateway and OpenAI-compatible API router" width="140"/>
   </picture>
 
   # PolyRouter
