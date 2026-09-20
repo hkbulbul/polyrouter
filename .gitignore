@@ -38,8 +38,8 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# Supabase CLI local state
-supabase/.temp/
+# Supabase backend (migrations, edge functions, CLI local state) — kept local, not published
+supabase/
 !.env.example
 
 # vercel
@@ -93,6 +93,11 @@ graphify-out/*
 .PR/
 .next-analyze/*
 
+# Translated READMEs + repo images (not needed for now) — root-level only
+/i18n/
+/images/
+/README.zh-CN.md
+
 # Local-only tool state (personal machine)
 .commandcode/
 .impeccable/
@@ -106,3 +111,5 @@ data/chatgpt-web-sessions/
 
 # Sentry Config File
 .env.sentry-build-plugin
+# Keep local Supabase functions, migrations, and CLI state out of version control.
+/supabase/
