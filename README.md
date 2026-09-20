@@ -1,6 +1,9 @@
 <div align="center">
 
-  <img src="./public/polyrouter-logo.png" alt="PolyRouter — local AI gateway and OpenAI-compatible API router" width="160"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./public/polyrouter-logo-white.png"/>
+    <img src="./public/polyrouter-logo.png" alt="PolyRouter — local AI gateway and OpenAI-compatible API router" width="160"/>
+  </picture>
 
   # PolyRouter
 
