@@ -143,10 +143,6 @@ $DATA_DIR/db/data.sqlite
 
 Set the `DATA_DIR` environment variable to use another writable location.
 
-## Telemetry
-
-Official npm releases can send minimal **anonymous lifecycle telemetry** (a random installation UUID, event name, timestamp, version). It never sends prompts, requests, models, providers, credentials, raw IPs, or machine identifiers. Disable it in **Dashboard → Profile → Anonymous Telemetry**, or set `POLYROUTER_PUBLIC_TELEMETRY=false` before startup. See the [Privacy Policy](https://github.com/hkbulbul/polyrouter#installation-telemetry) for details.
-
 ## Documentation and Support
 
 - 📖 [Project README](https://github.com/hkbulbul/polyrouter#readme) — full docs, providers, self-hosting
