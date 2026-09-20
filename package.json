@@ -1,6 +1,6 @@
 {
   "name": "polyrouter-app",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "PolyRouter local AI gateway dashboard and OpenAI-compatible API router for 60+ AI providers",
   "license": "MIT",
   "private": true,
