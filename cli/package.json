@@ -1,6 +1,6 @@
 {
   "name": "polyrouter",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "description": "Local AI gateway and OpenAI-compatible API router for AI coding tools and 60+ providers",
   "bin": {
     "polyrouter": "./cli.js"
