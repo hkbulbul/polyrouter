@@ -12,6 +12,7 @@ import { GET as copilotGet } from "../copilot-settings/route";
 import { GET as clineGet } from "../cline-settings/route";
 import { GET as kiloGet } from "../kilo-settings/route";
 import { GET as deepseekTuiGet } from "../deepseek-tui-settings/route";
+import { GET as deepseekHarnessGet } from "../deepseek-harness-settings/route";
 import { GET as jcodeGet } from "../jcode-settings/route";
 import { GET as grokBuildGet } from "../grok-build-settings/route";
 import { GET as commandCodeGet } from "../commandcode-settings/route";
@@ -28,6 +29,7 @@ const STATUS_GETTERS = {
   cline: clineGet,
   kilo: kiloGet,
   "deepseek-tui": deepseekTuiGet,
+  "deepseek-harness": deepseekHarnessGet,
   jcode: jcodeGet,
   "grok-build": grokBuildGet,
   commandcode: commandCodeGet,

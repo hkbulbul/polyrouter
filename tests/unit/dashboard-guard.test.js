@@ -334,6 +334,25 @@ describe("dashboard guard local-only access", () => {
     expect(response).toBe(mocks.nextResponse);
   });
 
+  it.each(["GET", "POST", "DELETE"])("rejects remote DeepSeek Harness settings %s access without a CLI token", async (method) => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/deepseek-harness-settings", {
+      host: "router.example.com",
+    }, method));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Local only: CLI token required");
+  });
+
+  it("allows trusted local DeepSeek Harness settings access when dashboard login is disabled", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request("/api/cli-tools/deepseek-harness-settings", trustedHeaders()));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
   it("rejects local-only route on loopback when requireLogin=true and no JWT", async () => {
     const response = await proxy(request("/api/mcp/filesystem/sse", {
       host: "localhost:20128",

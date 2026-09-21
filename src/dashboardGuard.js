@@ -78,6 +78,7 @@ const PROTECTED_API_PATHS = [
 const LOCAL_ONLY_PATHS = [
   "/api/cli-tools/cowork-settings",
   "/api/cli-tools/commandcode-settings",
+  "/api/cli-tools/deepseek-harness-settings",
   "/api/cli-tools/antigravity-mitm",
   "/api/mcp/",
   "/api/tunnel/tailscale-install",
