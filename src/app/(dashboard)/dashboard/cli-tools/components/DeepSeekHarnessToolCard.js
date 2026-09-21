@@ -6,6 +6,7 @@ import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import { buildHarnessSettingsYaml } from "@/lib/deepseekHarnessManualConfig";
 
 const ENDPOINT = "/api/cli-tools/deepseek-harness-settings";
 
@@ -160,7 +161,7 @@ export default function DeepSeekHarnessToolCard({
   const manualModel = selectedModel || "provider/model-id";
   const manualModels = selectedModels.length > 0 ? selectedModels : [manualModel];
   const manualConfigs = [
-    { filename: "$DSH_HOME/settings.yaml", content: `llm-pi-ai:\n  providers:\n    polyrouter:\n      displayName: PolyRouter\n      apiKeyEnv: POLYROUTER_API_KEY\n      api: openai-completions\n      baseURL: ${manualBase}\n      compat:\n        thinkingFormat: deepseek\n      models:\n${manualModels.map((model) => `        - id: ${model}\n          name: ${model}`).join("\\n")}\n\nagent-default-model:\n  provider: polyrouter\n  model: ${manualModel}\n` },
+    { filename: "$DSH_HOME/settings.yaml", content: buildHarnessSettingsYaml({ baseUrl: manualBase, models: manualModels, defaultModel: manualModel }) },
     { filename: "$DSH_HOME/.credentials.yaml", content: `version: 1\nrefs:\n  POLYROUTER_API_KEY: <API_KEY_FROM_DASHBOARD>\nrecords: {}\n` },
     { filename: "Run", content: "npm install -g @deepseek-ai/dsh\ndsh web" },
   ];

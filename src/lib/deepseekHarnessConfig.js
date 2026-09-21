@@ -292,7 +292,14 @@ export function inspectHarnessConfig({ settingsText = "", credentialsText = "", 
     hasPolyRouter: Boolean(provider),
     compatible,
     collision,
-    drift: Boolean(owned && provider && metadata.value?.managedProviderDigest && metadata.value.managedProviderDigest !== digest(provider)),
+    drift: Boolean(
+      owned
+      && (
+        !provider
+        || !metadata.value?.managedProviderDigest
+        || metadata.value.managedProviderDigest !== digest(provider)
+      )
+    ),
     configured: compatible && Boolean(model),
     provider: provider ? DSH_PROVIDER_ID : null,
     baseUrl: typeof provider?.baseURL === "string" ? provider.baseURL : null,
@@ -334,6 +341,19 @@ export function applyHarnessDocuments({ settingsText = "", credentialsText = "",
   const owned = Boolean(metadata.value?.managed && metadata.value?.providerId === DSH_PROVIDER_ID);
   if (current && (!owned || !isCompatibleProvider(current))) {
     throw new HarnessConfigError("PROVIDER_ID_CONFLICT", "An existing polyrouter provider is not managed by PolyRouter.");
+  }
+  if (
+    owned
+    && (
+      !current
+      || !metadata.value?.managedProviderDigest
+      || metadata.value.managedProviderDigest !== digest(current)
+    )
+  ) {
+    throw new HarnessConfigError(
+      "CONFIG_DRIFT",
+      "The managed Harness provider changed outside PolyRouter; review before applying or resetting."
+    );
   }
   const normalizedModels = normalizeModels(models, model);
   const requestedDefault = model == null ? normalizedModels[0] : validateModel(model);
@@ -397,6 +417,19 @@ export function resetHarnessDocuments({ settingsText = "", credentialsText = "",
   const owned = Boolean(metadata.value?.managed && metadata.value?.providerId === DSH_PROVIDER_ID);
   if (provider && (!owned || !isCompatibleProvider(provider))) {
     throw new HarnessConfigError("PROVIDER_ID_CONFLICT", "The existing polyrouter provider is not managed by PolyRouter.");
+  }
+  if (
+    owned
+    && (
+      !provider
+      || !metadata.value?.managedProviderDigest
+      || metadata.value.managedProviderDigest !== digest(provider)
+    )
+  ) {
+    throw new HarnessConfigError(
+      "CONFIG_DRIFT",
+      "The managed Harness provider changed outside PolyRouter; review before applying or resetting."
+    );
   }
   if (owned) {
     const providers = settings.doc.getIn([DSH_SETTINGS_NAMESPACE, "providers"])?.toJSON?.() || {};

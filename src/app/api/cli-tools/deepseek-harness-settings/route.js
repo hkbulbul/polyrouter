@@ -16,7 +16,7 @@ import {
   inspectHarnessConfig,
   applyHarnessDocuments,
   resetHarnessDocuments,
-  parseHarnessMetadata,
+  revisionFor,
   redactHarnessError,
 } from "@/lib/deepseekHarnessConfig";
 
@@ -63,8 +63,16 @@ async function writeAtomic(filePath, content) {
   }
 }
 
-async function commitSnapshot(paths, before, after) {
+async function commitSnapshot(paths, before, after, expectedRevision) {
   await ensureSecureHome(paths.dshHome);
+  const latest = await readSnapshot(paths);
+  const latestRevision = revisionFor({ ...latest, paths });
+  if (typeof expectedRevision !== "string" || latestRevision !== expectedRevision) {
+    throw new HarnessConfigError(
+      "STALE_CONFIG",
+      "DeepSeek Harness settings changed. Refresh and try again."
+    );
+  }
   const changed = [];
   for (const [name, filePath] of [["settingsText", paths.settingsPath], ["credentialsText", paths.credentialsPath], ["metadataText", paths.metadataPath]]) {
     if (before[name] === after[name]) continue;
@@ -170,7 +178,7 @@ export async function POST(request) {
       const paths = getDshPaths();
       const before = await readSnapshot(paths);
       const current = inspectHarnessConfig({ ...before, env: process.env, paths });
-      if (body?.expectedRevision && body.expectedRevision !== current.revision) {
+      if (typeof body?.expectedRevision !== "string" || body.expectedRevision !== current.revision) {
         throw new HarnessConfigError("STALE_CONFIG", "DeepSeek Harness settings changed. Refresh and try again.");
       }
       const result = applyHarnessDocuments({
@@ -186,7 +194,7 @@ export async function POST(request) {
         contextWindow: body?.contextWindow,
         maxTokens: body?.maxTokens,
       });
-      await commitSnapshot(paths, before, result);
+      await commitSnapshot(paths, before, result, body.expectedRevision);
       const state = await inspectCurrent();
       return NextResponse.json({ success: true, message: "DeepSeek Harness settings applied successfully.", ...state });
     } catch (error) {
@@ -203,11 +211,11 @@ export async function DELETE(request) {
       const paths = getDshPaths();
       const before = await readSnapshot(paths);
       const current = inspectHarnessConfig({ ...before, env: process.env, paths });
-      if (body?.expectedRevision && body.expectedRevision !== current.revision) {
+      if (typeof body?.expectedRevision !== "string" || body.expectedRevision !== current.revision) {
         throw new HarnessConfigError("STALE_CONFIG", "DeepSeek Harness settings changed. Refresh and try again.");
       }
       const result = resetHarnessDocuments({ ...before, env: process.env, paths });
-      await commitSnapshot(paths, before, result);
+      await commitSnapshot(paths, before, result, body.expectedRevision);
       return NextResponse.json({ success: true, message: "DeepSeek Harness PolyRouter settings reset.", ...(await inspectCurrent()) });
     } catch (error) {
       return responseError(error);

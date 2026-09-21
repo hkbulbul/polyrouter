@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
+import { buildHarnessSettingsYaml } from "../../src/lib/deepseekHarnessManualConfig.js";
 import {
   DSH_CREDENTIAL_REF,
   applyHarnessDocuments,
@@ -129,5 +131,27 @@ describe("deepseekHarnessConfig", () => {
     const reset = resetHarnessDocuments({ ...applied, env });
     expect(reset.settingsText).not.toContain("polyrouter:");
     expect(reset.credentialsText).not.toContain(DSH_CREDENTIAL_REF);
+  });
+
+  it("blocks apply and reset after the managed provider drifts", () => {
+    const applied = applyHarnessDocuments({ baseUrl: "http://127.0.0.1:20128", model: "cc/test", apiKey: "sk_test", env });
+    const driftedSettings = applied.settingsText.replace("http://127.0.0.1:20128/v1", "http://127.0.0.1:20129/v1");
+    const inspected = inspectHarnessConfig({ ...applied, settingsText: driftedSettings, env });
+    expect(inspected.collision).toBe(false);
+    expect(inspected.drift).toBe(true);
+    expect(() => applyHarnessDocuments({ ...applied, settingsText: driftedSettings, baseUrl: "http://127.0.0.1:20128", model: "cc/next", apiKey: "sk_next", env })).toThrow(expect.objectContaining({ code: "CONFIG_DRIFT" }));
+    expect(() => resetHarnessDocuments({ ...applied, settingsText: driftedSettings, env })).toThrow(expect.objectContaining({ code: "CONFIG_DRIFT" }));
+  });
+
+  it("generates parseable multi-model manual settings YAML", () => {
+    const content = buildHarnessSettingsYaml({
+      baseUrl: "http://127.0.0.1:20128/v1",
+      models: ["cc/one", "cc/two"],
+      defaultModel: "cc/one",
+    });
+    const parsed = parseYaml(content);
+    expect(content).not.toContain("\\\\n");
+    expect(parsed["llm-pi-ai"].providers.polyrouter.models.map((entry) => entry.id)).toEqual(["cc/one", "cc/two"]);
+    expect(parsed["agent-default-model"].model).toBe("cc/one");
   });
 });
