@@ -346,6 +346,21 @@ amp --model "{{model}}"
       { type: "warning", text: "Config path: Linux/macOS ~/.deepseek/config.toml • Windows %USERPROFILE%\\.deepseek\\config.toml" },
     ],
   },
+  "deepseek-harness": {
+    id: "deepseek-harness",
+    name: "DeepSeek Harness",
+    image: "/providers/deepseek-tui.png",
+    color: "#4D6BFE",
+    description: "DeepSeek's plugin-based coding agent harness",
+    docsUrl: "https://github.com/deepseek-ai/deepseek-harness",
+    configType: "custom",
+    defaultCommand: "dsh",
+    modelAliases: [],
+    defaultModels: [
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", alias: "sonnet", defaultValue: "cc/claude-sonnet-4-6" },
+      { id: "gpt-5.5", name: "GPT 5.5", alias: "gpt5", defaultValue: "cx/gpt-5.5" },
+    ],
+  },
   jcode: {
     id: "jcode",
     name: "jcode",
