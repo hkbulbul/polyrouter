@@ -19,9 +19,14 @@ describe("Antigravity usage project id resolution and live quota", () => {
     vi.clearAllMocks();
   });
 
-  it("uses the connection-level projectId and overrides static 100% quota with live bucket data", async () => {
+  it("uses the connection-level projectId, retains plan from loadCodeAssist, and overrides static 100% quota with live bucket data", async () => {
     proxyAwareFetch
-      // 1. fetchAvailableModels
+      // 1. loadCodeAssist
+      .mockResolvedValueOnce(jsonResponse({
+        cloudaicompanionProject: { id: "resolved-project-fallback" },
+        currentTier: { name: "Pro" },
+      }))
+      // 2. fetchAvailableModels
       .mockResolvedValueOnce(jsonResponse({
         models: {
           "gemini-3.8-flash-tiered": {
@@ -40,7 +45,7 @@ describe("Antigravity usage project id resolution and live quota", () => {
           },
         },
       }))
-      // 2. retrieveUserQuota
+      // 3. retrieveUserQuota
       .mockResolvedValueOnce(jsonResponse({
         buckets: [
           {
@@ -57,11 +62,19 @@ describe("Antigravity usage project id resolution and live quota", () => {
       projectId: "my-gcp-project",
     });
 
-    expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(3);
 
-    // fetchAvailableModels called with project in body
+    // loadCodeAssist called for plan info
     expect(proxyAwareFetch).toHaveBeenNthCalledWith(
       1,
+      "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+      expect.anything(),
+      null
+    );
+
+    // fetchAvailableModels called with explicit connection project in body
+    expect(proxyAwareFetch).toHaveBeenNthCalledWith(
+      2,
       "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
       expect.objectContaining({
         body: JSON.stringify({ project: "my-gcp-project" }),
@@ -69,15 +82,17 @@ describe("Antigravity usage project id resolution and live quota", () => {
       null
     );
 
-    // retrieveUserQuota called with project in body
+    // retrieveUserQuota called with explicit connection project in body
     expect(proxyAwareFetch).toHaveBeenNthCalledWith(
-      2,
+      3,
       "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
       expect.objectContaining({
         body: JSON.stringify({ project: "my-gcp-project" }),
       }),
       null
     );
+
+    expect(usage.plan).toBe("Pro");
 
     // Live consumed quota overrides static 1.0
     expect(usage.quotas["gemini-3.8-flash-tiered"]).toMatchObject({
@@ -142,5 +157,77 @@ describe("Antigravity usage project id resolution and live quota", () => {
     expect(usage.plan).toBe("Pro");
     expect(usage.quotas["gemini-3.8-flash-tiered"].remainingPercentage).toBe(10);
     expect(usage.quotas["gemini-3.8-flash-tiered"].used).toBe(900);
+  });
+
+  it("sanitizes negative, out-of-bounds, and non-finite quota fractions", async () => {
+    proxyAwareFetch
+      // 1. loadCodeAssist
+      .mockResolvedValueOnce(jsonResponse({
+        cloudaicompanionProject: { id: "resolved-project-1" },
+        currentTier: { name: "Pro" },
+      }))
+      // 2. fetchAvailableModels with negative / out-of-bounds fractions
+      .mockResolvedValueOnce(jsonResponse({
+        models: {
+          "gemini-3.8-flash-tiered": {
+            quotaInfo: {
+              remainingFraction: -0.5,
+            },
+          },
+          "claude-sonnet-4-6": {
+            quotaInfo: {
+              remainingFraction: 1.5,
+            },
+          },
+          "gpt-oss-120b-medium": {
+            quotaInfo: {
+              remainingFraction: "not-a-number",
+            },
+          },
+        },
+      }))
+      // 3. retrieveUserQuota with negative, >1, and NaN bucket values
+      .mockResolvedValueOnce(jsonResponse({
+        buckets: [
+          {
+            modelId: "gemini-3.8-flash-tiered",
+            remainingFraction: -0.2,
+          },
+          {
+            modelId: "claude-sonnet-4-6",
+            remainingFraction: 1.8,
+          },
+          {
+            modelId: "gpt-oss-120b-medium",
+            remainingFraction: "invalid",
+          },
+        ],
+      }));
+
+    const usage = await getUsageForProvider({
+      provider: "antigravity",
+      accessToken: "test-token",
+    });
+
+    // Negative fraction clamped to 0 (used: 1000, remainingPercentage: 0)
+    expect(usage.quotas["gemini-3.8-flash-tiered"]).toMatchObject({
+      used: 1000,
+      total: 1000,
+      remainingPercentage: 0,
+    });
+
+    // Out-of-bounds fraction (> 1) clamped to 1 (used: 0, remainingPercentage: 100)
+    expect(usage.quotas["claude-sonnet-4-6"]).toMatchObject({
+      used: 0,
+      total: 1000,
+      remainingPercentage: 100,
+    });
+
+    // Non-finite bucket was skipped in live loop; static model fraction was non-finite so defaulted to 0
+    expect(usage.quotas["gpt-oss-120b-medium"]).toMatchObject({
+      used: 1000,
+      total: 1000,
+      remainingPercentage: 0,
+    });
   });
 });

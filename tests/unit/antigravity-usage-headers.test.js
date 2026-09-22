@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const proxyAwareFetch = vi.fn(async (url) => {
+const defaultFetchHandler = async (url) => {
   const targetUrl = typeof url === "string" ? url : (url?.url || "");
   if (targetUrl.includes(":loadCodeAssist")) {
     return {
@@ -42,14 +42,19 @@ const proxyAwareFetch = vi.fn(async (url) => {
     }),
     text: async () => "{}",
   };
-});
+};
+
+const proxyAwareFetch = vi.fn(defaultFetchHandler);
 
 vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
   proxyAwareFetch,
 }));
 
 describe("Antigravity usage headers and quota resolution", () => {
-  beforeEach(() => proxyAwareFetch.mockClear());
+  beforeEach(() => {
+    proxyAwareFetch.mockReset();
+    proxyAwareFetch.mockImplementation(defaultFetchHandler);
+  });
 
   it("uses the official IDE user agent and omits router-only source headers", async () => {
     const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js");
@@ -72,17 +77,20 @@ describe("Antigravity usage headers and quota resolution", () => {
     });
   });
 
-  it("uses connection projectId directly and bypasses loadCodeAssist lookup", async () => {
+  it("uses connection projectId directly and retains subscription plan from loadCodeAssist", async () => {
     const { getAntigravityUsage } = await import("../../open-sse/services/usage/google.js");
 
     const result = await getAntigravityUsage("access-token", { projectId: "existing-proj" });
 
-    // Should call fetchAvailableModels and retrieveUserQuota, skipping loadCodeAssist
-    expect(proxyAwareFetch).toHaveBeenCalledTimes(2);
-    expect(proxyAwareFetch.mock.calls[0][0]).toContain(":fetchAvailableModels");
-    expect(proxyAwareFetch.mock.calls[1][0]).toContain(":retrieveUserQuota");
+    // Should call loadCodeAssist (for plan/tier), fetchAvailableModels, and retrieveUserQuota
+    expect(proxyAwareFetch).toHaveBeenCalledTimes(3);
+    expect(proxyAwareFetch.mock.calls[0][0]).toContain(":loadCodeAssist");
+    expect(proxyAwareFetch.mock.calls[1][0]).toContain(":fetchAvailableModels");
     expect(proxyAwareFetch.mock.calls[1][1].body).toBe(JSON.stringify({ project: "existing-proj" }));
+    expect(proxyAwareFetch.mock.calls[2][0]).toContain(":retrieveUserQuota");
+    expect(proxyAwareFetch.mock.calls[2][1].body).toBe(JSON.stringify({ project: "existing-proj" }));
 
+    expect(result.plan).toBe("Pro");
     expect(result.quotas["gemini-3.8-flash-tiered"]).toMatchObject({
       used: 350,
       total: 1000,

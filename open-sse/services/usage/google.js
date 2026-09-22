@@ -68,7 +68,10 @@ export async function getGeminiUsage(accessToken, providerSpecificData, proxyOpt
       for (const bucket of data.buckets) {
         if (!bucket.modelId || bucket.remainingFraction == null) continue;
 
-        const remainingFraction = Number(bucket.remainingFraction) || 0;
+        const rawFraction = Number(bucket.remainingFraction);
+        if (!Number.isFinite(rawFraction)) continue;
+
+        const remainingFraction = Math.max(0, Math.min(1, rawFraction));
         const total = 1000; // Normalized base, matches antigravity convention
         const remaining = Math.round(total * remainingFraction);
         const used = Math.max(0, total - remaining);
@@ -120,11 +123,9 @@ async function getGeminiSubscriptionInfo(accessToken, proxyOptions = null) {
 export async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptions = null) {
   try {
     let projectId = normalizeCloudCodeProjectId(providerSpecificData?.projectId);
-    let subscriptionInfo = null;
+    const subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
 
     if (!projectId) {
-      // Fetch subscription info once — reuse for both projectId and plan
-      subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
       projectId = normalizeCloudCodeProjectId(subscriptionInfo?.cloudaicompanionProject);
     }
 
@@ -199,7 +200,10 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
           continue;
         }
 
-        const remainingFraction = info.quotaInfo.remainingFraction || 0;
+        const rawFraction = Number(info.quotaInfo.remainingFraction);
+        const remainingFraction = Number.isFinite(rawFraction)
+          ? Math.max(0, Math.min(1, rawFraction))
+          : 0;
         const remainingPercentage = remainingFraction * 100;
 
         // Convert percentage to used/total for UI compatibility
@@ -243,7 +247,10 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
             for (const bucket of quotaData.buckets) {
               if (!bucket.modelId || bucket.remainingFraction == null) continue;
 
-              const remainingFraction = Number(bucket.remainingFraction) || 0;
+              const rawFraction = Number(bucket.remainingFraction);
+              if (!Number.isFinite(rawFraction)) continue;
+
+              const remainingFraction = Math.max(0, Math.min(1, rawFraction));
               const remainingPercentage = remainingFraction * 100;
               const total = 1000;
               const remaining = Math.round(total * remainingFraction);
