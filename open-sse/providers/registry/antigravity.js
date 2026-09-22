@@ -38,6 +38,7 @@ export default {
     },
     usage: {
       quotaApiUrl: "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+      retrieveUserQuotaUrl: "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
       loadProjectApiUrl: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
       tokenUrl: "https://oauth2.googleapis.com/token",
     },
