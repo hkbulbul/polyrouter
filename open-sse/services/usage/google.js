@@ -3,6 +3,7 @@
  */
 
 import { CLIENT_METADATA } from "../../config/appConstants.js";
+import { findModelName } from "../../config/providerModels.js";
 import { ANTIGRAVITY_IDE_USER_AGENT, ANTIGRAVITY_IDE_VERSION, ANTIGRAVITY_OAUTH_CLIENT } from "../../providers/shared.js";
 import { U, parseResetTime, normalizeCloudCodeProjectId, fetchWithTimeout } from "./shared.js";
 
@@ -67,7 +68,10 @@ export async function getGeminiUsage(accessToken, providerSpecificData, proxyOpt
       for (const bucket of data.buckets) {
         if (!bucket.modelId || bucket.remainingFraction == null) continue;
 
-        const remainingFraction = Number(bucket.remainingFraction) || 0;
+        const rawFraction = Number(bucket.remainingFraction);
+        if (!Number.isFinite(rawFraction)) continue;
+
+        const remainingFraction = Math.max(0, Math.min(1, rawFraction));
         const total = 1000; // Normalized base, matches antigravity convention
         const remaining = Math.round(total * remainingFraction);
         const used = Math.max(0, total - remaining);
@@ -118,9 +122,12 @@ async function getGeminiSubscriptionInfo(accessToken, proxyOptions = null) {
  */
 export async function getAntigravityUsage(accessToken, providerSpecificData, proxyOptions = null) {
   try {
-    // Fetch subscription info once — reuse for both projectId and plan
+    let projectId = normalizeCloudCodeProjectId(providerSpecificData?.projectId);
     const subscriptionInfo = await getAntigravitySubscriptionInfo(accessToken, proxyOptions);
-    const projectId = subscriptionInfo?.cloudaicompanionProject || null;
+
+    if (!projectId) {
+      projectId = normalizeCloudCodeProjectId(subscriptionInfo?.cloudaicompanionProject);
+    }
 
     const response = await fetchWithTimeout(ANTIGRAVITY_CONFIG.quotaApiUrl, {
       method: "POST",
@@ -157,31 +164,31 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
     const data = await response.json();
     const quotas = {};
 
-    // Parse model quotas (inspired by vscode-antigravity-cockpit)
-    if (data.models) {
-      // Filter only recommended/important models (must match PROVIDER_MODELS ag ids)
-      const importantModels = [
-        'gemini-3.8-flash-tiered',
-        'gemini-3.7-flash-tiered',
-        'gemini-3.6-flash-tiered',
-        'gemini-3.6-flash-high',
-        'gemini-3.6-flash-medium',
-        'gemini-3.6-flash-low',
-        'gemini-3.1-flash-lite',
-        'gemini-3-flash-agent',
-        'gemini-3.5-flash-low',
-        'gemini-3.5-flash-extra-low',
-        'gemini-pro-agent',
-        'gemini-3.1-pro-low',
-        'claude-sonnet-4-6',
-        'claude-opus-4-6-thinking',
-        'gpt-oss-120b-medium',
-        'gemini-3-flash',
-        // Image generation models
-        'gemini-3.1-flash-image',
-        'gemini-3-pro-image',
-      ];
+    // Filter only recommended/important models (must match PROVIDER_MODELS ag ids)
+    const importantModels = [
+      'gemini-3.8-flash-tiered',
+      'gemini-3.7-flash-tiered',
+      'gemini-3.6-flash-tiered',
+      'gemini-3.6-flash-high',
+      'gemini-3.6-flash-medium',
+      'gemini-3.6-flash-low',
+      'gemini-3.1-flash-lite',
+      'gemini-3-flash-agent',
+      'gemini-3.5-flash-low',
+      'gemini-3.5-flash-extra-low',
+      'gemini-pro-agent',
+      'gemini-3.1-pro-low',
+      'claude-sonnet-4-6',
+      'claude-opus-4-6-thinking',
+      'gpt-oss-120b-medium',
+      'gemini-3-flash',
+      // Image generation models
+      'gemini-3.1-flash-image',
+      'gemini-3-pro-image',
+    ];
 
+    // Parse model metadata and default quota from fetchAvailableModels
+    if (data.models) {
       for (const [modelKey, info] of Object.entries(data.models)) {
         // Skip models without quota info
         if (!info.quotaInfo) {
@@ -193,13 +200,16 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
           continue;
         }
 
-        const remainingFraction = info.quotaInfo.remainingFraction || 0;
+        const rawFraction = Number(info.quotaInfo.remainingFraction);
+        const remainingFraction = Number.isFinite(rawFraction)
+          ? Math.max(0, Math.min(1, rawFraction))
+          : 0;
         const remainingPercentage = remainingFraction * 100;
 
         // Convert percentage to used/total for UI compatibility
         const total = 1000; // Normalized base
         const remaining = Math.round(total * remainingFraction);
-        const used = total - remaining;
+        const used = Math.max(0, total - remaining);
 
         // Use modelKey as key (matches PROVIDER_MODELS id)
         quotas[modelKey] = {
@@ -208,8 +218,66 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
           resetAt: parseResetTime(info.quotaInfo.resetTime),
           remainingPercentage,
           unlimited: false,
-          displayName: info.displayName || modelKey,
+          displayName: info.displayName || findModelName("ag", modelKey),
         };
+      }
+    }
+
+    // Live quota consumption from retrieveUserQuota:
+    // fetchAvailableModels static remainingFraction is always 1.0 (100%).
+    // retrieveUserQuota returns live rolling window bucket fractions and reset times.
+    const retrieveUserQuotaUrl = ANTIGRAVITY_CONFIG.retrieveUserQuotaUrl;
+    if (retrieveUserQuotaUrl && projectId) {
+      try {
+        const userQuotaResponse = await fetchWithTimeout(retrieveUserQuotaUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "User-Agent": ANTIGRAVITY_CONFIG.userAgent,
+            "Content-Type": "application/json",
+            "X-Client-Name": "antigravity",
+            "X-Client-Version": ANTIGRAVITY_IDE_VERSION,
+          },
+          body: JSON.stringify({ project: projectId }),
+        }, 10000, proxyOptions);
+
+        if (userQuotaResponse.ok) {
+          const quotaData = await userQuotaResponse.json();
+          if (Array.isArray(quotaData.buckets)) {
+            for (const bucket of quotaData.buckets) {
+              if (!bucket.modelId || bucket.remainingFraction == null) continue;
+
+              const rawFraction = Number(bucket.remainingFraction);
+              if (!Number.isFinite(rawFraction)) continue;
+
+              const remainingFraction = Math.max(0, Math.min(1, rawFraction));
+              const remainingPercentage = remainingFraction * 100;
+              const total = 1000;
+              const remaining = Math.round(total * remainingFraction);
+              const used = Math.max(0, total - remaining);
+
+              if (quotas[bucket.modelId]) {
+                quotas[bucket.modelId].used = used;
+                quotas[bucket.modelId].total = total;
+                quotas[bucket.modelId].remainingPercentage = remainingPercentage;
+                if (bucket.resetTime) {
+                  quotas[bucket.modelId].resetAt = parseResetTime(bucket.resetTime);
+                }
+              } else if (importantModels.includes(bucket.modelId)) {
+                quotas[bucket.modelId] = {
+                  used,
+                  total,
+                  resetAt: parseResetTime(bucket.resetTime),
+                  remainingPercentage,
+                  unlimited: false,
+                  displayName: findModelName("ag", bucket.modelId) || bucket.modelId,
+                };
+              }
+            }
+          }
+        }
+      } catch (quotaError) {
+        console.warn("[Antigravity Usage] retrieveUserQuota warning:", quotaError.message);
       }
     }
 
