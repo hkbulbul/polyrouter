@@ -118,6 +118,12 @@ function resolveFormat(targetFormat, model, provider) {
     // If targetFormat is claude, non-claude-compatible formats cannot be sent to Claude Messages
     const isClaudeCompatible = caps.thinkingFormat.startsWith("claude-") || caps.thinkingFormat === "minimax" || caps.thinkingFormat === "hunyuan";
     if (targetFormat === "claude" && !isClaudeCompatible) {
+      // Effort/level-based models (OpenAI reasoning models, Gemini 3.x, etc.) cannot preserve
+      // a numeric thinking budget on Anthropic Messages routes ("This route cannot preserve a numeric thinking budget").
+      // Route them via claude-adaptive (thinking.type: "adaptive" + output_config.effort) instead of claude-budget.
+      if (caps.thinkingFormat === "openai" || caps.thinkingFormat === "gemini-level") {
+        return "claude-adaptive";
+      }
       return FORMAT_TO_NATIVE[targetFormat] || "claude-budget";
     }
     // If targetFormat is OpenAI-compatible, Claude or Gemini native formats cannot be sent to Chat Completions
@@ -162,6 +168,15 @@ function toKimiReasoningEffort(cfg) {
   if (level === "auto") return "high";
   if (level === "minimal") return "low";
   if (level === "xhigh") return "max";
+  if (["low", "medium", "high", "max"].includes(level)) return level;
+  return null;
+}
+
+function toClaudeAdaptiveEffort(cfg) {
+  const level = toLevel(cfg);
+  if (level === "auto") return "high";
+  if (level === "minimal") return "low";
+  if (level === "xhigh") return "high";
   if (["low", "medium", "high", "max"].includes(level)) return level;
   return null;
 }
@@ -253,8 +268,10 @@ function applyFormat(fmt, body, cfg, caps) {
       // shims (e.g. GitHub Copilot /v1/messages) default thinking off even for
       // Sonnet 5. Send both fields — the documented adaptive-thinking shape.
       body.thinking = { type: "adaptive" };
-      const level = toLevel(eff);
-      body.output_config = { effort: level === "xhigh" ? "high" : level };
+      const effort = toClaudeAdaptiveEffort(eff);
+      if (effort) {
+        body.output_config = { effort };
+      }
       break;
     }
     case "claude-budget": {
