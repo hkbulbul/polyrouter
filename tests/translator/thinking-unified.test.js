@@ -68,6 +68,18 @@ describe("applyThinking per provider format", () => {
     const out = apply("claude", "claude-haiku-4.5", { reasoning_effort: "high" }, "claude");
     expect(out.thinking).toEqual({ type: "enabled", budget_tokens: 24576 });
   });
+  it("openai reasoning model on claude target → claude-adaptive (no numeric budget)", () => {
+    const out = apply("claude", "gpt-5.6-luna", { reasoning_effort: "high" }, "explabs");
+    expect(out.thinking).toEqual({ type: "adaptive" });
+    expect(out.output_config).toEqual({ effort: "high" });
+    expect(out.thinking.budget_tokens).toBeUndefined();
+  });
+  it("gemini-3 level reasoning model on claude target → claude-adaptive (no numeric budget)", () => {
+    const out = apply("claude", "gemini-3.7-flash", { reasoning_effort: "medium" }, "explabs");
+    expect(out.thinking).toEqual({ type: "adaptive" });
+    expect(out.output_config).toEqual({ effort: "medium" });
+    expect(out.thinking.budget_tokens).toBeUndefined();
+  });
   it("gemini-3 → thinkingLevel", () => {
     const out = apply("gemini", "gemini-3-pro", { reasoning_effort: "medium" }, "gemini");
     expect(out.generationConfig.thinkingConfig.thinkingLevel).toBe("medium");

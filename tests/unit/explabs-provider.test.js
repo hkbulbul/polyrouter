@@ -290,6 +290,35 @@ describe("Experiential Labs Claude Code & Thinking Routing", () => {
     expect(translated.max_tokens).toBeGreaterThan(8192);
   });
 
+  it("routes explabs/gpt-5.6-luna to claude-adaptive without numeric budget_tokens to prevent 400 invalid_request_error", () => {
+    // 1. Adaptive thinking preserved without budget_tokens
+    const bodyAdaptive = {
+      model: "explabs/gpt-5.6-luna",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
+    };
+
+    const translatedAdaptive = translateRequest("claude", "claude", "gpt-5.6-luna", bodyAdaptive, true, null, "explabs");
+
+    expect(translatedAdaptive.thinking).toEqual({ type: "adaptive" });
+    expect(translatedAdaptive.output_config).toEqual({ effort: "high" });
+    expect(translatedAdaptive.thinking.budget_tokens).toBeUndefined();
+
+    // 2. Incoming numeric budget is safely converted to effort level and budget_tokens removed
+    const bodyWithBudget = {
+      model: "explabs/gpt-5.6-luna",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "enabled", budget_tokens: 8192 },
+    };
+
+    const translatedBudget = translateRequest("claude", "claude", "gpt-5.6-luna", bodyWithBudget, true, null, "explabs");
+
+    expect(translatedBudget.thinking).toEqual({ type: "adaptive" });
+    expect(translatedBudget.output_config).toEqual({ effort: "medium" });
+    expect(translatedBudget.thinking.budget_tokens).toBeUndefined();
+  });
+
   it("provides logo image assets and resolves them via getProviderIconSrc", () => {
     const rootDir = path.resolve(__dirname, "../..");
     expect(fs.existsSync(path.join(rootDir, "public/providers/explabs.png"))).toBe(true);
