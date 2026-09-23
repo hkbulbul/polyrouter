@@ -172,6 +172,15 @@ function toKimiReasoningEffort(cfg) {
   return null;
 }
 
+function toClaudeAdaptiveEffort(cfg) {
+  const level = toLevel(cfg);
+  if (level === "auto") return "high";
+  if (level === "minimal") return "low";
+  if (level === "xhigh") return "high";
+  if (["low", "medium", "high", "max"].includes(level)) return level;
+  return null;
+}
+
 const GEMINI_LEVEL_OUTPUT_FLOOR = {
   minimal: 4096,
   low: 8192,
@@ -259,10 +268,9 @@ function applyFormat(fmt, body, cfg, caps) {
       // shims (e.g. GitHub Copilot /v1/messages) default thinking off even for
       // Sonnet 5. Send both fields — the documented adaptive-thinking shape.
       body.thinking = { type: "adaptive" };
-      const rawLevel = toLevel(eff);
-      const level = rawLevel === "auto" ? "high" : rawLevel;
-      if (level) {
-        body.output_config = { effort: level === "xhigh" ? "high" : level };
+      const effort = toClaudeAdaptiveEffort(eff);
+      if (effort) {
+        body.output_config = { effort };
       }
       break;
     }

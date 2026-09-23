@@ -74,6 +74,18 @@ describe("applyThinking per provider format", () => {
     expect(out.output_config).toEqual({ effort: "high" });
     expect(out.thinking.budget_tokens).toBeUndefined();
   });
+  it("openai reasoning model on claude target normalizes minimal effort to low", () => {
+    const out = apply("claude", "gpt-5.6-luna", { reasoning_effort: "minimal" }, "explabs");
+    expect(out.thinking).toEqual({ type: "adaptive" });
+    expect(out.output_config).toEqual({ effort: "low" });
+    expect(out.thinking.budget_tokens).toBeUndefined();
+  });
+  it("claude-adaptive clamps xhigh to high and preserves max", () => {
+    const outXhigh = apply("claude", "gpt-5.6-luna", { reasoning_effort: "xhigh" }, "explabs");
+    expect(outXhigh.output_config).toEqual({ effort: "high" });
+    const outMax = apply("claude", "gpt-5.6-luna", { reasoning_effort: "max" }, "explabs");
+    expect(outMax.output_config).toEqual({ effort: "max" });
+  });
   it("gemini-3 level reasoning model on claude target → claude-adaptive (no numeric budget)", () => {
     const out = apply("claude", "gemini-3.7-flash", { reasoning_effort: "medium" }, "explabs");
     expect(out.thinking).toEqual({ type: "adaptive" });

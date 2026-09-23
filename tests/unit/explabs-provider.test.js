@@ -317,6 +317,19 @@ describe("Experiential Labs Claude Code & Thinking Routing", () => {
     expect(translatedBudget.thinking).toEqual({ type: "adaptive" });
     expect(translatedBudget.output_config).toEqual({ effort: "medium" });
     expect(translatedBudget.thinking.budget_tokens).toBeUndefined();
+
+    // 3. OpenAI minimal effort is normalized to low (Claude adaptive does not support minimal)
+    const bodyWithMinimal = {
+      model: "explabs/gpt-5.6-luna",
+      messages: [{ role: "user", content: "hi" }],
+      reasoning_effort: "minimal",
+    };
+
+    const translatedMinimal = translateRequest("claude", "claude", "gpt-5.6-luna", bodyWithMinimal, true, null, "explabs");
+
+    expect(translatedMinimal.thinking).toEqual({ type: "adaptive" });
+    expect(translatedMinimal.output_config).toEqual({ effort: "low" });
+    expect(translatedMinimal.thinking.budget_tokens).toBeUndefined();
   });
 
   it("provides logo image assets and resolves them via getProviderIconSrc", () => {
