@@ -3,8 +3,28 @@
 import { useState, useEffect } from "react";
 import { Card, Button, Input } from "@/shared/components";
 
+function PasswordVisibilityToggle({ visible, onToggle }) {
+  const label = visible ? "Hide password" : "Show password";
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={visible}
+      title={label}
+      className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-text-main focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+    >
+      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+        {visible ? "visibility_off" : "visibility"}
+      </span>
+    </button>
+  );
+}
+
 export default function LoginPage() {
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [resetHint, setResetHint] = useState("");
   const [retryAfter, setRetryAfter] = useState(0);
@@ -15,6 +35,7 @@ export default function LoginPage() {
   const [oidcConfigured, setOidcConfigured] = useState(false);
   const [oidcLoginLabel, setOidcLoginLabel] = useState("Sign in with OIDC");
   const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Countdown for rate-limit
   useEffect(() => {
@@ -72,6 +93,7 @@ export default function LoginPage() {
         setNeedsPasswordSetup(false);
         setHasPassword(true);
         setNewPassword("");
+        setShowNewPassword(false);
         setError("");
       } else {
         const data = await res.json();
@@ -155,10 +177,16 @@ export default function LoginPage() {
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">New password</label>
                 <Input
-                  type="password"
+                  type={showNewPassword ? "text" : "password"}
                   placeholder="At least 8 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  endAdornment={
+                    <PasswordVisibilityToggle
+                      visible={showNewPassword}
+                      onToggle={() => setShowNewPassword((visible) => !visible)}
+                    />
+                  }
                   minLength={8}
                   required
                   autoFocus
@@ -196,10 +224,16 @@ export default function LoginPage() {
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium">Password</label>
                   <Input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    endAdornment={
+                      <PasswordVisibilityToggle
+                        visible={showPassword}
+                        onToggle={() => setShowPassword((visible) => !visible)}
+                      />
+                    }
                     required
                     autoFocus={!oidcAvailable}
                   />
