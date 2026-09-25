@@ -1,5 +1,5 @@
 const api = require("../api/client");
-const { pause, confirm } = require("../utils/input");
+const { pause, confirm, select } = require("../utils/input");
 const { showStatus } = require("../utils/display");
 const { selectModelFromList } = require("../utils/modelSelector");
 const { showMenuWithBack } = require("../utils/menuHelper");
@@ -173,14 +173,67 @@ async function showClaudeCodeMenu(port, breadcrumb = []) {
 // ─── Codex CLI ────────────────────────────────────────────────────────────────
 
 /**
+ * Read a string from a named TOML table.
+ * @param {string} config
+ * @param {string} tableName
+ * @param {string} key
+ * @returns {string}
+ */
+function readCodexTomlValue(config, tableName, key) {
+  if (!config) return "";
+  const escapedTableName = tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const sectionMatch = config.match(
+    new RegExp(`^\\[${escapedTableName}\\]([\\s\\S]*?)(?=\\r?\\n\\[|(?![\\s\\S]))`, "m")
+  );
+  if (!sectionMatch) return "";
+  const valueMatch = sectionMatch[1].match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, "m"));
+  return valueMatch ? valueMatch[1] : "";
+}
+
+/**
+ * Parse the Codex settings used by the PolyRouter CLI.
+ * @param {string} config
+ * @returns {Object}
+ */
+function parseCodexConfig(config) {
+  const modelMatch = config && config.match(/^model\s*=\s*"([^"]+)"/m);
+  const modelCatalogMatch = config && config.match(/^model_catalog_json\s*=\s*"([^"]+)"/m);
+
+  return {
+    baseUrl: readCodexTomlValue(config, "model_providers.polyrouter", "base_url"),
+    model: modelMatch ? modelMatch[1] : "",
+    subagentModel: readCodexTomlValue(config, "agents.subagent", "model"),
+    modelCatalogPath: modelCatalogMatch ? modelCatalogMatch[1] : "",
+  };
+}
+
+function uniqueCodexModels(...modelGroups) {
+  return [...new Set(modelGroups.flat().filter(model => typeof model === "string" && model.trim()))];
+}
+
+/**
+ * Load Codex settings for menu labels and model defaults.
+ * @returns {Promise<Object>}
+ */
+async function getCodexSettings() {
+  const result = await api.getCliToolSettings("codex");
+  if (!result.success) return { loadFailed: true };
+
+  return {
+    ...result.data,
+    ...parseCodexConfig(result.data.config),
+  };
+}
+
+/**
  * Build header showing current Codex config status
+ * @param {Object} settings
  * @returns {Promise<string>}
  */
-async function buildCodexHeader() {
-  const result = await api.getCliToolSettings("codex");
-  if (!result.success) return `  ${COLORS.red}Failed to load settings${COLORS.reset}`;
+async function buildCodexHeader(settings) {
+  if (settings?.loadFailed) return `  ${COLORS.red}Failed to load settings${COLORS.reset}`;
 
-  const { installed, hasPolyRouter, config } = result.data;
+  const { installed, hasPolyRouter } = settings;
   if (!installed) return `Status:   ${COLORS.red}✗ Codex CLI not installed${COLORS.reset}`;
 
   if (!hasPolyRouter) {
@@ -190,16 +243,54 @@ async function buildCodexHeader() {
     ].join("\n");
   }
 
-  // Parse base_url and model from raw TOML string
-  const baseUrlMatch = config && config.match(/base_url\s*=\s*"([^"]+)"/);
-  const modelMatch = config && config.match(/^model\s*=\s*"([^"]+)"/m);
-  const baseUrl = baseUrlMatch ? baseUrlMatch[1] : "";
-  const model = modelMatch ? modelMatch[1] : "";
-
   const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
-  if (baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${baseUrl}${COLORS.reset}`);
-  if (model)   lines.push(`Model:    ${COLORS.dim}${model}${COLORS.reset}`);
+  if (settings.baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${settings.baseUrl}${COLORS.reset}`);
+  if (settings.model) lines.push(`Main:     ${COLORS.dim}${settings.model}${COLORS.reset}`);
+  if (settings.subagentModel) lines.push(`Subagent: ${COLORS.dim}${settings.subagentModel}${COLORS.reset}`);
+  if (settings.modelCatalogRegistered) {
+    const modelCount = settings.availableModelIds?.length || 0;
+    lines.push(`App menu: ${COLORS.green}✓ ${modelCount} PolyRouter model${modelCount === 1 ? "" : "s"}${COLORS.reset}`);
+  }
   return lines.join("\n");
+}
+
+/**
+ * Show the result of applying Codex model settings.
+ * @param {Object} result
+ * @param {string} successMessage
+ */
+async function showCodexApplyResult(result, successMessage) {
+  if (!result.success) {
+    showStatus(`Failed: ${result.error}`, "error");
+    await pause();
+    return;
+  }
+
+  showStatus(successMessage, "success");
+  if (result.data?.modelCatalog?.registered) {
+    showStatus("Codex model picker updated. Restart Codex to refresh it.", "info");
+  } else if (result.data?.modelCatalog?.warning) {
+    showStatus(result.data.modelCatalog.warning, "warning");
+  }
+  await pause();
+}
+
+/**
+ * Get the endpoint and API key needed to update Codex settings.
+ * @param {number} port
+ * @param {Object} settings
+ * @returns {Promise<{baseUrl: string, apiKey: string}|null>}
+ */
+async function getCodexApplyContext(port, settings) {
+  const apiKey = await getFirstApiKey();
+  if (!apiKey) {
+    showStatus("No API keys found. Create one in API Keys menu first.", "error");
+    await pause();
+    return null;
+  }
+
+  const { endpoint } = await getEndpoint(port);
+  return { baseUrl: settings.baseUrl || endpoint, apiKey };
 }
 
 /**
@@ -207,22 +298,141 @@ async function buildCodexHeader() {
  * @param {number} port
  */
 async function codexQuickSetup(port) {
-  const { endpoint } = await getEndpoint(port);
-  const apiKey = await getFirstApiKey();
+  const settings = await getCodexSettings();
+  const model = await selectModelFromList(
+    "Select Main Codex Model",
+    settings.model || "cx/claude-sonnet-4-5-20250929",
+    { excludeCombos: true }
+  );
+  if (!model) return;
 
-  if (!apiKey) {
-    showStatus("No API keys found. Create one in API Keys menu first.", "error");
+  let subagentModel = model;
+  const useDifferentSubagent = await confirm("Use a different model for subagents?");
+  if (useDifferentSubagent) {
+    subagentModel = await selectModelFromList("Select Subagent Codex Model", settings.subagentModel || model, { excludeCombos: true });
+    if (!subagentModel) return;
+  }
+
+  const catalogModels = uniqueCodexModels(
+    settings.availableModelIds || [],
+    model,
+    subagentModel
+  );
+  let addAnotherModel = await confirm("Add another model to the Codex app picker?");
+  while (addAnotherModel) {
+    const extraModel = await selectModelFromList("Add Model to Codex Picker", "", { excludeCombos: true });
+    if (!extraModel) return;
+    catalogModels.push(extraModel);
+    addAnotherModel = await confirm("Add another model to the Codex app picker?");
+  }
+
+  const context = await getCodexApplyContext(port, settings);
+  if (!context) return;
+
+  const result = await api.applyCliToolSettings("codex", {
+    ...context,
+    model,
+    subagentModel,
+    catalogModels: uniqueCodexModels(catalogModels),
+  });
+  await showCodexApplyResult(result, "Codex setup completed!");
+}
+
+/**
+ * Change either the main or subagent model without resetting the other role.
+ * @param {"main"|"subagent"} role
+ * @param {number} port
+ */
+async function codexSelectModel(role, port) {
+  const settings = await getCodexSettings();
+  if (role === "subagent" && !settings.model) {
+    showStatus("Select a main Codex model first.", "error");
     await pause();
     return;
   }
 
-  // Get model selection
-  const model = await selectModelFromList("Select Codex Model", "cx/claude-sonnet-4-5-20250929", { excludeCombos: true });
-  if (!model) return;
+  const isMain = role === "main";
+  const selected = await selectModelFromList(
+    isMain ? "Select Main Codex Model" : "Select Subagent Codex Model",
+    isMain ? settings.model : settings.subagentModel,
+    { excludeCombos: true }
+  );
+  if (!selected) return;
 
-  const result = await api.applyCliToolSettings("codex", { baseUrl: endpoint, apiKey, model });
-  showStatus(result.success ? "Codex setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
-  await pause();
+  const model = isMain ? selected : settings.model;
+  const subagentModel = isMain
+    ? (!settings.subagentModel || settings.subagentModel === settings.model ? selected : settings.subagentModel)
+    : selected;
+  const context = await getCodexApplyContext(port, settings);
+  if (!context) return;
+
+  const result = await api.applyCliToolSettings("codex", {
+    ...context,
+    model,
+    subagentModel,
+    catalogModels: uniqueCodexModels(settings.availableModelIds || [], model, subagentModel),
+  });
+  await showCodexApplyResult(result, `Codex ${role} model → ${selected} saved!`);
+}
+
+/**
+ * Add a model to the Codex app picker without changing the active main model.
+ * @param {number} port
+ */
+async function codexAddPickerModel(port) {
+  const settings = await getCodexSettings();
+  const selected = await selectModelFromList("Add Model to Codex Picker", "", { excludeCombos: true });
+  if (!selected) return;
+
+  const model = settings.model || selected;
+  const subagentModel = settings.subagentModel || model;
+  const context = await getCodexApplyContext(port, settings);
+  if (!context) return;
+
+  const result = await api.applyCliToolSettings("codex", {
+    ...context,
+    model,
+    subagentModel,
+    catalogModels: uniqueCodexModels(settings.availableModelIds || [], model, subagentModel, selected),
+  });
+  await showCodexApplyResult(result, `${selected} added to the Codex app picker!`);
+}
+
+/**
+ * Remove a non-active model from the Codex app picker.
+ * @param {number} port
+ */
+async function codexRemovePickerModel(port) {
+  const settings = await getCodexSettings();
+  if (!settings.model) {
+    showStatus("Configure the main Codex model first.", "error");
+    await pause();
+    return;
+  }
+
+  const removableModels = uniqueCodexModels(settings.availableModelIds || [])
+    .filter(model => model !== settings.model && model !== settings.subagentModel);
+  if (removableModels.length === 0) {
+    showStatus("No extra models are available to remove.", "info");
+    await pause();
+    return;
+  }
+
+  const selectedIndex = await select("Select a model to remove from the Codex app picker:", removableModels);
+  const selected = removableModels[selectedIndex];
+  if (!selected) return;
+  const catalogModels = uniqueCodexModels(settings.availableModelIds || [])
+    .filter(model => model !== selected);
+  const context = await getCodexApplyContext(port, settings);
+  if (!context) return;
+
+  const result = await api.applyCliToolSettings("codex", {
+    ...context,
+    model: settings.model,
+    subagentModel: settings.subagentModel || settings.model,
+    catalogModels,
+  });
+  await showCodexApplyResult(result, `${selected} removed from the Codex app picker!`);
 }
 
 /**
@@ -244,11 +454,27 @@ async function showCodexMenu(port, breadcrumb = []) {
     title: "🤖 Codex CLI Settings",
     breadcrumb,
     headerContent: buildCodexHeader,
-    refresh: async () => ({}),
+    refresh: getCodexSettings,
     items: [
       {
-        label: "⚡ Quick Setup",
+        label: "⚡ Quick Setup (model list)",
         action: async () => { await codexQuickSetup(port); return true; }
+      },
+      {
+        label: (data) => `Main model → ${data.model || "Not set"}`,
+        action: async () => { await codexSelectModel("main", port); return true; }
+      },
+      {
+        label: (data) => `Subagent model → ${data.subagentModel || data.model || "Not set"}`,
+        action: async () => { await codexSelectModel("subagent", port); return true; }
+      },
+      {
+        label: (data) => `Add app picker model (${data.availableModelIds?.length || 0} configured)`,
+        action: async () => { await codexAddPickerModel(port); return true; }
+      },
+      {
+        label: "Remove app picker model",
+        action: async () => { await codexRemovePickerModel(port); return true; }
       },
       {
         label: "Reset to Default",
