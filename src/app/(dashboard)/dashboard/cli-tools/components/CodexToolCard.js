@@ -6,6 +6,7 @@ import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import { CODEX_MODEL_SLOTS, isCodexModelSlotId } from "@/lib/codexModelCatalog";
 
 export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
   const [codexStatus, setCodexStatus] = useState(initialStatus || null);
@@ -15,10 +16,10 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const [message, setMessage] = useState(null);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
-  const [subagentModel, setSubagentModel] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [subagentModalOpen, setSubagentModalOpen] = useState(false);
+  const [modelSlots, setModelSlots] = useState({});
+  const [activeModelId, setActiveModelId] = useState("");
+  const [subagentModelId, setSubagentModelId] = useState("");
+  const [modelPickerTarget, setModelPickerTarget] = useState("");
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
@@ -52,13 +53,32 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
 
   // Parse model and subagent settings from config content
   useEffect(() => {
+    const configuredSlots = codexStatus?.modelSlots || {};
     if (codexStatus?.config) {
       const modelMatch = codexStatus.config.match(/^model\s*=\s*"([^"]+)"/m);
-      if (modelMatch) setSelectedModel(modelMatch[1]);
-
-      // Parse subagent settings
       const subagentModelMatch = codexStatus.config.match(/\[agents\.subagent\]\s*\n\s*model\s*=\s*"([^"]+)"/m);
-      if (subagentModelMatch) setSubagentModel(subagentModelMatch[1]);
+      const configuredMainModel = modelMatch?.[1] || "";
+      const configuredSubagentModel = subagentModelMatch?.[1] || "";
+
+      setModelSlots(current => {
+        const next = { ...current, ...configuredSlots };
+        if (configuredMainModel && !isCodexModelSlotId(configuredMainModel) && !next["codex-astra"]) {
+          next["codex-astra"] = configuredMainModel;
+        }
+        if (configuredSubagentModel && !isCodexModelSlotId(configuredSubagentModel) && !next["codex-sol"]) {
+          next["codex-sol"] = configuredSubagentModel;
+        }
+        return next;
+      });
+
+      if (configuredMainModel) {
+        setActiveModelId(isCodexModelSlotId(configuredMainModel) ? configuredMainModel : "codex-astra");
+      }
+      if (configuredSubagentModel) {
+        setSubagentModelId(isCodexModelSlotId(configuredSubagentModel) ? configuredSubagentModel : "codex-sol");
+      }
+    } else if (Object.keys(configuredSlots).length > 0) {
+      setModelSlots(current => ({ ...current, ...configuredSlots }));
     }
   }, [codexStatus]);
 
@@ -79,6 +99,14 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   };
 
   const getDisplayUrl = () => customBaseUrl || `${baseUrl}/v1`;
+  const selectedSlotId = modelPickerTarget.startsWith("slot:")
+    ? modelPickerTarget.split(":")[1]
+    : "";
+  const selectedSlot = CODEX_MODEL_SLOTS.find(slot => slot.id === selectedSlotId);
+  const modelPickerTitle = `Select Model for ${selectedSlot?.name || "Codex Slot"}`;
+  const hasValidMainModel = Boolean(modelSlots[activeModelId]?.trim());
+  const effectiveSubagentModelId = subagentModelId || activeModelId;
+  const hasValidSubagentModel = Boolean(modelSlots[effectiveSubagentModelId]?.trim());
 
   const checkCodexStatus = async () => {
     setCheckingCodex(true);
@@ -108,13 +136,21 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
         body: JSON.stringify({
           baseUrl: getEffectiveBaseUrl(),
           apiKey: keyToUse,
-          model: selectedModel,
-          subagentModel: subagentModel || selectedModel
+          model: activeModelId,
+          subagentModel: subagentModelId || activeModelId,
+          catalogModels: [],
+          modelSlots,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Settings applied successfully!" });
+        if (data.modelCatalog?.registered) {
+          setMessage({ type: "success", text: "Settings applied. Custom models were added to the Codex app; restart Codex to refresh its model picker." });
+        } else if (data.modelCatalog?.warning) {
+          setMessage({ type: "warning", text: `Settings applied with warning: ${data.modelCatalog.warning}` });
+        } else {
+          setMessage({ type: "success", text: "Settings applied successfully!" });
+        }
         checkCodexStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
@@ -134,8 +170,9 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
       const data = await res.json();
       if (res.ok) {
         setMessage({ type: "success", text: "Settings reset successfully!" });
-        setSelectedModel("");
-        setSubagentModel("");
+        setModelSlots({});
+        setActiveModelId("");
+        setSubagentModelId("");
         checkCodexStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to reset settings" });
@@ -148,12 +185,29 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   };
 
   const handleModelSelect = (model) => {
-    setSelectedModel(model.value);
-    // Auto-set subagent model if not set
-    if (!subagentModel) {
-      setSubagentModel(model.value);
+    if (modelPickerTarget.startsWith("slot:")) {
+      const slotId = modelPickerTarget.split(":")[1];
+      setModelSlots(current => ({ ...current, [slotId]: model.value }));
     }
-    setModalOpen(false);
+    setModelPickerTarget("");
+  };
+
+  const handleSlotMappingChange = (slotId, model) => {
+    setModelSlots(current => ({ ...current, [slotId]: model }));
+    if (!model.trim()) {
+      setActiveModelId(current => current === slotId ? "" : current);
+      setSubagentModelId(current => current === slotId ? "" : current);
+    }
+  };
+
+  const handleSetMainSlot = (slotId) => {
+    if (!modelSlots[slotId]?.trim()) return;
+    setActiveModelId(slotId);
+  };
+
+  const handleToggleSubagentSlot = (slotId) => {
+    if (!modelSlots[slotId]?.trim()) return;
+    setSubagentModelId(current => current === slotId ? "" : slotId);
   };
 
   const getManualConfigs = () => {
@@ -161,10 +215,12 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
       ? selectedApiKey
       : (!cloudEnabled ? "sk_polyrouter" : "<API_KEY_FROM_DASHBOARD>");
 
-    const effectiveSubagentModel = subagentModel || selectedModel;
+    const manualMainModel = modelSlots[activeModelId] || activeModelId;
+    const manualSubagentSlot = subagentModelId || activeModelId;
+    const effectiveSubagentModel = modelSlots[manualSubagentSlot] || manualSubagentSlot;
 
     const configContent = `# PolyRouter Configuration for Codex CLI
-model = "${selectedModel}"
+model = "${manualMainModel}"
 model_provider = "polyrouter"
 
 [model_providers.polyrouter]
@@ -175,6 +231,7 @@ requires_openai_auth = false
 experimental_bearer_token = "${keyToUse}"
 
 [agents.subagent]
+description = "Default PolyRouter subagent"
 model = "${effectiveSubagentModel}"
 `;
 
@@ -306,58 +363,73 @@ model = "${effectiveSubagentModel}"
                   <ApiKeySelect value={selectedApiKey} onChange={setSelectedApiKey} apiKeys={apiKeys} cloudEnabled={cloudEnabled} />
                 </div>
 
-                {/* Model */}
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
-                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Model</span>
-                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <div className="relative w-full min-w-0">
-                    <input type="text" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface  border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                    {selectedModel && <button onClick={() => setSelectedModel("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500  transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
-                  </div>
-                  <button onClick={() => setModalOpen(true)} disabled={!activeProviders?.length} className={`w-full sm:w-auto  border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${activeProviders?.length ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select Model</button>
-                </div>
-
-                {/* Subagent Model */}
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
-                  <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Subagent Model</span>
-                  <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <div className="relative w-full min-w-0">
-                    <input
-                      type="text"
-                      value={subagentModel}
-                      onChange={(e) => setSubagentModel(e.target.value)}
-                      placeholder={selectedModel || "provider/model-id (defaults to main model)"}
-                      className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface  border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
-                    />
-                    {subagentModel && (
+                {/* Model Mappings */}
+                {CODEX_MODEL_SLOTS.map(slot => {
+                  const hasMapping = Boolean(modelSlots[slot.id]?.trim());
+                  const isMain = activeModelId === slot.id;
+                  const isSubagent = subagentModelId === slot.id;
+                  return (
+                    <div
+                      key={slot.id}
+                      className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto_auto_auto] sm:items-center sm:gap-2"
+                    >
+                      <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">{slot.name}</span>
+                      <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
+                      <div className="relative w-full min-w-0">
+                        <input
+                          type="text"
+                          value={modelSlots[slot.id] || ""}
+                          onChange={(event) => handleSlotMappingChange(slot.id, event.target.value)}
+                          placeholder="provider/model-id"
+                          className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface border border-border font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                        />
+                        {modelSlots[slot.id] && (
+                          <button
+                            type="button"
+                            onClick={() => handleSlotMappingChange(slot.id, "")}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted transition-colors hover:text-red-500"
+                            title={`Clear ${slot.name} mapping`}
+                          >
+                            <span className="material-symbols-outlined text-[14px]">close</span>
+                          </button>
+                        )}
+                      </div>
                       <button
-                        onClick={() => setSubagentModel("")}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500  transition-colors"
-                        title="Clear (will use main model)"
+                        type="button"
+                        onClick={() => setModelPickerTarget(`slot:${slot.id}`)}
+                        disabled={!activeProviders?.length}
+                        className={`w-full whitespace-nowrap border px-2 py-2 text-xs transition-colors sm:w-auto sm:shrink-0 sm:py-1.5 ${activeProviders?.length ? "cursor-pointer border-border bg-surface text-text-main hover:border-primary" : "cursor-not-allowed border-border opacity-50"}`}
                       >
-                        <span className="material-symbols-outlined text-[14px]">close</span>
+                        Select Model
                       </button>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setSubagentModalOpen(true)}
-                    disabled={!activeProviders?.length}
-                    className={`w-full sm:w-auto  border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${activeProviders?.length ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}
-                  >
-                    Select Model
-                  </button>
-                </div>
-              </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSetMainSlot(slot.id)}
+                        disabled={!hasMapping}
+                        aria-pressed={isMain}
+                        className={`w-full border px-2 py-2 text-xs transition-colors sm:w-auto sm:shrink-0 sm:py-1.5 ${isMain ? "border-primary/50 bg-primary/10 font-medium text-primary" : "border-border bg-surface text-text-muted hover:border-primary/40 hover:text-text-main"} disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        Main
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSubagentSlot(slot.id)}
+                        disabled={!hasMapping}
+                        aria-pressed={isSubagent}
+                        className={`w-full border px-2 py-2 text-xs transition-colors sm:w-auto sm:shrink-0 sm:py-1.5 ${isSubagent ? "border-primary/50 bg-primary/10 font-medium text-primary" : "border-border bg-surface text-text-muted hover:border-primary/40 hover:text-text-main"} disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        Subagent
+                      </button>
+                    </div>
+                  );
+                })}
 
-              {message && (
-                <div className={`flex items-center gap-2 px-2 py-1.5  text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}>
-                  <span className="material-symbols-outlined text-[14px]">{message.type === "success" ? "check_circle" : "error"}</span>
-                  <span>{message.text}</span>
+                <p className="text-[11px] leading-4 text-text-muted">
+                  Map each Codex picker name to a real model, then choose one Main and optionally one Subagent. For example, Astra can route to Fable 5 and Sol to Gemini.
+                </p>
                 </div>
-              )}
-
               <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
-                <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={(!selectedApiKey && (cloudEnabled && apiKeys.length > 0)) || !selectedModel} loading={applying}>
+                <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={(!selectedApiKey && (cloudEnabled && apiKeys.length > 0)) || !hasValidMainModel || !hasValidSubagentModel} loading={applying}>
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={restoring} loading={restoring}>
@@ -372,27 +444,15 @@ model = "${effectiveSubagentModel}"
         </div>
       )}
 
-      {modalOpen && (
+      {modelPickerTarget.startsWith("slot:") && (
         <ModelSelectModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
+          isOpen={Boolean(selectedSlot)}
+          onClose={() => setModelPickerTarget("")}
           onSelect={handleModelSelect}
-          selectedModel={selectedModel}
+          selectedModel={modelSlots[selectedSlotId] || ""}
           activeProviders={activeProviders}
           modelAliases={modelAliases}
-          title="Select Model for Codex"
-        />
-      )}
-
-      {subagentModalOpen && (
-        <ModelSelectModal
-          isOpen={subagentModalOpen}
-          onClose={() => setSubagentModalOpen(false)}
-          onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
-          selectedModel={subagentModel}
-          activeProviders={activeProviders}
-          modelAliases={modelAliases}
-          title="Select Subagent Model for Codex"
+          title={modelPickerTitle}
         />
       )}
 
