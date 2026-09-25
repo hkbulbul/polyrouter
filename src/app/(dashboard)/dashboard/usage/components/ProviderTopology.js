@@ -110,9 +110,18 @@ function RouterNode({ data }) {
       <Handle type="source" position={Position.Left} id="left" className="!bg-transparent !border-0 !w-0 !h-0" />
       <Handle type="source" position={Position.Right} id="right" className="!bg-transparent !border-0 !w-0 !h-0" />
 
-      <span className={`text-sm font-bold ${powering ? "topology-router-label text-yellow-300" : ""}`}>
-        <span className={powering ? "" : "text-brand-500"}>Poly</span><span className={powering ? "" : "text-text-main"}>Router</span>
-      </span>
+      <div className="flex items-center gap-2">
+        <img
+          src="/favicon.svg"
+          alt="PolyRouter"
+          width={22}
+          height={22}
+          className={`size-[22px] shrink-0 object-contain ${powering ? "topology-router-icon" : ""}`}
+        />
+        <span className={`text-sm font-bold ${powering ? "topology-router-label text-yellow-300" : ""}`}>
+          <span className={powering ? "" : "text-brand-500"}>Poly</span><span className={powering ? "" : "text-text-main"}>Router</span>
+        </span>
+      </div>
       {data.activeCount > 0 && (
         <span className="ml-2 px-1.5 py-0.5 rounded-full bg-yellow-400 text-black text-xs font-bold topology-router-badge">
           {data.activeCount}
@@ -256,7 +265,7 @@ const edgeTypes = { topology: TopologyEdge };
 function buildLayout(providers, activeSet, lastSet, errorSet) {
   const nodeW = 180;
   const nodeH = 30;
-  const routerW = 120;
+  const routerW = 145;
   const routerH = 44;
   const nodeGap = 24;
 
