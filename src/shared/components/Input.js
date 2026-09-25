@@ -11,6 +11,7 @@ export default function Input({
   error,
   hint,
   icon,
+  endAdornment,
   disabled = false,
   required = false,
   className,
@@ -31,6 +32,11 @@ export default function Input({
             <span className="material-symbols-outlined text-[20px]">{icon}</span>
           </div>
         )}
+        {endAdornment && (
+          <div className="absolute inset-y-0 right-0 flex items-center pr-1">
+            {endAdornment}
+          </div>
+        )}
         <input
           type={type}
           placeholder={placeholder}
@@ -45,6 +51,7 @@ export default function Input({
             // iOS zoom fix
             "text-[16px] sm:text-sm",
             icon && "pl-10",
+            endAdornment && "pr-11",
             error && "ring-1 ring-red-500 focus:ring-2 focus:ring-red-500/40 border-red-500/40",
             inputClassName
           )}
