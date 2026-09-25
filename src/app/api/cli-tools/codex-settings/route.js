@@ -10,6 +10,7 @@ import { parseTOML, stringifyTOML } from "confbox";
 import {
   CODEX_MODEL_SLOTS,
   buildCodexModelCatalog,
+  isQualifiedCodexModelTarget,
   isPolyRouterCatalogModel,
 } from "@/lib/codexModelCatalog";
 import { deleteModelAlias, getModelAliases, setModelAlias } from "@/models";
@@ -97,19 +98,6 @@ const formatAliasTarget = (target) => {
   return "";
 };
 
-const toStoredAliasTarget = (modelId) => {
-  if (modelId.includes("/")) return modelId;
-
-  const provider = modelId.startsWith("claude-")
-    ? "anthropic"
-    : modelId.startsWith("gemini-")
-      ? "gemini"
-      : modelId.startsWith("gpt-")
-        ? "openai"
-        : "openrouter";
-  return `${provider}/${modelId}`;
-};
-
 const normalizeModelSlots = (modelSlots) => Object.fromEntries(
   CODEX_MODEL_SLOTS.map(slot => [
     slot.id,
@@ -132,7 +120,7 @@ const syncCodexModelSlots = async (modelSlots) => {
   for (const slot of CODEX_MODEL_SLOTS) {
     const target = normalizedSlots[slot.id];
     if (target) {
-      await setModelAlias(slot.id, toStoredAliasTarget(target));
+      await setModelAlias(slot.id, target);
     } else if (aliases[slot.id]) {
       await deleteModelAlias(slot.id);
     }
@@ -293,6 +281,14 @@ export async function POST(request) {
     const hasModelSlots = modelSlots && typeof modelSlots === "object" && !Array.isArray(modelSlots);
     const requestedModelSlots = hasModelSlots ? normalizeModelSlots(modelSlots) : null;
     if (requestedModelSlots) {
+      const invalidSlot = CODEX_MODEL_SLOTS.find(slot =>
+        requestedModelSlots[slot.id] && !isQualifiedCodexModelTarget(requestedModelSlots[slot.id])
+      );
+      if (invalidSlot) {
+        return NextResponse.json({
+          error: `Model mapping for ${invalidSlot.name} must use provider/model format`,
+        }, { status: 400 });
+      }
       if (slotIds.has(model) && !requestedModelSlots[model]) {
         return NextResponse.json({ error: `Configure a model mapping for ${model}` }, { status: 400 });
       }
@@ -301,6 +297,14 @@ export async function POST(request) {
       }
     }
     const normalizedModelSlots = requestedModelSlots || await readCodexModelSlots();
+    const invalidStoredSlot = CODEX_MODEL_SLOTS.find(slot =>
+      normalizedModelSlots[slot.id] && !isQualifiedCodexModelTarget(normalizedModelSlots[slot.id])
+    );
+    if (invalidStoredSlot) {
+      return NextResponse.json({
+        error: `Model mapping for ${invalidStoredSlot.name} must use provider/model format`,
+      }, { status: 400 });
+    }
     if (requestedModelSlots) await syncCodexModelSlots(requestedModelSlots);
     const existingCatalogModels = await getManagedModelIds();
     const requestedCatalogModels = Array.isArray(catalogModels)

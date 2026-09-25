@@ -13,6 +13,12 @@ export function isCodexModelSlotId(modelId) {
   return CODEX_MODEL_SLOT_BY_ID.has(modelId);
 }
 
+export function isQualifiedCodexModelTarget(value) {
+  if (typeof value !== "string") return false;
+  const parts = value.trim().split("/");
+  return parts.length >= 2 && parts.every(part => part.trim().length > 0);
+}
+
 const cloneModel = (model) => JSON.parse(JSON.stringify(model));
 
 const getModelLeafId = (modelId) => modelId.split("/").at(-1);
@@ -64,7 +70,8 @@ export function isPolyRouterCatalogModel(model) {
 }
 
 export function buildCodexModelCatalog(baseCatalog, { model, subagentModel, catalogModels = [], modelSlots = {} }) {
-  const baseModels = Array.isArray(baseCatalog?.models) ? baseCatalog.models : [];
+  const baseModels = (Array.isArray(baseCatalog?.models) ? baseCatalog.models : [])
+    .filter(baseModel => !isPolyRouterCatalogModel(baseModel));
   if (baseModels.length === 0) {
     throw new Error("Codex did not provide a usable model catalog");
   }
@@ -82,7 +89,10 @@ export function buildCodexModelCatalog(baseCatalog, { model, subagentModel, cata
   );
 
   if (customModelIds.length === 0) {
-    return { catalog: baseCatalog, customModelIds: [] };
+    return {
+      catalog: baseModels.length === baseCatalog.models.length ? baseCatalog : { ...baseCatalog, models: baseModels },
+      customModelIds: [],
+    };
   }
 
   const slots = customModelIds.map(modelId => CODEX_MODEL_SLOT_BY_ID.get(modelId) || null);

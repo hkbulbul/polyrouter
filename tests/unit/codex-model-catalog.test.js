@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CODEX_MODEL_SLOTS,
   buildCodexModelCatalog,
+  isQualifiedCodexModelTarget,
   isPolyRouterCatalogModel,
 } from "../../src/lib/codexModelCatalog.js";
 import { getModelInfoCore } from "../../open-sse/services/model.js";
@@ -132,6 +133,27 @@ describe("buildCodexModelCatalog", () => {
     expect(CODEX_MODEL_SLOTS).toHaveLength(4);
   });
 
+  it("rebuilds the catalog without a removed picker model while keeping other extras", () => {
+    const baseCatalog = { models: [createModel("gpt-5.5", 1)] };
+    const initial = buildCodexModelCatalog(baseCatalog, {
+      model: "openrouter/main",
+      subagentModel: "openrouter/subagent",
+      catalogModels: ["openrouter/extra-a", "openrouter/extra-b"],
+    });
+    const updated = buildCodexModelCatalog(initial.catalog, {
+      model: "openrouter/main",
+      subagentModel: "openrouter/subagent",
+      catalogModels: ["openrouter/extra-b"],
+    });
+
+    const pickerModels = updated.catalog.models.filter(isPolyRouterCatalogModel);
+    expect(pickerModels.map(model => model.slug)).toEqual([
+      "openrouter/main",
+      "openrouter/subagent",
+      "openrouter/extra-b",
+    ]);
+  });
+
   it("rejects a catalog without model metadata", () => {
     expect(() => buildCodexModelCatalog({ models: [] }, { model: "custom/model" }))
       .toThrow("usable model catalog");
@@ -151,6 +173,15 @@ describe("isPolyRouterCatalogModel", () => {
 
   it("recognizes named Codex slot entries", () => {
     expect(isPolyRouterCatalogModel({ slug: "codex-astra", display_name: "Astra" })).toBe(true);
+  });
+});
+
+describe("isQualifiedCodexModelTarget", () => {
+  it("accepts provider-qualified targets and rejects ambiguous bare model IDs", () => {
+    expect(isQualifiedCodexModelTarget("anthropic/claude-fable-5")).toBe(true);
+    expect(isQualifiedCodexModelTarget("openrouter/vendor/model")).toBe(true);
+    expect(isQualifiedCodexModelTarget("claude-fable-5")).toBe(false);
+    expect(isQualifiedCodexModelTarget("openrouter/")).toBe(false);
   });
 });
 

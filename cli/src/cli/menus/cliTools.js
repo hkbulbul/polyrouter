@@ -418,7 +418,9 @@ async function codexRemovePickerModel(port) {
     return;
   }
 
-  const selected = await select("Select a model to remove from the Codex app picker:", removableModels);
+  const selectedIndex = await select("Select a model to remove from the Codex app picker:", removableModels);
+  const selected = removableModels[selectedIndex];
+  if (!selected) return;
   const catalogModels = uniqueCodexModels(settings.availableModelIds || [])
     .filter(model => model !== selected);
   const context = await getCodexApplyContext(port, settings);

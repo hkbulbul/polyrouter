@@ -21,6 +21,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const [subagentModelId, setSubagentModelId] = useState("");
   const [modelPickerTarget, setModelPickerTarget] = useState("");
   const [modelAliases, setModelAliases] = useState({});
+  const [manualModelId, setManualModelId] = useState("");
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
 
@@ -103,10 +104,22 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     ? modelPickerTarget.split(":")[1]
     : "";
   const selectedSlot = CODEX_MODEL_SLOTS.find(slot => slot.id === selectedSlotId);
-  const modelPickerTitle = `Select Model for ${selectedSlot?.name || "Codex Slot"}`;
+  const modelPickerTitle = modelPickerTarget === "manual"
+    ? "Select Manual Codex Model"
+    : `Select Model for ${selectedSlot?.name || "Codex Slot"}`;
   const hasValidMainModel = Boolean(modelSlots[activeModelId]?.trim());
   const effectiveSubagentModelId = subagentModelId || activeModelId;
   const hasValidSubagentModel = Boolean(modelSlots[effectiveSubagentModelId]?.trim());
+  const getConfiguredModel = (modelId) => {
+    if (!modelId) return "";
+    const mappedModel = modelSlots[modelId]?.trim();
+    if (mappedModel) return mappedModel;
+    return isCodexModelSlotId(modelId) ? "" : modelId;
+  };
+  const manualMainModel = getConfiguredModel(activeModelId) || manualModelId;
+  const manualSubagentSlot = subagentModelId || activeModelId;
+  const manualSubagentModel = getConfiguredModel(manualSubagentSlot) || manualMainModel;
+  const hasManualModel = Boolean(manualMainModel);
 
   const checkCodexStatus = async () => {
     setCheckingCodex(true);
@@ -138,7 +151,9 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
           apiKey: keyToUse,
           model: activeModelId,
           subagentModel: subagentModelId || activeModelId,
-          catalogModels: [],
+          catalogModels: Array.isArray(codexStatus?.availableModelIds)
+            ? codexStatus.availableModelIds
+            : undefined,
           modelSlots,
         }),
       });
@@ -173,6 +188,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
         setModelSlots({});
         setActiveModelId("");
         setSubagentModelId("");
+        setManualModelId("");
         checkCodexStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to reset settings" });
@@ -185,6 +201,11 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   };
 
   const handleModelSelect = (model) => {
+    if (modelPickerTarget === "manual") {
+      setManualModelId(model.value);
+      setModelPickerTarget("");
+      return;
+    }
     if (modelPickerTarget.startsWith("slot:")) {
       const slotId = modelPickerTarget.split(":")[1];
       setModelSlots(current => ({ ...current, [slotId]: model.value }));
@@ -215,9 +236,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
       ? selectedApiKey
       : (!cloudEnabled ? "sk_polyrouter" : "<API_KEY_FROM_DASHBOARD>");
 
-    const manualMainModel = modelSlots[activeModelId] || activeModelId;
-    const manualSubagentSlot = subagentModelId || activeModelId;
-    const effectiveSubagentModel = modelSlots[manualSubagentSlot] || manualSubagentSlot;
+    if (!manualMainModel) return [];
 
     const configContent = `# PolyRouter Configuration for Codex CLI
 model = "${manualMainModel}"
@@ -232,7 +251,7 @@ experimental_bearer_token = "${keyToUse}"
 
 [agents.subagent]
 description = "Default PolyRouter subagent"
-model = "${effectiveSubagentModel}"
+    model = "${manualSubagentModel}"
 `;
 
     const authContent = JSON.stringify({
@@ -291,8 +310,12 @@ model = "${effectiveSubagentModel}"
                     <p className="text-sm text-text-muted">Manual configuration is still available if polyrouter is deployed on a remote server.</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 pl-9">
-                  <Button variant="secondary" size="sm" onClick={() => setShowManualConfigModal(true)} className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30">
+                <div className="flex flex-wrap items-center gap-2 pl-9">
+                  <Button variant="outline" size="sm" onClick={() => setModelPickerTarget("manual")} disabled={!activeProviders?.length}>
+                    <span className="material-symbols-outlined text-[18px] mr-1">model_training</span>
+                    {manualMainModel || "Select Manual Model"}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setShowManualConfigModal(true)} disabled={!hasManualModel} title={hasManualModel ? "Copy manual Codex configuration" : "Select a model before copying the manual configuration"} className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30">
                     <span className="material-symbols-outlined text-[18px] mr-1">content_copy</span>
                     Manual Config
                   </Button>
@@ -428,6 +451,23 @@ model = "${effectiveSubagentModel}"
                   Map each Codex picker name to a real model, then choose one Main and optionally one Subagent. For example, Astra can route to Fable 5 and Sol to Gemini.
                 </p>
                 </div>
+              {message && (
+                <div
+                  role="status"
+                  className={`flex items-center gap-2 px-2 py-1.5 text-xs ${
+                    message.type === "success"
+                      ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                      : message.type === "warning"
+                        ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                        : "bg-red-500/10 text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">
+                    {message.type === "success" ? "check_circle" : message.type === "warning" ? "warning" : "error"}
+                  </span>
+                  <span>{message.text}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
                 <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={(!selectedApiKey && (cloudEnabled && apiKeys.length > 0)) || !hasValidMainModel || !hasValidSubagentModel} loading={applying}>
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
@@ -435,7 +475,7 @@ model = "${effectiveSubagentModel}"
                 <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={restoring} loading={restoring}>
                   <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>
+                <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)} disabled={!hasManualModel} title={hasManualModel ? "Copy manual Codex configuration" : "Select a model before copying the manual configuration"}>
                   <span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>Manual Config
                 </Button>
               </div>
@@ -444,12 +484,12 @@ model = "${effectiveSubagentModel}"
         </div>
       )}
 
-      {modelPickerTarget.startsWith("slot:") && (
+      {(modelPickerTarget.startsWith("slot:") || modelPickerTarget === "manual") && (
         <ModelSelectModal
-          isOpen={Boolean(selectedSlot)}
+          isOpen={modelPickerTarget === "manual" || Boolean(selectedSlot)}
           onClose={() => setModelPickerTarget("")}
           onSelect={handleModelSelect}
-          selectedModel={modelSlots[selectedSlotId] || ""}
+          selectedModel={modelPickerTarget === "manual" ? manualModelId : modelSlots[selectedSlotId] || ""}
           activeProviders={activeProviders}
           modelAliases={modelAliases}
           title={modelPickerTitle}
