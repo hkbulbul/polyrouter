@@ -1,0 +1,32 @@
+export default {
+  id: "ollama-search",
+  alias: "ollama-search",
+  display: {
+    name: "Ollama Search",
+    icon: "cloud",
+    color: "#FFFFFF",
+    textIcon: "OS",
+    website: "https://ollama.com",
+    notice: {
+      text: "Uses the API key from your Ollama connection.",
+      apiKeyUrl: "https://ollama.com/settings/keys",
+    },
+  },
+  category: "apikey",
+  authType: "apikey",
+  serviceKinds: ["webSearch"],
+  credentialFallback: "ollama",
+  searchConfig: {
+    baseUrl: "https://ollama.com/api/web_search",
+    method: "POST",
+    authType: "apikey",
+    authHeader: "bearer",
+    costPerQuery: 0,
+    freeMonthlyQuota: 1000,
+    searchTypes: ["web"],
+    defaultMaxResults: 5,
+    maxMaxResults: 10,
+    timeoutMs: 10000,
+    cacheTTLMs: 300000,
+  },
+};

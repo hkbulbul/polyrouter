@@ -1,6 +1,7 @@
 import { PROVIDER_MODELS } from "open-sse/config/providerModels.js";
 import { AI_PROVIDERS, ALIAS_TO_ID } from "@/shared/constants/providers";
 import { getModelKind } from "@/shared/constants/models";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 const KIND_ENDPOINT = {
   llm: "/v1/chat/completions",
@@ -49,6 +50,7 @@ function lookup(fullId, requestedKind) {
   const alias = fullId.slice(0, slash);
   const modelId = fullId.slice(slash + 1);
   const providerId = ALIAS_TO_ID[alias] || alias;
+  if (getUnavailableProviderError(providerId)) return null;
   const providerInfo = AI_PROVIDERS[providerId];
 
   // PROVIDER_MODELS lookup (by alias key, fallback to providerId)

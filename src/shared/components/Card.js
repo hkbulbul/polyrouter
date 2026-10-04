@@ -25,28 +25,28 @@ export default function Card({
   return (
     <div
       className={cn(
-        "bg-surface border border-border-subtle",
-        elev ? " shadow-[var(--shadow-elev)]" : " shadow-[var(--shadow-soft)]",
-        hover && "hover:shadow-[var(--shadow-warm)] hover:border-brand-500/30 transition-all cursor-pointer",
+        "bg-surface border",
+        elev ? "border-border" : "border-border-subtle",
+        hover && "hover:border-border-strong hover:bg-[color-mix(in_srgb,var(--color-surface)_70%,var(--color-surface-2))] transition-colors cursor-pointer",
         paddings[padding],
         className
       )}
       {...props}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div className="flex min-w-0 items-center gap-3">
             {icon && (
-              <div className="p-2  bg-bg text-text-muted">
-                <span className="material-symbols-outlined text-[20px]">{icon}</span>
+              <div className="flex size-9 shrink-0 items-center justify-center border border-border-subtle bg-bg text-primary">
+                <span className="material-symbols-outlined text-[18px]">{icon}</span>
               </div>
             )}
-            <div>
+            <div className="min-w-0">
               {title && (
-                <h3 className="text-text-main font-semibold">{title}</h3>
+                <h3 className="text-[15px] font-medium leading-tight tracking-[-0.01em] text-text-main">{title}</h3>
               )}
               {subtitle && (
-                <p className="text-sm text-text-muted">{subtitle}</p>
+                <p className="mt-1 text-[13px] leading-snug text-text-muted">{subtitle}</p>
               )}
             </div>
           </div>

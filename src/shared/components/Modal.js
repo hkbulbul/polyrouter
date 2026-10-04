@@ -149,7 +149,7 @@ export default function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay */}
       <div
-        className={cn("absolute inset-0 bg-black/50 backdrop-blur-[2px]", overlayAnim)}
+        className={cn("absolute inset-0 bg-black/55 backdrop-blur-[3px]", overlayAnim)}
         onClick={closeOnOverlay ? handleClose : undefined}
       />
 
@@ -161,7 +161,7 @@ export default function Modal({
         aria-labelledby={titleId}
         className={cn(
           "relative w-full bg-surface",
-          "border border-border-subtle",
+          "border border-border",
           "shadow-[var(--shadow-elev)]",
           panelAnim,
           sizes[size],
@@ -169,14 +169,14 @@ export default function Modal({
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 px-5 py-3 border-b border-border-subtle">
-          <h2 id={titleId} className="text-sm font-semibold text-text-main truncate">
+        <div className="flex h-12 items-center justify-between gap-4 px-5 border-b border-border">
+          <h2 id={titleId} className="text-[15px] font-medium tracking-[-0.01em] text-text-main truncate">
             {title}
           </h2>
           <button
             onClick={handleClose}
             aria-label="Close"
-            className="shrink-0 p-1 -mr-1 text-text-muted hover:text-text-main transition-colors rounded-md hover:bg-surface-2"
+            className="shrink-0 flex size-8 -mr-2 items-center justify-center border border-transparent text-text-muted hover:text-text-main hover:border-border transition-colors"
           >
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
@@ -189,7 +189,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border-subtle bg-surface-2/40">
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-bg">
             {footer}
           </div>
         )}
@@ -227,7 +227,7 @@ export function ConfirmModal({
         </>
       }
     >
-      <p className="text-text-muted">{message}</p>
+      <p className="text-sm leading-relaxed text-text-muted">{message}</p>
     </Modal>
   );
 }

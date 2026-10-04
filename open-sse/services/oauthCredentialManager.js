@@ -3,7 +3,7 @@ import {
   isUnrecoverableRefreshError,
   refreshTokenByProvider,
 } from "./tokenRefresh.js";
-import { PROVIDER_OAUTH } from "../providers/index.js";
+import { PROVIDER_OAUTH, getUnavailableProviderError } from "../providers/index.js";
 import { TOKEN_REFRESH_INFLIGHT_TTL_MS } from "../config/runtimeConfig.js";
 
 // Single source: codex.oauth.maxRefreshAgeMs (8 days) — proactive refresh window
@@ -159,6 +159,8 @@ export async function withCredentialRefreshLock(provider, credentials, refreshFn
 }
 
 export async function refreshProviderCredentials(provider, credentials, log) {
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) throw new Error(unavailableError);
   if (!credentials) return null;
 
   return withCredentialRefreshLock(provider, credentials, async () => {

@@ -5,6 +5,8 @@ import { getDefaultModel } from "open-sse/config/providerModels.js";
 import { resolveOllamaLocalHost, resolveXiaomiTokenplanBaseUrl, PROVIDERS } from "open-sse/config/providers.js";
 import { openaiToCommandCodeRequest } from "open-sse/translator/request/openai-to-commandcode.js";
 import { normalizeProviderId } from "@/lib/providerNormalization";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
+import { resolveSelfHostedEndpoint } from "open-sse/utils/selfHostedEndpoint.js";
 
 // Probe a webSearch/webFetch provider using its searchConfig/fetchConfig.
 // Returns true if API key is accepted (status !== 401 && !== 403).
@@ -43,14 +45,26 @@ async function probeWebProvider(provider, apiKey) {
 
 // Probe a media provider (tts/embedding/stt/image/video) using *Config.
 // Returns true if API key is accepted; null to skip (let default handler decide).
-async function probeMediaProvider(provider, apiKey) {
+async function probeMediaProvider(provider, apiKey, providerSpecificData = {}) {
   const p = AI_PROVIDERS[provider];
   if (!p) return null;
   const MEDIA_KINDS = new Set(["tts", "embedding", "stt", "image", "video", "music", "imageToText"]);
   const kinds = p.serviceKinds || ["llm"];
   const isMediaOnly = kinds.every((k) => MEDIA_KINDS.has(k));
   if (!isMediaOnly) return null;
-  const cfg = p.ttsConfig || p.sttConfig || p.embeddingConfig || p.imageConfig || p.videoConfig || p.musicConfig;
+  const cfg = { ...(p.ttsConfig || p.sttConfig || p.embeddingConfig || p.imageConfig || p.videoConfig || p.musicConfig) };
+  const selfHostedKind = {
+    "selfhosted-embedding": "embedding",
+    "selfhosted-stt": "stt",
+    "selfhosted-tts": "tts",
+  }[provider];
+  if (selfHostedKind) {
+    try {
+      cfg.baseUrl = resolveSelfHostedEndpoint(providerSpecificData?.baseUrl, selfHostedKind);
+    } catch (error) {
+      return false;
+    }
+  }
   // No probe config → best-effort accept (validate at usage time)
   if (!cfg) return true;
   if (p.noAuth || cfg.authType === "none") return true;
@@ -85,6 +99,10 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const provider = normalizeProviderId(body.provider);
+    const unavailableError = getUnavailableProviderError(provider);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
+    }
     const { apiKey, providerSpecificData } = body;
 
     const isNoAuth = AI_PROVIDERS[provider]?.noAuth === true;
@@ -243,7 +261,7 @@ export async function POST(request) {
       }
 
       // Generic probe for tts/embedding providers (config-driven)
-      const mediaResult = await probeMediaProvider(provider, apiKey);
+      const mediaResult = await probeMediaProvider(provider, apiKey, providerSpecificData);
       if (mediaResult !== null) {
         return NextResponse.json({
           valid: mediaResult,

@@ -8,6 +8,7 @@ import {
   ANTHROPIC_COMPATIBLE_PREFIX,
 } from "@/shared/constants/providers";
 import { testSingleConnection } from "../[id]/test/testUtils.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 function getAuthGroup(providerId, connection = null) {
   // Prioritize authType from connection if available
@@ -49,6 +50,13 @@ export async function POST(request) {
       return NextResponse.json({ error: "mode is required" }, { status: 400 });
     }
 
+    const unavailableError = typeof providerId === "string"
+      ? getUnavailableProviderError(providerId)
+      : null;
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
+    }
+
     const allConnections = await getProviderConnections({ isActive: true });
 
     let connectionsToTest = [];
@@ -70,6 +78,10 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+
+    // Stale connections for visible-but-unavailable registry entries must not
+    // reach provider probes, even when they are still active in the database.
+    connectionsToTest = connectionsToTest.filter((connection) => !getUnavailableProviderError(connection.provider));
 
     if (connectionsToTest.length === 0) {
       return NextResponse.json({
@@ -93,6 +105,7 @@ export async function POST(request) {
           valid: data.valid,
           latencyMs: data.latencyMs || 0,
           error: data.error || null,
+          unavailable: data.unavailable || false,
           diagnosis: data.diagnosis || null,
           statusCode: data.statusCode || null,
           testedAt: data.testedAt || new Date().toISOString(),

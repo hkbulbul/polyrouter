@@ -1,4 +1,5 @@
 import { PROVIDERS } from "../config/providers.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 import { OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared.js";
 
 const OPENAI_COMPATIBLE_PREFIX = "openai-compatible-";
@@ -104,8 +105,15 @@ export function detectFormat(body) {
   return "openai";
 }
 
+export function getUnavailableProviderMessage(provider) {
+  return getUnavailableProviderError(provider);
+}
+
 // Get provider config (internal — no external runtime consumer)
 function getProviderConfig(provider) {
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) throw new Error(unavailableError);
+
   if (isOpenAICompatible(provider)) {
     const apiType = getOpenAICompatibleType(provider);
     return {

@@ -24,6 +24,8 @@ export const CLAUDE_CONFIG = { ...PROVIDER_OAUTH["claude"] };
 // Codex (OpenAI) OAuth Configuration (Authorization Code Flow with PKCE)
 export const CODEX_CONFIG = { ...PROVIDER_OAUTH["codex"] };
 
+export const ZED_HOSTED_CONFIG = { ...PROVIDER_OAUTH["zed"] };
+
 // Gemini (Google) OAuth Configuration (Standard OAuth2)
 // clientId/clientSecret from GOOGLE_OAUTH_CLIENT (shared.js) â€” not stored in registry
 export const GEMINI_CONFIG = { ...GOOGLE_OAUTH_CLIENT, ...PROVIDER_OAUTH["gemini-cli"] };
@@ -123,9 +125,6 @@ export const KIMCHI_CONFIG = { ...PROVIDER_OAUTH["kimchi"] };
 // Grok CLI / Grok Build OAuth Configuration (Device Code Flow)
 // Endpoint: cli-chat-proxy.grok.com â€” same client_id as xai, different flow + scopes
 export const GROK_CLI_CONFIG = { ...PROVIDER_OAUTH["grok-cli"] };
-// Muse Code OAuth Configuration (Device Code Flow)
-export const MUSE_CODE_CONFIG = { ...PROVIDER_OAUTH["muse-code"] };
-
 // OAuth timeout (5 minutes)
 export const OAUTH_TIMEOUT = 300000;
 

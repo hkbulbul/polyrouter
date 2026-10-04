@@ -28,10 +28,10 @@ export default function HeaderMenu({ onLogout }) {
       <Dropdown
         trigger={
           <button
-            className="flex items-center justify-center p-2 text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-all rounded-[var(--radius-brand)]"
+            className="flex items-center justify-center size-9 border border-transparent text-text-muted hover:text-text-main hover:border-border hover:bg-surface-2 transition-colors"
             title="Menu"
           >
-            <span className="material-symbols-outlined">grid_view</span>
+            <span className="material-symbols-outlined text-[20px]">grid_view</span>
           </button>
         }
       >

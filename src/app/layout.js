@@ -1,4 +1,4 @@
-import { IBM_Plex_Sans } from "next/font/google";
+import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import "material-symbols/outlined.css";
 import "./globals.css";
 import { ThemeProvider } from "@/shared/components/ThemeProvider";
@@ -13,10 +13,15 @@ import { RuntimeI18nProvider } from "@/i18n/RuntimeI18nProvider";
 // Hook console immediately at module load time (server-side only, runs once)
 initConsoleLogCapture();
 
-const ibmPlexSans = IBM_Plex_Sans({
+// Same type pairing as the landing site: grotesk for UI, mono for labels and code.
+const schibstedGrotesk = Schibsted_Grotesk({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-ibm-plex-sans",
+  variable: "--font-schibsted",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
 });
 
 export const metadata = {
@@ -29,12 +34,12 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#0a0c0b",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${schibstedGrotesk.variable} ${jetbrainsMono.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -42,7 +47,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className={`${ibmPlexSans.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <DashboardAnalyticsProvider>
           <GoogleAnalyticsProvider>
             <PostHogProvider>

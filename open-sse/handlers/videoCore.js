@@ -1,7 +1,7 @@
 import { createErrorResult } from "../utils/error.js";
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { refreshTokenByProvider } from "../services/tokenRefresh.js";
-import { PROVIDER_MEDIA } from "../providers/index.js";
+import { PROVIDER_MEDIA, getUnavailableProviderError } from "../providers/index.js";
 
 // Upstream fetch deadline for video job submission/polling (the job itself is
 // async upstream — this only bounds the HTTP round-trip, not video rendering).
@@ -86,6 +86,8 @@ export async function handleVideoProxyCore({
   log,
   onCredentialsRefreshed,
 }) {
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return createErrorResult(HTTP_STATUS.BAD_REQUEST, unavailableError);
   const config = getVideoConfig(provider);
   if (!config) {
     return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Provider '${provider}' does not support video generation`);

@@ -14,6 +14,7 @@ import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo.js";
 import { assertPublicUrl } from "@/shared/utils/ssrfGuard.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 /**
  * Handle web fetch (URL extraction) request for the SSE/Next.js server.
@@ -114,6 +115,11 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
   const format = body.format;
   const maxCharacters = body.max_characters;
   const providerId = resolveProviderId(providerInput);
+  const unavailableError = getUnavailableProviderError(providerId);
+  if (unavailableError) {
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
+
   const resolvedProvider = AI_PROVIDERS[providerId];
 
   if (!resolvedProvider) {

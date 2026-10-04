@@ -8,6 +8,7 @@ import { handleTtsCore } from "open-sse/handlers/ttsCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import { handleComboChat } from "open-sse/services/combo.js";
 import * as log from "../utils/logger.js";
 
@@ -71,6 +72,8 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language, vo
   if (!modelInfo.provider) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
 
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
   log.info("ROUTING", `Provider: ${provider}, Voice: ${model}`);
 
   // noAuth providers — no credential needed

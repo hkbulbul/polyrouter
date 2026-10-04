@@ -12,6 +12,8 @@ import { resolveGrokCliModels } from "open-sse/services/grokCliModels.js";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { ANTIGRAVITY_OAUTH_CLIENT } from "open-sse/providers/shared.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
+import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 
 const GEMINI_CLI_MODELS_URL = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 const ANTIGRAVITY_MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
@@ -539,6 +541,11 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
     }
 
+    const unavailableError = getUnavailableProviderError(connection.provider);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
+    }
+
     if (isOpenAICompatibleProvider(connection.provider)) {
       const baseUrl = connection.providerSpecificData?.baseUrl;
       if (!baseUrl) {
@@ -569,6 +576,15 @@ export async function GET(request, { params }) {
         provider: connection.provider,
         connectionId: connection.id,
         models
+      });
+    }
+
+    if (connection.provider === "zed") {
+      const catalog = await resolveZedModels(connection);
+      return NextResponse.json({
+        provider: connection.provider,
+        connectionId: connection.id,
+        models: catalog?.models || [],
       });
     }
 

@@ -3,6 +3,7 @@ import { resolveConnectionProxyConfig, pickProxyPoolId } from "@/lib/network/con
 import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLockUpdate, getEarliestModelLockUntil } from "open-sse/services/accountFallback.js";
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import * as log from "../utils/logger.js";
 
 // Serializes the round-robin read-modify-write below, per provider.
@@ -81,6 +82,7 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
   const preferredConnectionId = options?.preferredConnectionId || null;
   // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
   const providerId = resolveProviderId(provider);
+  if (getUnavailableProviderError(providerId)) return null;
 
   // Read once, before any lock is taken. Both the noAuth branch and the
   // strategy choice need this, and knowing the strategy up front is precisely

@@ -3,6 +3,7 @@ import {
   getProviderConnections,
   updateProviderConnection,
 } from "@/lib/localDb";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 const MODEL_LOCK_PREFIX = "modelLock_";
 
@@ -25,6 +26,7 @@ export async function GET() {
     const models = [];
 
     for (const connection of connections) {
+      if (getUnavailableProviderError(connection.provider)) continue;
       const locks = getActiveModelLocks(connection);
       for (const lock of locks) {
         models.push({
@@ -69,6 +71,10 @@ export async function POST(request) {
 
     if (action !== "clearCooldown" || !provider || !model) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+    const unavailableError = getUnavailableProviderError(provider);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
     }
 
     const connections = await getProviderConnections({ provider });

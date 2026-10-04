@@ -62,6 +62,14 @@ export const TTS_MODELS_CONFIG = {
     },
     allVoices: VOICES_FULL,
   },
+  "fish-audio": {
+    models: [
+      { id: "s2.1-pro-free", name: "S2.1 Pro Free", type: "tts" },
+      { id: "s2.1-pro", name: "S2.1 Pro", type: "tts" },
+      { id: "s2-pro", name: "S2 Pro", type: "tts" },
+      { id: "s1", name: "S1", type: "tts" },
+    ],
+  },
   elevenlabs: {
     models: [
       { id: "eleven_flash_v2_5",      name: "Flash v2.5 (Fastest)",      type: "tts" },

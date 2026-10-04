@@ -327,6 +327,49 @@ function buildSearxngRequest(config, params) {
   };
 }
 
+function buildXquikRequest(config, params) {
+  if (!params.token) throw new Error("Xquik requires an API key");
+
+  const queryType = getProviderSetting(params, "queryType");
+  if (queryType && !["Latest", "Top"].includes(queryType)) {
+    throw new Error("Xquik queryType must be Latest or Top");
+  }
+
+  const query = new URLSearchParams({
+    q: params.query,
+    limit: String(params.maxResults),
+  });
+  const cursor = getProviderSetting(params, "cursor");
+  if (cursor) query.set("cursor", cursor);
+  if (queryType) query.set("queryType", queryType);
+  if (params.language) query.set("language", params.language);
+
+  return {
+    url: `${resolveBaseUrl(config, params)}?${query}`,
+    init: {
+      method: "GET",
+      headers: { Accept: "application/json", "x-api-key": params.token },
+    },
+  };
+}
+
+function buildOllamaSearchRequest(config, params) {
+  const body = { query: params.query, max_results: params.maxResults };
+  if (params.country) body.country = params.country;
+  if (params.language) body.language = params.language;
+  return {
+    url: resolveBaseUrl(config, params),
+    init: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(params.token ? { Authorization: `Bearer ${params.token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    },
+  };
+}
+
 // ── Dispatcher ──────────────────────────────────────────────────────────
 
 const BUILDERS = {
@@ -340,6 +383,8 @@ const BUILDERS = {
   "searchapi": buildSearchApiRequest,
   "youcom": buildYouComRequest,
   "searxng": buildSearxngRequest,
+  "xquik": buildXquikRequest,
+  "ollama-search": buildOllamaSearchRequest,
 };
 
 /**

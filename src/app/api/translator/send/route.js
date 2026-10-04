@@ -1,5 +1,6 @@
 import { getProviderConnections, updateProviderConnection } from "@/lib/localDb.js";
 import { getExecutor } from "open-sse/index.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 async function persistRefreshedCredentials(connection, newCredentials) {
   const updateData = {};
@@ -38,6 +39,10 @@ export async function POST(request) {
 
     if (!provider || !model || !body) {
       return Response.json({ success: false, error: "provider, model, and body required" }, { status: 400 });
+    }
+    const unavailableError = getUnavailableProviderError(provider);
+    if (unavailableError) {
+      return Response.json({ success: false, error: unavailableError }, { status: 400 });
     }
 
     const connections = await getProviderConnections({ provider });

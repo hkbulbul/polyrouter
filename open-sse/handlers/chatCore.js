@@ -26,6 +26,7 @@ import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { compressWithHeadroom, formatHeadroomLog, formatHeadroomSizeLog, isHeadroomPhantomSavings } from "../rtk/headroom.js";
 import { compressWithPxpipe } from "../rtk/pxpipe.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 import { stripUnsupportedModalities } from "../translator/concerns/modality.js";
 import { prefetchRemoteImages } from "../translator/concerns/prefetch.js";
 import { extractThinking } from "../translator/concerns/thinkingUnified.js";
@@ -40,6 +41,10 @@ import { resolveSessionId } from "../utils/sessionManager.js";
  */
 export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onStreamAbort, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking }) {
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) {
+    return createErrorResult(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
   const requestStartTime = Date.now();
   // Stable per-session color so all lines of one CLI conversation share a tag
   const sessionSeed = (() => {
@@ -59,9 +64,9 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   const alias = PROVIDER_ID_TO_ALIAS[provider] || provider;
   const modelTargetFormat = getModelTargetFormat(alias, model);
-  // Multi-endpoint providers: pick transport matching sourceFormat → zero translation
-  const runtimeTransport = resolveTransport(provider, sourceFormat);
-  const targetFormat = modelTargetFormat || runtimeTransport?.format || getTargetFormat(provider);
+  // Prefer a model's declared native format; otherwise preserve compatible client formats.
+  const runtimeTransport = resolveTransport(provider, modelTargetFormat || sourceFormat);
+  const targetFormat = runtimeTransport?.format || modelTargetFormat || getTargetFormat(provider);
   if (runtimeTransport && credentials) credentials.runtimeTransport = runtimeTransport;
   const stripList = getModelStrip(alias, model);
   const upstreamModel = getModelUpstreamId(alias, model);
@@ -335,8 +340,12 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   if (!executor.noAuth && shouldRefreshResponse
     && (providerResponse.status === HTTP_STATUS.UNAUTHORIZED || providerResponse.status === HTTP_STATUS.FORBIDDEN)) {
     try {
-      const newCredentials = await refreshWithRetry(() => executor.refreshCredentials(credentials, log), 3, log);
-      if (newCredentials?.accessToken || newCredentials?.copilotToken) {
+      const newCredentials = await refreshWithRetry(
+        () => executor.refreshCredentials(credentials, log, proxyOptions),
+        3,
+        log,
+      );
+      if (newCredentials?.accessToken || newCredentials?.apiKey || newCredentials?.copilotToken) {
         if (log?.line) log.line(reqTag, "🔑", `TOKEN REFRESHED · ${provider}/${model}`);
         Object.assign(credentials, newCredentials);
         if (onCredentialsRefreshed) {

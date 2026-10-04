@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createErrorResult } from "../utils/error.js";
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 
 // Build auth headers from sttConfig + token
 function buildAuthHeaders(cfg, token) {
@@ -203,6 +204,8 @@ function jsonResponse(obj) {
  * @returns {Promise<{success, response, status?, error?}>}
  */
 export async function handleSttCore({ provider, model, formData, credentials, sttConfig }) {
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return createErrorResult(HTTP_STATUS.BAD_REQUEST, unavailableError);
   const file = formData.get("file");
   if (!file) return createErrorResult(HTTP_STATUS.BAD_REQUEST, "Missing required field: file");
 

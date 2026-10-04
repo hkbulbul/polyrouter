@@ -12,6 +12,7 @@ import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import * as log from "../utils/logger.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 // Video generation is xAI-only today; requests without a provider prefix
 // (bare model id, or multipart bodies we deliberately don't parse) land here.
@@ -65,6 +66,10 @@ async function resolveVideoProvider(parsedBody) {
 
   const modelStr = String(parsedBody.model);
   const modelInfo = await getModelInfo(modelStr);
+  const unavailableError = getUnavailableProviderError(modelInfo.provider);
+  if (unavailableError) {
+    return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError) };
+  }
   if (!modelInfo.provider) {
     return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Combos are not supported for video generation") };
   }
@@ -101,6 +106,8 @@ export async function handleVideoCreate(request, action) {
   const resolved = await resolveVideoProvider(bodyInfo.parsed);
   if (resolved.error) return resolved.error;
   const { provider, model } = resolved;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
 
   // Strip the provider prefix (e.g. "xai/grok-imagine-video") before forwarding;
   // otherwise forward the original bytes untouched.

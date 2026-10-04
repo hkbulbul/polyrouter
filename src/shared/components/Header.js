@@ -227,73 +227,64 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
   };
 
   return (
-    <header className="shrink-0 flex items-center justify-between gap-3 px-4 lg:px-8 pt-3 pb-2 border-b border-border-subtle bg-surface/60 backdrop-blur-xl lg:bg-transparent lg:backdrop-blur-none z-20">
+    <header className="sticky top-0 shrink-0 flex h-16 items-center justify-between gap-3 px-4 lg:px-8 border-b border-border bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)] backdrop-blur-[10px] z-20">
       {/* Mobile menu button */}
-      <div className="flex items-center gap-3 lg:hidden shrink-0">
-        {showMenuButton && (
-          <button
-            onClick={onMenuClick}
-            className="text-text-main hover:text-primary transition-colors"
-          >
-            <span className="material-symbols-outlined">menu</span>
-          </button>
-        )}
-      </div>
+      {showMenuButton && (
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Open menu"
+          className="flex size-9 shrink-0 flex-col items-center justify-center gap-[5px] border border-border lg:hidden"
+        >
+          <i className="block h-[1.5px] w-3.5 bg-text-main" />
+          <i className="block h-[1.5px] w-3.5 bg-text-main" />
+        </button>
+      )}
 
-      {/* Page title with breadcrumbs */}
-      <div className="flex flex-col min-w-0 flex-1">
-        {breadcrumbs.length > 0 ? (
-          <div className="flex items-center gap-2">
-            {breadcrumbs.map((crumb, index) => (
-              <div
-                key={`${crumb.label}-${crumb.href || "current"}`}
-                className="flex items-center gap-2"
-              >
-                {index > 0 && (
-                  <span className="material-symbols-outlined text-text-muted text-base">
-                    chevron_right
-                  </span>
-                )}
+      {/* Page title: mono breadcrumb above, title below (landing dashboard style) */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+        <p className="eyebrow flex min-w-0 items-center gap-1.5 truncate text-[10.5px]">
+          <Link href="/dashboard" className="hover:text-text-main transition-colors">Dashboard</Link>
+          {breadcrumbs.length > 0 ? (
+            breadcrumbs.slice(0, -1).map((crumb) => (
+              <span key={`${crumb.label}-${crumb.href || "current"}`} className="flex items-center gap-1.5">
+                <span className="text-border-strong">/</span>
                 {crumb.href ? (
-                  <Link
-                    href={crumb.href}
-                    className="text-text-muted hover:text-primary transition-colors"
-                  >
-                    {crumb.label}
-                  </Link>
+                  <Link href={crumb.href} className="hover:text-text-main transition-colors">{translate(crumb.label)}</Link>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    {crumb.image && (
-                      <ProviderIcon
-                        src={crumb.image}
-                        alt={crumb.label}
-                        size={28}
-                        className="object-contain  max-w-[28px] max-h-[28px]"
-                        fallbackText={crumb.label.slice(0, 2).toUpperCase()}
-                      />
-                    )}
-                    <h1 className="text-base lg:text-2xl font-semibold text-text-main tracking-tight truncate">
-                      {translate(crumb.label)}
-                    </h1>
-                  </div>
+                  <span>{translate(crumb.label)}</span>
                 )}
-              </div>
-            ))}
+              </span>
+            ))
+          ) : title ? (
+            <>
+              <span className="text-border-strong">/</span>
+              <span className="text-text-main">{translate(title)}</span>
+            </>
+          ) : null}
+        </p>
+        {breadcrumbs.length > 0 ? (
+          <div className="flex min-w-0 items-center gap-2">
+            {breadcrumbs[breadcrumbs.length - 1].image && (
+              <ProviderIcon
+                src={breadcrumbs[breadcrumbs.length - 1].image}
+                alt={breadcrumbs[breadcrumbs.length - 1].label}
+                size={20}
+                className="object-contain max-w-[20px] max-h-[20px]"
+                fallbackText={breadcrumbs[breadcrumbs.length - 1].label.slice(0, 2).toUpperCase()}
+              />
+            )}
+            <h1 className="truncate text-base lg:text-lg font-medium leading-none tracking-[-0.02em] text-text-main">
+              {translate(breadcrumbs[breadcrumbs.length - 1].label)}
+            </h1>
           </div>
         ) : title ? (
-          <div>
-            <div className="flex items-center gap-2">
-              {icon && (
-                <span className="material-symbols-outlined text-primary text-xl lg:text-2xl">
-                  {icon}
-                </span>
-              )}
-              <h1 className="text-base lg:text-2xl font-semibold tracking-tight truncate">
-                {translate(title)}
-              </h1>
-            </div>
+          <div className="flex min-w-0 items-baseline gap-3">
+            <h1 className="shrink-0 text-base lg:text-lg font-medium leading-none tracking-[-0.02em] text-text-main">
+              {translate(title)}
+            </h1>
             {description && (
-              <p className="hidden lg:block text-sm text-text-muted truncate">
+              <p className="hidden xl:block min-w-0 truncate text-[13px] leading-none text-text-muted">
                 {translate(description)}
               </p>
             )}
@@ -304,10 +295,10 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
       {/* Right actions */}
       <div className="flex items-center gap-1 shrink-0">
         {displayName && loginMethod === "OIDC" && (
-          <div className="hidden sm:flex items-center max-w-[220px] px-3 py-1.5 rounded-full border border-border bg-surface/70 text-xs text-text-muted truncate">
+          <div className="hidden sm:flex h-9 items-center max-w-[220px] px-3 border border-border bg-surface text-xs text-text-muted truncate">
             <span className="material-symbols-outlined text-[14px] mr-1.5 text-primary">person</span>
             <span className="truncate">{displayName}</span>
-            <span className="ml-2 shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+            <span className="ml-2 shrink-0 border border-primary/40 bg-primary/10 px-1.5 py-[3px] font-mono text-[10px] uppercase leading-none tracking-[0.08em] text-primary">
               OIDC
             </span>
           </div>
@@ -317,12 +308,12 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
           href="https://discord.gg/c5Sgutjkw"
           target="_blank"
           rel="noopener noreferrer"
-          className="group flex items-center justify-center size-10 rounded-full text-text-muted"
+          className="group flex items-center justify-center size-9 border border-transparent text-text-muted hover:text-text-main hover:border-border hover:bg-surface-2 transition-colors"
           aria-label="Join the PolyRouter Discord community"
           title="Join the PolyRouter Discord community"
         >
           <svg
-            className="size-5 transition-colors duration-200 group-hover:text-[#5865F2]"
+            className="size-[18px] transition-colors duration-200 group-hover:text-[#5865F2]"
             viewBox="0 0 24 24"
             fill="currentColor"
             aria-hidden="true"
@@ -333,7 +324,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
         <button
           type="button"
           onClick={() => setBugModalOpen(true)}
-          className="flex items-center justify-center size-10 rounded-full text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
+          className="flex items-center justify-center size-9 border border-transparent text-text-muted hover:text-text-main hover:border-border hover:bg-surface-2 transition-colors"
           aria-label="Report a bug"
           title="Report a bug"
         >
@@ -357,8 +348,8 @@ function HeaderSearch() {
   if (!visible) return null;
 
   return (
-    <div className="relative w-[160px] sm:w-[220px]">
-      <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-[16px] pointer-events-none">
+    <div className="relative w-[160px] sm:w-[240px]">
+      <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-[16px] pointer-events-none">
         search
       </span>
       <input
@@ -366,7 +357,7 @@ function HeaderSearch() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={placeholder}
-        className="w-full h-8 pl-7 pr-7  border border-border bg-surface/60 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+        className="w-full h-9 pl-8 pr-7 border border-border bg-surface text-[13px] placeholder:text-text-muted/70 hover:border-border-strong focus:outline-none focus:border-accent-fill transition-colors"
       />
       {query && (
         <button

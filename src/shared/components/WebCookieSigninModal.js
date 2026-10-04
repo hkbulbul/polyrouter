@@ -217,7 +217,7 @@ export default function WebCookieSigninModal({
           <>
             <div className="rounded-xl border border-border bg-surface-2 p-5">
               <div className="flex gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-on-primary">
                   <span className="material-symbols-outlined">open_in_browser</span>
                 </div>
                 <div>
@@ -283,7 +283,7 @@ export default function WebCookieSigninModal({
                   <>
                     <p className="text-sm font-semibold text-text-main">Connector is not installed</p>
                     <p className="mt-1 text-xs leading-5 text-text-muted">Use this fallback only when you specifically need your existing Chrome login.</p>
-                    <a href={DOWNLOAD_URL} download className="mt-3 inline-flex h-9 items-center gap-2 bg-brand-500 px-4 text-sm font-semibold text-white hover:bg-brand-600">
+                    <a href={DOWNLOAD_URL} download className="mt-3 inline-flex h-9 items-center gap-2 bg-brand-500 px-4 text-sm font-semibold text-on-primary hover:bg-brand-600">
                       <span className="material-symbols-outlined text-[18px]">download</span>
                       Download extension
                     </a>

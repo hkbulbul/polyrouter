@@ -22,7 +22,12 @@ import { MimoFreeExecutor } from "./mimo-free.js";
 import { ChatGptWebExecutor } from "./chatgpt-web.js";
 import { CodeBuddyExecutor } from "./codebuddy-cn.js";
 import { TraeExecutor } from "./trae.js";
+import { WindsurfExecutor } from "./windsurf.js";
+import { DevinCliExecutor } from "./devin-cli.js";
+import ZedExecutor from "./zed.js";
 import { DefaultExecutor } from "./default.js";
+import { getUnavailableProviderError } from "../providers/index.js";
+import { resolveProviderAlias } from "../services/model.js";
 
 const executors = {
   antigravity: new AntigravityExecutor(),
@@ -55,18 +60,26 @@ const executors = {
   "codebuddy-cn": new CodeBuddyExecutor(),
   trae: new TraeExecutor(),
   tr: new TraeExecutor(),
+  windsurf: new WindsurfExecutor(),
+  "devin-cli": new DevinCliExecutor(),
+  zed: new ZedExecutor(),
 };
 
 const defaultCache = new Map();
 
 export function getExecutor(provider) {
-  if (executors[provider]) return executors[provider];
-  if (!defaultCache.has(provider)) defaultCache.set(provider, new DefaultExecutor(provider));
-  return defaultCache.get(provider);
+  const canonicalProvider = resolveProviderAlias(provider);
+  const unavailableError = getUnavailableProviderError(canonicalProvider);
+  if (unavailableError) throw new Error(unavailableError);
+  if (executors[canonicalProvider]) return executors[canonicalProvider];
+  if (!defaultCache.has(canonicalProvider)) {
+    defaultCache.set(canonicalProvider, new DefaultExecutor(canonicalProvider));
+  }
+  return defaultCache.get(canonicalProvider);
 }
 
 export function hasSpecializedExecutor(provider) {
-  return !!executors[provider];
+  return !!executors[resolveProviderAlias(provider)];
 }
 
 export { BaseExecutor } from "./base.js";
@@ -94,4 +107,7 @@ export { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 export { MimoFreeExecutor } from "./mimo-free.js";
 export { ChatGptWebExecutor } from "./chatgpt-web.js";
 export { TraeExecutor } from "./trae.js";
+export { WindsurfExecutor } from "./windsurf.js";
+export { DevinCliExecutor } from "./devin-cli.js";
+export { default as ZedExecutor } from "./zed.js";
 export { CodeBuddyExecutor } from "./codebuddy-cn.js";

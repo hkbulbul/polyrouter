@@ -14,8 +14,9 @@ export async function POST(request, { params }) {
     return NextResponse.json({
       valid: result.valid,
       error: result.error,
+      unavailable: result.unavailable || false,
       refreshed: result.refreshed || false,
-    });
+    }, result.statusCode ? { status: result.statusCode } : undefined);
   } catch (error) {
     console.log("Error testing connection:", error);
     return NextResponse.json({ error: "Test failed" }, { status: 500 });

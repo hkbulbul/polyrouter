@@ -22,6 +22,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
     organization: "",
   });
   const [cloudflareData, setCloudflareData] = useState({ accountId: "" });
+  const [endpointUrl, setEndpointUrl] = useState("");
   const [region, setRegion] = useState("");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -36,6 +37,9 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
         priority: connection.priority || 1,
         apiKey: "",
       });
+      if (connection.provider?.startsWith("selfhosted-")) {
+        setEndpointUrl(connection.providerSpecificData?.baseUrl || "");
+      }
       // Load Azure-specific data if present
       if (connection.provider === "azure" && connection.providerSpecificData) {
         setAzureData({
@@ -63,6 +67,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   const isCookie = connection?.authType === "cookie";
   const isAzure = connection?.provider === "azure";
   const isCloudflareAi = connection?.provider === "cloudflare-ai";
+  const isSelfHostedMedia = connection?.provider?.startsWith("selfhosted-");
   const isCompatible = connection
     ? (isOpenAICompatibleProvider(connection.provider) || isAnthropicCompatibleProvider(connection.provider))
     : false;
@@ -103,6 +108,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
           ...(isAzure ? { providerSpecificData: azureData } : {}),
           ...(isCloudflareAi ? { providerSpecificData: cloudflareData } : {}),
           ...(providerRegions ? { providerSpecificData: buildRegionSpecificData() } : {}),
+          ...(isSelfHostedMedia ? { providerSpecificData: { baseUrl: endpointUrl.trim() } } : {}),
         }),
       });
       const data = await res.json();
@@ -138,6 +144,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
                 ...(isAzure ? { providerSpecificData: azureData } : {}),
                 ...(isCloudflareAi ? { providerSpecificData: cloudflareData } : {}),
                 ...(providerRegions ? { providerSpecificData: buildRegionSpecificData() } : {}),
+                ...(isSelfHostedMedia ? { providerSpecificData: { baseUrl: endpointUrl.trim() } } : {}),
               }),
             });
             const data = await res.json();
@@ -172,6 +179,9 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       if (providerRegions && region) {
         updates.providerSpecificData = buildRegionSpecificData();
       }
+      if (isSelfHostedMedia) {
+        updates.providerSpecificData = { baseUrl: endpointUrl.trim() };
+      }
       
       await onSave(updates);
     } finally {
@@ -190,6 +200,20 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder={isOAuth ? "Account name" : "Production Key"}
         />
+        {isSelfHostedMedia && (
+          <Input
+            label="Endpoint URL"
+            value={endpointUrl}
+            onChange={(e) => setEndpointUrl(e.target.value)}
+            placeholder={
+              connection.provider === "selfhosted-embedding"
+                ? "http://localhost:8080/v1"
+                : connection.provider === "selfhosted-stt"
+                ? "http://localhost:8080/v1/audio/transcriptions"
+                : "http://localhost:8880"
+            }
+          />
+        )}
         {isOAuth && connection.email && (
           <div className="bg-sidebar/50 p-3 ">
             <p className="text-sm text-text-muted mb-1">Email</p>

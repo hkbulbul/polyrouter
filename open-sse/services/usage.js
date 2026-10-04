@@ -20,6 +20,7 @@ import {
   getVercelAiGatewayUsage,
   getQoderUsage,
 } from "./usage/misc.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 
 /**
  * Get usage data for a provider connection
@@ -49,6 +50,8 @@ const USAGE_HANDLERS = {
 
 export async function getUsageForProvider(connection, proxyOptions = null) {
   const { provider, accessToken, apiKey, providerSpecificData, projectId } = connection;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return { message: unavailableError, unavailable: true };
   const providerDataWithProjectId = {
     ...(providerSpecificData || {}),
     ...(projectId ? { projectId } : {}),

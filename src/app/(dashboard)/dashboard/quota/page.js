@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { CardSkeleton } from "@/shared/components/Loading";
+import QuotaPageSkeleton from "./components/QuotaPageSkeleton";
 import QuotaTracker from "../usage/components/ProviderLimits";
 
 export default function QuotaPage() {
   return (
-    <Suspense fallback={<CardSkeleton />}>
+    <Suspense fallback={<QuotaPageSkeleton />}>
       <QuotaTracker />
     </Suspense>
   );

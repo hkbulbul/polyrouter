@@ -4,6 +4,7 @@ import { refreshWithRetry } from "../services/tokenRefresh.js";
 import { getExecutor } from "../executors/index.js";
 import { getImageAdapter } from "./imageProviders/index.js";
 import { urlToBase64 } from "./imageProviders/_base.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 
 function serializeRequestBody(requestBody) {
   if (typeof FormData !== "undefined" && requestBody instanceof FormData) return requestBody;
@@ -37,6 +38,10 @@ export async function handleImageGenerationCore({
   onRequestSuccess,
 }) {
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) {
+    return createErrorResult(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
 
   if (!body.prompt) {
     return createErrorResult(HTTP_STATUS.BAD_REQUEST, "Missing required field: prompt");

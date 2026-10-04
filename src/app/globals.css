@@ -8,112 +8,117 @@
 .fonts-loaded .material-symbols-outlined { visibility: visible; }
 
 /* ============================================================
-   PolyRouter palette — adopted from 9remote_private/web
-   Brand green (dark) / soft green (light), neutral warm bases
+   PolyRouter palette — matches the landing site (landing_polyrouter)
+   Hairline borders, square corners, #00c474 accent with dark ink on
+   green, warm-neutral light mode and green-black dark mode.
    ============================================================ */
 :root {
-  /* Brand scale (light) - centered on #16a34a */
-  --color-brand-50: #f0fdf4;
-  --color-brand-100: #dcfce7;
-  --color-brand-200: #bbf7d0;
-  --color-brand-300: #86efac;
-  --color-brand-400: #4ade80;
-  --color-brand-500: #16a34a;
-  --color-brand-600: #15803d;
-  --color-brand-700: #166534;
-  --color-brand-800: #14532d;
-  --color-brand-900: #052e16;
+  /* Brand scale (light) - centered on #00c474 */
+  --color-brand-50: #ecfdf4;
+  --color-brand-100: #d1fae6;
+  --color-brand-200: #a3f0cb;
+  --color-brand-300: #5fe0a5;
+  --color-brand-400: #1fd98a;
+  --color-brand-500: #00a862;
+  --color-brand-600: #00804c;
+  --color-brand-700: #006a3f;
+  --color-brand-800: #0a4d31;
+  --color-brand-900: #03140c;
 
-  /* Primary (legacy alias for backward compat with existing components) */
-  --color-primary: var(--color-brand-500);
-  --color-primary-hover: var(--color-brand-600);
+  /* Primary: fills use the bright accent, text uses the readable accent */
+  --color-primary: #009a5b;
+  --color-primary-hover: #008a51;
+  --color-on-primary: #03140c;
+  --color-accent-fill: #00c474;
 
   /* Surfaces & backgrounds (light) */
-  --color-bg: #FDFAF6;
-  --color-bg-alt: #F7F3EE;
+  --color-bg: #f5f5f4;
+  --color-bg-alt: #efefed;
   --color-surface: #ffffff;
-  --color-surface-2: #f4f4f5;
-  --color-surface-3: #e7e7e9;
-  --color-sidebar: rgba(244, 241, 236, 0.85);
+  --color-surface-2: #f5f5f4;
+  --color-surface-3: #e9e9e7;
+  --color-sidebar: #fafaf9;
 
   /* Borders */
-  --color-border: #e5e7eb;
-  --color-border-subtle: #f1f1f3;
+  --color-border: #dcdcdc;
+  --color-border-subtle: #e6e6e4;
+  --color-border-strong: #bdbdbd;
 
   /* Text */
-  --color-text: #0a0a0a;
-  --color-text-main: #0a0a0a;
-  --color-text-muted: #6B7280;
-  --color-text-subtle: #9CA3AF;
+  --color-text: #111411;
+  --color-text-main: #111411;
+  --color-text-muted: #6f6f6f;
+  --color-text-subtle: #9a9a9a;
 
   /* Status */
-  --color-danger: #cf222e;
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-info: #3B82F6;
+  --color-danger: #b4544a;
+  --color-success: #00804c;
+  --color-warning: #b7791f;
+  --color-info: #3b6fd4;
 
-  /* Radius */
-  --radius-brand: 10px;
-  --radius-brand-lg: 14px;
+  /* Radius: square, like the landing site */
+  --radius-brand: 0px;
+  --radius-brand-lg: 0px;
 
-  /* Shadows */
-  --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.04);
-  --shadow-warm: 0 2px 12px -2px rgba(22, 163, 74, 0.18);
-  --shadow-elevated: 0 12px 28px -4px rgba(60, 50, 45, 0.06);
-  --shadow-elev:
-    inset 0 1px 0 0 rgba(255,255,255,0.8),
-    0 1px 2px rgba(15,23,42,0.04),
-    0 12px 36px -8px rgba(15,23,42,0.10);
-  --shadow-focus: 0 0 0 3px rgba(22,163,74,0.18);
+  /* Shadows: flat; depth comes from hairlines, not blur */
+  --shadow-soft: none;
+  --shadow-warm: 0 0 0 1px color-mix(in srgb, var(--color-accent-fill) 45%, transparent);
+  --shadow-elevated: 0 18px 40px -16px rgba(17, 20, 17, 0.18);
+  --shadow-elev: 0 24px 48px -20px rgba(17, 20, 17, 0.22);
+  --shadow-focus: 0 0 0 1px var(--color-accent-fill);
+
+  --grain-opacity: 0.32;
 
   color-scheme: light;
 }
 
 .dark {
-  /* Brand scale (dark) - centered on #22c55e */
-  --color-brand-50: #052e16;
-  --color-brand-100: #14532d;
-  --color-brand-200: #166534;
-  --color-brand-300: #15803d;
-  --color-brand-400: #16a34a;
-  --color-brand-500: #22c55e;
-  --color-brand-600: #4ade80;
-  --color-brand-700: #86efac;
-  --color-brand-800: #bbf7d0;
-  --color-brand-900: #dcfce7;
+  /* Brand scale (dark) - centered on #00c474 */
+  --color-brand-50: #03140c;
+  --color-brand-100: #062a19;
+  --color-brand-200: #0a4d31;
+  --color-brand-300: #00804c;
+  --color-brand-400: #00a862;
+  --color-brand-500: #00c474;
+  --color-brand-600: #1fd98a;
+  --color-brand-700: #5fe0a5;
+  --color-brand-800: #a3f0cb;
+  --color-brand-900: #d1fae6;
 
-  --color-primary: #16a34a;
-  --color-primary-hover: #15803d;
+  --color-primary: #00c474;
+  --color-primary-hover: #00d680;
+  --color-on-primary: #03140c;
+  --color-accent-fill: #00c474;
 
-  /* Surfaces (dark - Claude-like neutral warm) */
-  --color-bg: #1a1a1a;
-  --color-bg-alt: #1F1F1E;
-  --color-surface: #262626;
-  --color-surface-2: #303030;
-  --color-surface-3: #3a3a3a;
-  --color-sidebar: rgba(30, 30, 30, 0.85);
+  /* Surfaces (dark - green-black) */
+  --color-bg: #0a0c0b;
+  --color-bg-alt: #0f1311;
+  --color-surface: #111513;
+  --color-surface-2: #161b18;
+  --color-surface-3: #1f2622;
+  --color-sidebar: #0c0f0d;
 
-  --color-border: #333333;
-  --color-border-subtle: #2a2a2a;
+  --color-border: #252e29;
+  --color-border-subtle: #1e2421;
+  --color-border-strong: #343d37;
 
-  --color-text: #ededed;
-  --color-text-main: #ededed;
-  --color-text-muted: #9ca3af;
-  --color-text-subtle: #6b7280;
+  --color-text: #e8ebe9;
+  --color-text-main: #e8ebe9;
+  --color-text-muted: #8a918c;
+  --color-text-subtle: #5c645f;
 
-  --color-danger: #ef4444;
-  --color-success: #22c55e;
-  --color-warning: #fbbf24;
-  --color-info: #60a5fa;
+  --color-danger: #de6b60;
+  --color-success: #1fd98a;
+  --color-warning: #e3b341;
+  --color-info: #6c9cf0;
 
-  --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.3);
-  --shadow-warm: 0 2px 12px -2px rgba(34, 197, 94, 0.25);
-  --shadow-elevated: 0 12px 28px -4px rgba(0, 0, 0, 0.45);
-  --shadow-elev:
-    inset 0 1px 0 0 rgba(255,255,255,0.06),
-    0 1px 2px rgba(0,0,0,0.4),
-    0 16px 48px -8px rgba(0,0,0,0.55);
-  --shadow-focus: 0 0 0 3px rgba(22, 163, 74, 0.18);
+  --shadow-soft: none;
+  --shadow-warm: 0 0 0 1px color-mix(in srgb, var(--color-accent-fill) 45%, transparent);
+  --shadow-elevated: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  --shadow-elev: 0 24px 56px -20px rgba(0, 0, 0, 0.8);
+  --shadow-focus: 0 0 0 1px var(--color-accent-fill);
+
+  --grain-opacity: 0.18;
 
   color-scheme: dark;
 }
@@ -150,6 +155,8 @@ select {
   /* Primary aliases */
   --color-primary: var(--color-primary);
   --color-primary-hover: var(--color-primary-hover);
+  --color-on-primary: var(--color-on-primary);
+  --color-accent-fill: var(--color-accent-fill);
 
   /* Semantic */
   --color-bg: var(--color-bg);
@@ -160,6 +167,7 @@ select {
   --color-sidebar: var(--color-sidebar);
   --color-border: var(--color-border);
   --color-border-subtle: var(--color-border-subtle);
+  --color-border-strong: var(--color-border-strong);
   --color-text: var(--color-text);
   --color-text-main: var(--color-text-main);
   --color-text-muted: var(--color-text-muted);
@@ -171,18 +179,18 @@ select {
   --color-info: var(--color-info);
 
   /* Static fallbacks (explicit per-mode usage if needed) */
-  --color-bg-light: #FCFBF9;
-  --color-bg-dark: #1a1a1a;
+  --color-bg-light: #f5f5f4;
+  --color-bg-dark: #0a0c0b;
   --color-surface-light: #ffffff;
-  --color-surface-dark: #262626;
-  --color-sidebar-light: #F4F1EC;
-  --color-sidebar-dark: #1F1F1E;
-  --color-border-light: #e5e7eb;
-  --color-border-dark: #333333;
-  --color-text-main-light: #0a0a0a;
-  --color-text-main-dark: #ededed;
-  --color-text-muted-light: #6B7280;
-  --color-text-muted-dark: #9ca3af;
+  --color-surface-dark: #111513;
+  --color-sidebar-light: #fafaf9;
+  --color-sidebar-dark: #0c0f0d;
+  --color-border-light: #dcdcdc;
+  --color-border-dark: #252e29;
+  --color-text-main-light: #111411;
+  --color-text-main-dark: #e8ebe9;
+  --color-text-muted-light: #6f6f6f;
+  --color-text-muted-dark: #8a918c;
 
   /* Radius */
   --radius-brand: var(--radius-brand);
@@ -195,8 +203,19 @@ select {
   --shadow-elev: var(--shadow-elev);
   --shadow-focus: var(--shadow-focus);
 
-  /* Font - IBM Plex Sans primary, system fallback */
-  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Square corners everywhere except explicit rounded-full (dots, avatars) */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+
+  /* Fonts - Schibsted Grotesk for UI, JetBrains Mono for labels/code (same as landing) */
+  --font-sans: var(--font-schibsted), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* Base */
@@ -208,14 +227,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Selection - brand-tinted */
+/* Selection - solid accent with ink, like the landing site */
 ::selection {
-  background-color: rgba(22, 163, 74, 0.25);
-  color: var(--color-primary);
+  background-color: var(--color-accent-fill);
+  color: var(--color-on-primary);
 }
-.dark ::selection {
-  background-color: rgba(22, 163, 74, 0.3);
-  color: var(--color-brand-300);
+
+/* Visible keyboard focus: a crisp 1px accent outline instead of blurry rings */
+:where(a, button, [role="button"], [role="tab"], [role="switch"], summary):focus-visible {
+  outline: 1px solid var(--color-accent-fill);
+  outline-offset: 2px;
+}
+
+/* Mono uppercase label (landing "eyebrow"), for section titles and field labels.
+   Layered so text-* utilities on the same element can override the color. */
+@layer components {
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+}
+
+/* Film grain over the whole app (pointer-events off, sits above content) */
+.app-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n' color-interpolation-filters='sRGB'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 200px 200px;
+}
+
+/* Faint dot grid (landing hero grid), for empty states and auth screens */
+.dot-grid {
+  background-image: radial-gradient(circle, var(--color-border-strong) 1px, transparent 1.6px);
+  background-size: 22px 22px;
 }
 
 /* iOS keyboard accent */
@@ -231,8 +284,8 @@ input, textarea {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.3);
-  border-radius: 20px;
+  background-color: var(--color-border-strong);
+  border-radius: 0;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-primary);
@@ -241,31 +294,29 @@ input, textarea {
 /* Thin horizontal scrollbar - brand colored */
 .scroll-thin-x {
   scrollbar-width: thin;
-  scrollbar-color: rgba(22, 163, 74, 0.55) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-accent-fill) 55%, transparent) transparent;
 }
 .dark .scroll-thin-x {
-  scrollbar-color: rgba(22, 163, 74, 0.55) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-accent-fill) 55%, transparent) transparent;
 }
 .scroll-thin-x::-webkit-scrollbar { height: 3px; }
 .scroll-thin-x::-webkit-scrollbar-track { background: transparent; }
 .scroll-thin-x::-webkit-scrollbar-thumb {
-  background: rgba(22, 163, 74, 0.55);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-accent-fill) 55%, transparent);
+  border-radius: 0;
 }
 .dark .scroll-thin-x::-webkit-scrollbar-thumb {
-  background: rgba(22, 163, 74, 0.55);
+  background: color-mix(in srgb, var(--color-accent-fill) 55%, transparent);
 }
 
 /* Reusable elevated card */
 .card-soft {
   background-color: var(--color-surface);
-  box-shadow: var(--shadow-soft);
-  border-radius: var(--radius-brand-lg);
+  border: 1px solid var(--color-border-subtle);
 }
 .card-elev {
   background-color: var(--color-surface);
-  box-shadow: var(--shadow-elev);
-  border-radius: var(--radius-brand-lg);
+  border: 1px solid var(--color-border);
 }
 
 /* Hero gradient (compat) */
@@ -277,10 +328,10 @@ input, textarea {
 .bg-vibrancy {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
 }
 .dark .bg-vibrancy {
-  background: rgba(38, 38, 38, 0.72);
+  background: color-mix(in srgb, var(--color-bg) 80%, transparent);
 }
 
 /* macOS Traffic Lights */
@@ -356,12 +407,12 @@ button:disabled,
 
 @keyframes border-glow {
   0%, 100% {
-    box-shadow: 0 0 5px rgba(22, 163, 74, 0.3), 0 0 10px rgba(22, 163, 74, 0.2);
-    border-color: rgba(22, 163, 74, 0.5);
+    box-shadow: 0 0 5px rgba(0, 196, 116, 0.3), 0 0 10px rgba(0, 196, 116, 0.2);
+    border-color: rgba(0, 196, 116, 0.5);
   }
   50% {
-    box-shadow: 0 0 10px rgba(22, 163, 74, 0.5), 0 0 20px rgba(22, 163, 74, 0.3);
-    border-color: rgba(22, 163, 74, 0.8);
+    box-shadow: 0 0 10px rgba(0, 196, 116, 0.5), 0 0 20px rgba(0, 196, 116, 0.3);
+    border-color: rgba(0, 196, 116, 0.8);
   }
 }
 .animate-border-glow { animation: border-glow 2s ease-in-out infinite; }
@@ -429,8 +480,8 @@ button:disabled,
   100% { transform: translateX(220%) skewX(-20deg); }
 }
 @keyframes ctaGlowPulse {
-  0%, 100% { box-shadow: 0 8px 24px -8px rgba(22, 163, 74, 0.45), 0 0 0 0 rgba(22, 163, 74, 0.5); }
-  50% { box-shadow: 0 12px 32px -8px rgba(22, 163, 74, 0.6), 0 0 0 8px rgba(22, 163, 74, 0); }
+  0%, 100% { box-shadow: 0 8px 24px -8px rgba(0, 196, 116, 0.45), 0 0 0 0 rgba(0, 196, 116, 0.5); }
+  50% { box-shadow: 0 12px 32px -8px rgba(0, 196, 116, 0.6), 0 0 0 8px rgba(0, 196, 116, 0); }
 }
 .btn-cta {
   position: relative;
@@ -456,25 +507,22 @@ button:disabled,
 .dot-grid-bg {
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(circle at 15% 20%, rgba(22, 163, 74, 0.10) 0%, transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(22, 163, 74, 0.06) 0%, transparent 40%);
+    radial-gradient(circle at 15% 20%, rgba(0, 196, 116, 0.10) 0%, transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(0, 196, 116, 0.06) 0%, transparent 40%);
 }
 .dark .dot-grid-bg {
   background-image:
-    radial-gradient(circle at 15% 20%, rgba(22, 163, 74, 0.18) 0%, transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(22, 163, 74, 0.10) 0%, transparent 40%);
+    radial-gradient(circle at 15% 20%, rgba(0, 196, 116, 0.18) 0%, transparent 40%),
+    radial-gradient(circle at 85% 80%, rgba(0, 196, 116, 0.10) 0%, transparent 40%);
 }
 
 /* Landing-style faint grid overlay (use absolute pos inside relative parent) */
 .landing-grid {
   background-image:
-    linear-gradient(to right, var(--color-accent) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--color-accent) 1px, transparent 1px);
-  background-size: 40px 40px;
-  opacity: 0.08;
-}
-.dark .landing-grid {
-  opacity: 0.04;
+    linear-gradient(color-mix(in srgb, var(--color-border) 70%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-border) 70%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: -1px -1px;
 }
 
 /* Topology: router card pulse (no flying rings) + electric edge beam */
@@ -543,8 +591,7 @@ button:disabled,
 .react-flow-controls-custom {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-soft);
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -593,9 +640,8 @@ button:disabled,
 .changelog-body code {
   background: var(--color-bg-alt);
   padding: 0.1rem 0.35rem;
-  border-radius: 4px;
   font-size: 0.875em;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 .changelog-body a {
   color: var(--color-primary);

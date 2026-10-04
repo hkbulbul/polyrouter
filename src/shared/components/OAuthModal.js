@@ -142,7 +142,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
           return;
         }
 
-        if (data.error === "expired_token" || data.error === "access_denied") {
+        if (data.error === "expired_token" || data.error === "access_denied" || (data.error && !data.pending)) {
           throw new Error(data.errorDescription || data.error);
         }
 
@@ -335,7 +335,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (!popupRef.current) {
           setStep("input");
         }
-      } else if (!isLocalhost || provider === "codex" || provider === "xai") {
+      } else if (!isLocalhost || provider === "codex" || provider === "xai" || provider === "zed") {
         // Non-localhost or proxy failed: manual input mode
         setStep("input");
         window.open(data.authUrl, "_blank");
@@ -517,6 +517,11 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
 
       const input = callbackUrl.trim();
 
+      if (provider === "zed") {
+        await exchangeTokens(input, null);
+        return;
+      }
+
       // Detect raw JWT access token (starts with eyJ) â€” skip URL parsing
       if (input.startsWith("eyJ") && input.includes(".")) {
         await exchangeTokens(input, null);
@@ -573,13 +578,16 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   if (!provider || !providerInfo) return null;
     const isXaiProvider = provider === "xai";
     const isKimchiProvider = provider === "kimchi";
+    const isZedProvider = provider === "zed";
   const deviceLoginUrl = deviceData?.verification_uri_complete || deviceData?.verification_uri || "";
   const modalTitle = isXaiProvider ? "Connect Grok Build OAuth" : `Connect ${providerInfo.name}`;
   const manualPlaceholder = isXaiProvider
     ? "http://127.0.0.1:56121/callback?code=... or copied code"
-    : isKimchiProvider
-      ? `${placeholderUrl.replace("code=...", "token=...")} or copied token`
-      : placeholderUrl;
+    : isZedProvider
+      ? "http://localhost:58443/?user_id=...&access_token=..."
+      : isKimchiProvider
+        ? `${placeholderUrl.replace("code=...", "token=...")} or copied token`
+        : placeholderUrl;
 
   return (
     <Modal isOpen={isOpen} title={modalTitle} onClose={handleClose} size="lg">
@@ -593,14 +601,14 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                 progress_activity
               </span>
               <span className="text-sm">
-                {isXaiProvider ? "Waiting for Grok Build OAuthâ€¦" : "Waiting for popup authorizationâ€¦"}
+                {isXaiProvider ? "Waiting for Grok Build OAuthâ€¦" : isZedProvider ? "Waiting for Zed sign-inâ€¦" : "Waiting for popup authorizationâ€¦"}
               </span>
             </div>
 
             {/* Divider */}
             <div className="flex items-center gap-3 my-1">
               <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-text-muted uppercase tracking-wider">Or paste callback URL manually</span>
+              <span className="text-xs text-text-muted uppercase tracking-wider">{isZedProvider ? "Paste Zed callback URL" : "Or paste callback URL manually"}</span>
               <div className="flex-1 h-px bg-border" />
             </div>
 
@@ -625,6 +633,8 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
                 <p className="text-xs text-text-muted mb-2">
                   {provider === "xai"
                     ? "If xAI shows a code instead of redirecting, paste that code here."
+                    : isZedProvider
+                      ? "After sign-in, the browser may show a loopback connection error. Copy the full URL from the address bar and paste it here."
                     : isKimchiProvider
                       ? "After authorization, copy the full callback URL or token from your browser."
                     : "After authorization, copy the full URL from your browser."}

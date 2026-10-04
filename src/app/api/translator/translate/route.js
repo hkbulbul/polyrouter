@@ -5,6 +5,7 @@ import { FORMATS } from "open-sse/translator/formats.js";
 import { getModelInfo } from "@/sse/services/model.js";
 import { getProviderConnections } from "@/lib/localDb.js";
 import { getExecutor } from "open-sse/executors/index.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 export async function POST(request) {
   try {
@@ -19,6 +20,10 @@ export async function POST(request) {
         // Detect provider + formats from 1_req_client.json
         const clientBody = body.body || body;
         const { provider, model } = await getModelInfo(clientBody.model);
+        const unavailableError = getUnavailableProviderError(provider);
+        if (unavailableError) {
+          return NextResponse.json({ success: false, error: unavailableError }, { status: 400 });
+        }
         const sourceFormat = detectFormat(clientBody);
         const targetFormat = getTargetFormat(provider);
         return NextResponse.json({ success: true, result: { provider, model, sourceFormat, targetFormat } });
@@ -29,6 +34,10 @@ export async function POST(request) {
         // Translate source→openai only (half of the pipeline)
         const clientBody = body.body || body;
         const { provider, model } = await getModelInfo(clientBody.model);
+        const unavailableError = getUnavailableProviderError(provider);
+        if (unavailableError) {
+          return NextResponse.json({ success: false, error: unavailableError }, { status: 400 });
+        }
         const sourceFormat = detectFormat(clientBody);
         const stream = clientBody.stream !== false;
 
@@ -47,6 +56,10 @@ export async function POST(request) {
 
         if (!provider || !model) {
           return NextResponse.json({ success: false, error: "provider and model required" }, { status: 400 });
+        }
+        const unavailableError = getUnavailableProviderError(provider);
+        if (unavailableError) {
+          return NextResponse.json({ success: false, error: unavailableError }, { status: 400 });
         }
 
         const targetFormat = getTargetFormat(provider);

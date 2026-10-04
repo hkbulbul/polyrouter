@@ -1,5 +1,6 @@
 // Re-export from open-sse with local logger
 import * as log from "../utils/logger.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import { updateProviderConnection } from "../../lib/localDb.js";
 import {
   getProjectIdForConnection,
@@ -165,6 +166,7 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
     const updates = {};
 
     if (newCredentials.accessToken)         updates.accessToken  = newCredentials.accessToken;
+    if (newCredentials.apiKey)              updates.apiKey       = newCredentials.apiKey;
     if (newCredentials.refreshToken)        updates.refreshToken = newCredentials.refreshToken;
     if (newCredentials.idToken)             updates.idToken = newCredentials.idToken;
     if (newCredentials.lastRefreshAt)       updates.lastRefreshAt = newCredentials.lastRefreshAt;
@@ -222,6 +224,8 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
  * @returns {Promise<object>} updated credentials object
  */
 export async function checkAndRefreshToken(provider, credentials) {
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) throw new Error(unavailableError);
   let creds = { ...credentials };
   if (!creds.connectionId && creds.id) {
     creds.connectionId = creds.id;

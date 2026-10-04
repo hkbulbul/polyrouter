@@ -457,6 +457,7 @@ export default function ProvidersPage() {
               authType="oauth"
               sponsor={sponsorsMap?.get(String(key).toLowerCase()) || null}
               onToggle={(active) => handleToggleProvider(key, "oauth", active)}
+              disabled={info.availability === "unavailable"}
             />
           ))}
         </div>
@@ -650,7 +651,7 @@ export default function ProvidersPage() {
   );
 }
 
-function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor = null }) {
+function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor = null, disabled = false }) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
   const isNoAuth = !!provider.noAuth;
 
@@ -667,11 +668,10 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor
     compatible: "Compatible",
   };
 
-  return (
-    <Link href={`/dashboard/providers/${providerId}`} className="group min-w-0">
+  const card = (
       <Card
         padding="xs"
-        className={`relative h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors cursor-pointer ${allDisabled ? "opacity-50" : ""}`}
+        className={`relative h-full hover:bg-black/[0.01] dark:hover:bg-white/[0.01] transition-colors ${disabled ? "cursor-not-allowed opacity-60" : `cursor-pointer ${allDisabled ? "opacity-50" : ""}`}`}
       >
         {sponsor ? (
           sponsor.href ? (
@@ -728,7 +728,16 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor
             <div className="min-w-0">
               <h3 className="truncate font-semibold">{provider.name}</h3>
               <div className="flex min-w-0 items-center gap-1.5 text-xs flex-wrap">
-                {allDisabled ? (
+                {disabled ? (
+                  <>
+                    <Badge variant="default" size="sm">Unavailable</Badge>
+                    {provider.availabilityReason && (
+                      <span className="text-text-muted" title={provider.availabilityReason}>
+                        {provider.availabilityReason}
+                      </span>
+                    )}
+                  </>
+                ) : allDisabled ? (
                   <Badge variant="default" size="sm">
                     <span className="flex items-center gap-1">
                       <span className="material-symbols-outlined text-[12px]">
@@ -751,7 +760,7 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {stats.total > 0 && (
+            {!disabled && stats.total > 0 && (
               <div
                 className="opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
                 onClick={(e) => {
@@ -771,6 +780,23 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle, sponsor
           </div>
         </div>
       </Card>
+  );
+
+  if (disabled) {
+    return (
+      <div
+        className="group min-w-0"
+        aria-disabled="true"
+        title={provider.availabilityReason || "This provider is unavailable"}
+      >
+        {card}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/dashboard/providers/${providerId}`} className="group min-w-0">
+      {card}
     </Link>
   );
 }
@@ -782,6 +808,8 @@ ProviderCard.propTypes = {
     name: PropTypes.string.isRequired,
     color: PropTypes.string,
     textIcon: PropTypes.string,
+    availability: PropTypes.string,
+    availabilityReason: PropTypes.string,
   }).isRequired,
   stats: PropTypes.shape({
     connected: PropTypes.number,
@@ -791,6 +819,7 @@ ProviderCard.propTypes = {
   }).isRequired,
   authType: PropTypes.string,
   onToggle: PropTypes.func,
+  disabled: PropTypes.bool,
 };
 
 function ApiKeyProviderCard({

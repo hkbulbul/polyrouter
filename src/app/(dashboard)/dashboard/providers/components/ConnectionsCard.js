@@ -298,6 +298,8 @@ AddApiKeyModal.propTypes = {
 // Self-contained card: fetches, displays and manages all connections for a provider.
 export default function ConnectionsCard({ providerId, authProviderId, isOAuth, statusMode = "default" }) {
   const connectionProviderId = authProviderId || providerId;
+  const unavailableInfo = OAUTH_PROVIDERS[connectionProviderId];
+  const isUnavailable = unavailableInfo?.availability === "unavailable";
   const [connections, setConnections] = useState([]);
   const [proxyPools, setProxyPools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -399,6 +401,22 @@ export default function ConnectionsCard({ providerId, authProviderId, isOAuth, s
   };
 
   if (loading) return <Card><div className="h-20 animate-pulse bg-black/5 " /></Card>;
+
+  if (isUnavailable) {
+    return (
+      <Card>
+        <div className="flex flex-col gap-2 py-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">Connections</h2>
+            <Badge variant="default" size="sm">Unavailable</Badge>
+          </div>
+          <p className="text-sm text-text-muted">
+            {unavailableInfo.availabilityReason || "This provider is not available yet."}
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <>
