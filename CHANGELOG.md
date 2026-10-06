@@ -1,6 +1,12 @@
 # Unreleased
 
+## Features
+- **Collapsible dashboard sidebar**: add a sidebar toggle to the page header that collapses the desktop sidebar to an icon rail (labels shown as tooltips); the choice is remembered across reloads and tabs.
+- **Compact page header**: replace the breadcrumb + title + description stack with a single line — just the page name, or parent links + name on nested pages.
+
 ## Fixes
+- **Usage Est. Cost card**: show the full cost instead of truncating it next to the per-1k-request badge; amounts now use thousands separators.
+- **Branding**: replace leftover `9router` identifiers with PolyRouter (Zed executor `User-Agent` is now `polyrouter/zed`); upstream attribution in LICENSE/README is kept as required by the MIT license.
 - **Command Code model routing**: map `cmc/glm-5.3-flash` to Command Code's canonical `z-ai/glm-5.3-flash` identifier, preserve Command Code's native nested-model request envelope and current client identity headers, fall back across all public DNS addresses when a Cloudflare edge is unreachable, and skip futile token-refresh retries for static API-key 401/403 responses.
 - **Command Code API key setup**: automatically store the selected PolyRouter key in Command Code's native provider credential store, so new Command Code processes work without manually setting `POLYROUTER_API_KEY`; preserve unrelated login/provider credentials and remove only PolyRouter-owned data on reset.
 
