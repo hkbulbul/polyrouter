@@ -20,7 +20,8 @@ const fmt = (value) => {
   return `${formatted}${unit.suffix}`;
 };
 
-const fmtCost = (n) => `$${(n || 0).toFixed(2)}`;
+const fmtCost = (n) =>
+  `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function OverviewCards({ stats }) {
   const totalPrompt = stats.totalPromptTokens || 0;
@@ -32,7 +33,7 @@ export default function OverviewCards({ stats }) {
   // Cache hit / token saving percentage
   const cacheHitRate = totalPrompt > 0 ? ((totalCached / totalPrompt) * 100).toFixed(1) : "0.0";
   // Cost per 1k requests
-  const costPer1k = totalRequests > 0 ? ((totalCost / totalRequests) * 1000).toFixed(2) : "0.00";
+  const costPer1k = totalRequests > 0 ? (totalCost / totalRequests) * 1000 : 0;
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 sm:gap-4">
@@ -151,12 +152,15 @@ export default function OverviewCards({ stats }) {
             <span className="material-symbols-outlined text-[18px]">payments</span>
           </div>
         </div>
-        <div className="mt-3 flex items-baseline justify-between gap-2">
-          <span className="truncate text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums">
+        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+          <span
+            className="whitespace-nowrap text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums"
+            title={fmtCost(totalCost)}
+          >
             ~{fmtCost(totalCost)}
           </span>
-          <Badge variant="warning" size="sm">
-            ${costPer1k}/1k req
+          <Badge variant="warning" size="sm" className="shrink-0">
+            {fmtCost(costPer1k)}/1k req
           </Badge>
         </div>
         <div className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
