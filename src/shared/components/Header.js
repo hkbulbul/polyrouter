@@ -179,7 +179,7 @@ const getPageInfo = (pathname) => {
   return { title: "", description: "", breadcrumbs: [] };
 };
 
-export default function Header({ onMenuClick, showMenuButton = true }) {
+export default function Header({ onMenuClick, showMenuButton = true, sidebarCollapsed = false, onToggleSidebar }) {
   const pathname = usePathname();
   const [displayName, setDisplayName] = useState("");
   const [loginMethod, setLoginMethod] = useState("");
@@ -187,7 +187,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
 
   // Memoize page info to prevent unnecessary recalculations
   const pageInfo = useMemo(() => getPageInfo(pathname), [pathname]);
-  const { title, description, icon, breadcrumbs } = pageInfo;
+  const { title, breadcrumbs } = pageInfo;
 
   useEffect(() => {
     let cancelled = false;
@@ -241,30 +241,40 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
         </button>
       )}
 
-      {/* Page title: mono breadcrumb above, title below (landing dashboard style) */}
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
-        <p className="eyebrow flex min-w-0 items-center gap-1.5 truncate text-[10.5px]">
-          <Link href="/dashboard" className="hover:text-text-main transition-colors">Dashboard</Link>
-          {breadcrumbs.length > 0 ? (
-            breadcrumbs.slice(0, -1).map((crumb) => (
-              <span key={`${crumb.label}-${crumb.href || "current"}`} className="flex items-center gap-1.5">
-                <span className="text-border-strong">/</span>
+      {/* Desktop sidebar collapse toggle */}
+      {onToggleSidebar && (
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden size-9 shrink-0 items-center justify-center border border-border text-text-muted transition-colors hover:bg-surface-2 hover:text-text-main lg:flex"
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {sidebarCollapsed ? "left_panel_open" : "left_panel_close"}
+          </span>
+        </button>
+      )}
+
+      {/* Page title: one line — parent links (nested pages only) followed by the page name */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {breadcrumbs.length > 0 ? (
+          <>
+            {breadcrumbs.slice(0, -1).map((crumb, index, parents) => (
+              // Show only the nearest parent on small screens to keep the row short
+              <span
+                key={`${crumb.label}-${crumb.href || "current"}`}
+                className={`${index < parents.length - 1 ? "hidden md:flex" : "flex"} shrink-0 items-center gap-2 text-sm leading-none text-text-muted`}
+              >
                 {crumb.href ? (
                   <Link href={crumb.href} className="hover:text-text-main transition-colors">{translate(crumb.label)}</Link>
                 ) : (
                   <span>{translate(crumb.label)}</span>
                 )}
+                <span className="text-border-strong">/</span>
               </span>
-            ))
-          ) : title ? (
-            <>
-              <span className="text-border-strong">/</span>
-              <span className="text-text-main">{translate(title)}</span>
-            </>
-          ) : null}
-        </p>
-        {breadcrumbs.length > 0 ? (
-          <div className="flex min-w-0 items-center gap-2">
+            ))}
             {breadcrumbs[breadcrumbs.length - 1].image && (
               <ProviderIcon
                 src={breadcrumbs[breadcrumbs.length - 1].image}
@@ -277,18 +287,11 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
             <h1 className="truncate text-base lg:text-lg font-medium leading-none tracking-[-0.02em] text-text-main">
               {translate(breadcrumbs[breadcrumbs.length - 1].label)}
             </h1>
-          </div>
+          </>
         ) : title ? (
-          <div className="flex min-w-0 items-baseline gap-3">
-            <h1 className="shrink-0 text-base lg:text-lg font-medium leading-none tracking-[-0.02em] text-text-main">
-              {translate(title)}
-            </h1>
-            {description && (
-              <p className="hidden xl:block min-w-0 truncate text-[13px] leading-none text-text-muted">
-                {translate(description)}
-              </p>
-            )}
-          </div>
+          <h1 className="truncate text-base lg:text-lg font-medium leading-none tracking-[-0.02em] text-text-main">
+            {translate(title)}
+          </h1>
         ) : null}
       </div>
 
@@ -376,4 +379,6 @@ function HeaderSearch() {
 Header.propTypes = {
   onMenuClick: PropTypes.func,
   showMenuButton: PropTypes.bool,
+  sidebarCollapsed: PropTypes.bool,
+  onToggleSidebar: PropTypes.func,
 };
