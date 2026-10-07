@@ -255,8 +255,18 @@ export default function PricingPage() {
                           <p className="text-xs text-amber-600 dark:text-amber-400">{fmtCompact(m.unpricedRequests)} at $0</p>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-right font-mono text-xs">{fmtRate(m.pricing?.input)}</td>
-                      <td className="px-3 py-3 text-right font-mono text-xs">{fmtRate(m.pricing?.output)}</td>
+                      <td className="px-3 py-3 text-right font-mono text-xs">
+                        <p>{fmtRate(m.pricing?.input)}</p>
+                        {m.pricing?.longContext && (
+                          <p className="text-text-muted" title={`Prompts over ${m.pricing.longContext.threshold.toLocaleString()} input tokens bill at the long-context rate`}>
+                            &gt;{Math.round(m.pricing.longContext.threshold / 1000)}K {fmtRate(m.pricing.longContext.input)}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-xs">
+                        <p>{fmtRate(m.pricing?.output)}</p>
+                        {m.pricing?.longContext && <p className="text-text-muted">&gt;{Math.round(m.pricing.longContext.threshold / 1000)}K {fmtRate(m.pricing.longContext.output)}</p>}
+                      </td>
                       <td className="px-3 py-3 text-right font-mono text-xs">{fmtRate(m.pricing ? m.pricing.cached ?? m.pricing.input : null)}</td>
                       <td className="px-3 py-3"><Badge size="sm" variant={badge.variant}>{badge.label}</Badge></td>
                       <td className="px-5 py-3">

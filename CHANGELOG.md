@@ -15,6 +15,13 @@
 - **Use PolyRouter switch (Claude Code, Codex)**: turn PolyRouter off to go straight back to the tool's own login/subscription, and on again with the saved settings — from the CLI Tools overview or the tool page. On first Apply PolyRouter now backs up the original value of every key it overwrites (`<DATA_DIR>/cli-tool-backups/<tool>.json`) and restores exactly those on disconnect, leaving everything else in the config untouched. Settings routes accept `PATCH { enabled }`.
 
 ## Fixes
+- **Built-in model prices corrected** against the official pricing pages (OpenAI, Google, Z.ai; checked 2026-10-07):
+  - GPT-5.6 Luna/Terra/Sol were 1.25–5× too high.
+  - GPT-6 Luna/Sol/6.1 Sol/Astra were missing, so their spend showed $0.
+  - Gemini 3.5–3.8 Flash used a generic fallback.
+  - GLM-5.1–5.3 (including 5.3-Flash) were up to 7× too high.
+
+  Provider variant names (e.g. `gpt-5.6-sol-thinking-agentic`, `gemini-3.8-flash-high`, `z-ai/glm-5.3-flash`) now resolve to their base model's price. Prices support a long-context tier: OpenAI bills prompts over 272K input tokens at a higher rate. Use **Pricing → Recalculate all** to re-price past usage.
 - **Cost accuracy**: the Usage table's Input / Cached / Output cost columns were a token-share split of the total, which badly under-counted output and over-counted cached tokens. Each request now stores its real per-rate cost (`usageHistory.inputCost/cachedCost/outputCost`), and existing rows are backfilled once without changing their totals.
 - **Unpriced models no longer look free**: requests on models with no price (e.g. new `gpt-6-*` models) are flagged `unpriced`. The Usage page, the Office leaderboard and Office analytics now call this out instead of showing a silent $0, because Office dollar budgets can't count that usage.
 - **Pricing page**: a new **Pricing** page (sidebar) lists every model you've used with its rates and their source (built-in, custom, or none). You can set or override a price for any provider/model and re-price past usage for that model, or for everything (`POST /api/pricing/recalculate`). It replaces the old orphaned `/dashboard/settings/pricing`, which could only edit models that already had a built-in override.
