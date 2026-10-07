@@ -101,6 +101,23 @@ export function isModelAllowed(model, limits) {
   return allowed.some((p) => matchesModelPattern(model, p));
 }
 
+/**
+ * Policy check for a request whose model name may route elsewhere (a combo's
+ * members, an alias's target). Denied if the name or ANY target is blocked;
+ * with an allow-list, allowed if the name itself is allowed or EVERY target is.
+ * @param {string|null} model the name the client sent
+ * @param {string[]} targets models it actually routes to (empty for a plain model)
+ */
+export function isModelRequestAllowed(model, targets, limits) {
+  if (!model) return true;
+  const all = [model, ...(targets || [])];
+  if (all.some((m) => (limits.blockedModels || []).some((p) => matchesModelPattern(m, p)))) return false;
+  const allowed = limits.allowedModels || [];
+  if (!allowed.length) return true;
+  if (allowed.some((p) => matchesModelPattern(model, p))) return true;
+  return Boolean(targets?.length) && targets.every((t) => allowed.some((p) => matchesModelPattern(t, p)));
+}
+
 function minutesOf(hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
@@ -146,11 +163,11 @@ const fmtUsd = (n) => `$${Number(n || 0).toFixed(2)}`;
 /**
  * Decide whether a request may proceed.
  * @param {object} limits normalized limits
- * @param {object} input { kind, model, inputTokens, now, counts:{minute,hour,day}, inFlight, usage:{day:{tokens,cost}, month:{tokens,cost}} }
+ * @param {object} input { kind, model, modelTargets, inputTokens, now, counts:{minute,hour,day}, inFlight, usage:{day:{tokens,cost}, month:{tokens,cost}} }
  * @returns {{allowed:true, fallbackModel?:string, budgetExceeded?:string} | {allowed:false,status,code,message}}
  */
 export function evaluatePolicy(limits, input) {
-  const { kind, model, inputTokens = 0, now = new Date(), counts = {}, inFlight = 0, usage = {} } = input;
+  const { kind, model, modelTargets = [], inputTokens = 0, now = new Date(), counts = {}, inFlight = 0, usage = {} } = input;
 
   if (Array.isArray(limits.allowedKinds) && !limits.allowedKinds.includes(kind)) {
     return deny(403, "office_kind_not_allowed", `Your office policy does not allow ${OFFICE_KIND_LABELS[kind] || kind} requests.`);
@@ -159,7 +176,7 @@ export function evaluatePolicy(limits, input) {
     const h = limits.allowedHours;
     return deny(403, "office_outside_hours", `AI access is only allowed ${h.start}–${h.end} on permitted days (server time).`);
   }
-  if (model && !isModelAllowed(model, limits)) {
+  if (model && !isModelRequestAllowed(model, modelTargets, limits)) {
     return deny(403, "office_model_not_allowed", `Model "${model}" is not allowed by your office policy.`);
   }
   if (limits.maxInputTokens && inputTokens > limits.maxInputTokens) {

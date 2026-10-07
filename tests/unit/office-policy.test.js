@@ -5,6 +5,7 @@ import {
   matchesModelPattern,
   isModelAllowed,
   isWithinAllowedHours,
+  isModelRequestAllowed,
   evaluatePolicy,
   describeLimitStatus,
   describeRestrictions,
@@ -77,6 +78,27 @@ describe("model patterns", () => {
     expect(isModelAllowed("cc/claude-opus-4", l)).toBe(false);
     expect(isModelAllowed("openai/gpt-4o", l)).toBe(false);
     expect(isModelAllowed("anything", base())).toBe(true);
+  });
+});
+
+describe("combo / alias targets", () => {
+  it("denies a name whose routed targets include a blocked model", () => {
+    const l = base({ blockedModels: ["*opus*"] });
+    expect(isModelRequestAllowed("my-combo", ["cc/claude-sonnet-4", "cc/claude-opus-4"], l)).toBe(false);
+    expect(isModelRequestAllowed("my-combo", ["cc/claude-sonnet-4"], l)).toBe(true);
+  });
+
+  it("with an allow-list, allows the name itself or a fully-allowed set of targets", () => {
+    const l = base({ allowedModels: ["cc/*"] });
+    expect(isModelRequestAllowed("best", ["cc/a", "cc/b"], l)).toBe(true);
+    expect(isModelRequestAllowed("best", ["cc/a", "openai/gpt-4o"], l)).toBe(false);
+    expect(isModelRequestAllowed("best", [], l)).toBe(false);
+    expect(isModelRequestAllowed("cc/x", [], l)).toBe(true);
+  });
+
+  it("evaluatePolicy uses the targets", () => {
+    const r = evaluatePolicy(base({ blockedModels: ["*opus*"] }), { kind: "chat", model: "fast", modelTargets: ["cc/claude-opus-4"] });
+    expect(r).toMatchObject({ allowed: false, code: "office_model_not_allowed" });
   });
 });
 

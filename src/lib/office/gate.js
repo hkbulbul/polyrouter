@@ -3,7 +3,9 @@
 // before the handler runs. Owner/admin keys and keyless local requests pass
 // straight through untouched.
 import { resolveOfficeRequestContext, getUserUsageWindows } from "./context.js";
-import { evaluatePolicy, estimateInputTokens, isModelAllowed } from "./policy.js";
+import { evaluatePolicy, estimateInputTokens, isModelRequestAllowed } from "./policy.js";
+import { getComboByName, getModelAliases } from "@/lib/db/index.js";
+import { PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models";
 import { getRequestCounts, recordRequest, getInFlight, acquireLease } from "./usageCache.js";
 
 const ERROR_TYPES = {
@@ -48,6 +50,42 @@ async function readBodyForInspection(request) {
     // Malformed body: let the real handler produce its usual 400.
     return { form: null, body: null };
   }
+}
+
+const MAX_COMBO_DEPTH = 3;
+
+/**
+ * The models a requested name actually routes to, so a combo or alias whose
+ * own name passes the policy can't reach a blocked model. Plain
+ * "provider/model" names route to themselves (empty list).
+ */
+export async function resolveModelTargets(model, depth = 0) {
+  if (!model || depth > MAX_COMBO_DEPTH) return [];
+  const targets = new Set();
+  if (!model.includes("/")) {
+    const combo = await getComboByName(model);
+    if (combo?.models?.length) {
+      for (const member of combo.models) {
+        if (typeof member !== "string" || !member) continue;
+        targets.add(member);
+        for (const nested of await resolveModelTargets(member, depth + 1)) targets.add(nested);
+      }
+      return [...targets];
+    }
+    const aliased = (await getModelAliases())?.[model];
+    if (typeof aliased === "string" && aliased.includes("/")) {
+      // Stored as "providerOrAlias/model"; also match the provider's id/alias spelling.
+      targets.add(aliased);
+      const slash = aliased.indexOf("/");
+      const prefix = aliased.slice(0, slash);
+      const rest = aliased.slice(slash + 1);
+      const alias = PROVIDER_ID_TO_ALIAS[prefix];
+      if (alias) targets.add(`${alias}/${rest}`);
+      const id = Object.keys(PROVIDER_ID_TO_ALIAS).find((k) => PROVIDER_ID_TO_ALIAS[k] === prefix);
+      if (id) targets.add(`${id}/${rest}`);
+    }
+  }
+  return [...targets];
 }
 
 function clampField(obj, field, max) {
@@ -159,6 +197,7 @@ export function withOfficeGate(handler, opts) {
       : (body?.model ?? form?.get?.("model") ?? null);
     model = typeof model === "string" && model.trim() ? model.trim() : null;
 
+    const modelTargets = model ? await resolveModelTargets(model) : [];
     const now = new Date();
     const usage = await getUserUsageWindows(user.id, now);
 
@@ -167,6 +206,7 @@ export function withOfficeGate(handler, opts) {
     const decision = evaluatePolicy(limits, {
       kind,
       model,
+      modelTargets,
       inputTokens: kind === "chat" ? estimateInputTokens(body) : 0,
       now,
       counts: getRequestCounts(user.id, now),
@@ -221,5 +261,9 @@ export async function filterModelsForRequest(request, models) {
   }
   if (!ctx) return models;
   if (ctx.error) return [];
-  return models.filter((m) => isModelAllowed(m?.id, ctx.policy.limits));
+  const visible = [];
+  for (const m of models) {
+    if (isModelRequestAllowed(m?.id, await resolveModelTargets(m?.id), ctx.policy.limits)) visible.push(m);
+  }
+  return visible;
 }

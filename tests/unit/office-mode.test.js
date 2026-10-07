@@ -307,6 +307,20 @@ describe("withOfficeGate", () => {
     expect((await ok(chatRequest(key.key, { model: "m" }))).status).toBe(200);
   });
 
+  it("checks combos and aliases against the models they route to", async () => {
+    const { key } = await makeEmployee({ limits: { blockedModels: ["*opus*"] } });
+    await db.createCombo({ name: `combo-${seq}`, models: ["cc/claude-sonnet-4", "cc/claude-opus-4"] });
+    await db.createCombo({ name: `safe-${seq}`, models: ["cc/claude-sonnet-4"] });
+    await db.setModelAlias(`big-${seq}`, "cc/claude-opus-4");
+    const { handler, calls } = recordingHandler();
+    const gated = gate.withOfficeGate(handler, { kind: "chat", format: "openai" });
+
+    expect((await gated(chatRequest(key.key, { model: `combo-${seq}` }))).status).toBe(403);
+    expect((await gated(chatRequest(key.key, { model: `big-${seq}` }))).status).toBe(403);
+    expect(calls).toHaveLength(0);
+    expect((await gated(chatRequest(key.key, { model: `safe-${seq}` }))).status).toBe(200);
+  });
+
   it("filters /v1/models for employees only", async () => {
     const { key } = await makeEmployee({ limits: { allowedModels: ["cc/*"] } });
     const models = [{ id: "cc/sonnet" }, { id: "openai/gpt-4o" }];
