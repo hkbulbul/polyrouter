@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   validateApiKey: vi.fn(),
+  isOfficeEmployeeApiKey: vi.fn(async () => false),
   getSettings: vi.fn(),
   getDashboardAuthSession: vi.fn(),
   getProviderCredentials: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/localDb.js", () => ({
   validateApiKey: mocks.validateApiKey,
+  isOfficeEmployeeApiKey: mocks.isOfficeEmployeeApiKey,
   getSettings: mocks.getSettings,
 }));
 vi.mock("@/lib/auth/dashboardSession.js", () => ({ getDashboardAuthSession: mocks.getDashboardAuthSession }));

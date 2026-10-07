@@ -29,7 +29,7 @@ export {
 
 // API keys
 export {
-  getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
+  getApiKeys, getApiKeyById, getApiKeyByValue, createApiKey, updateApiKey, deleteApiKey, validateApiKey, isApiKeyExpired, isOfficeEmployeeApiKey,
 } from "./repos/apiKeysRepo.js";
 
 // Combos
@@ -77,6 +77,19 @@ export {
   upsertSponsor, deleteSponsor, reorderSponsors,
 } from "./repos/sponsorsRepo.js";
 
+// Office mode (employees, teams, policies, devices, audit, usage aggregates)
+export {
+  normalizeEmail,
+  listOfficeUsers, getOfficeUserById, getOfficeUserByEmail, createOfficeUser, updateOfficeUser,
+  touchOfficeUserLogin, deleteOfficeUser,
+  listOfficeTeams, getOfficeTeamById, createOfficeTeam, updateOfficeTeam, deleteOfficeTeam,
+  listOfficePolicies, getOfficePolicyById, createOfficePolicy, updateOfficePolicy, deleteOfficePolicy,
+  listOfficeUserKeys, countOfficeUserKeys, deleteOfficeUserKey,
+  createOfficeDevice, getOfficeDeviceByTokenHash, listOfficeDevices, touchOfficeDevice, revokeOfficeDevice, getOfficeDeviceKey,
+  addOfficeAuditLog, listOfficeAuditLog,
+  getOfficeUserUsageSince, getOfficeUsageByUser, getOfficeUsageByModel, getOfficeUsageDaily, getOfficeUserIdForApiKey,
+} from "./repos/officeRepo.js";
+
 // Request details
 export {
   saveRequestDetail, getRequestDetails, getRequestDetailById, getDistinctProviders,
@@ -92,13 +105,18 @@ export async function exportDb() {
     providerConnections: db.all(`SELECT * FROM providerConnections`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, provider: r.provider, authType: r.authType, name: r.name, email: r.email, priority: r.priority, isActive: r.isActive === 1, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     providerNodes: db.all(`SELECT * FROM providerNodes`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, type: r.type, name: r.name, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     proxyPools: db.all(`SELECT * FROM proxyPools`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, isActive: r.isActive === 1, testStatus: r.testStatus, createdAt: r.createdAt, updatedAt: r.updatedAt })),
-    apiKeys: db.all(`SELECT * FROM apiKeys`).map((r) => ({ id: r.id, key: r.key, name: r.name, machineId: r.machineId, isActive: r.isActive === 1, createdAt: r.createdAt })),
+    apiKeys: db.all(`SELECT * FROM apiKeys`).map((r) => ({ id: r.id, key: r.key, name: r.name, machineId: r.machineId, isActive: r.isActive === 1, createdAt: r.createdAt, userId: r.userId || null, expiresAt: r.expiresAt || null, deviceId: r.deviceId || null })),
     combos: db.all(`SELECT * FROM combos`).map((r) => ({ id: r.id, name: r.name, kind: r.kind, models: parseJson(r.models, []), createdAt: r.createdAt, updatedAt: r.updatedAt })),
     modelAliases: {},
     customModels: [],
     mitmAlias: {},
     pricing: {},
     sponsors: {},
+    office: {
+      users: db.all(`SELECT * FROM officeUsers`),
+      teams: db.all(`SELECT * FROM officeTeams`),
+      policies: db.all(`SELECT * FROM officePolicies`),
+    },
   };
 
   for (const r of db.all(`SELECT key, value FROM kv WHERE scope = 'modelAliases'`)) out.modelAliases[r.key] = parseJson(r.value);
@@ -154,9 +172,34 @@ export async function importDb(payload) {
     }
     for (const k of payload.apiKeys || []) {
       db.run(
-        `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt) VALUES(?, ?, ?, ?, ?, ?)`,
-        [k.id, k.key, k.name || null, k.machineId || null, k.isActive === false ? 0 : 1, k.createdAt || new Date().toISOString()]
+        `INSERT OR REPLACE INTO apiKeys(id, key, name, machineId, isActive, createdAt, userId, expiresAt, deviceId) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [k.id, k.key, k.name || null, k.machineId || null, k.isActive === false ? 0 : 1, k.createdAt || new Date().toISOString(), k.userId || null, k.expiresAt || null, k.deviceId || null]
       );
+    }
+    // Office tables are only replaced when the payload carries them, so restoring
+    // an export from before office mode existed does not wipe employees.
+    if (payload.office && typeof payload.office === "object") {
+      db.run(`DELETE FROM officeUsers`);
+      db.run(`DELETE FROM officeTeams`);
+      db.run(`DELETE FROM officePolicies`);
+      for (const u of payload.office.users || []) {
+        db.run(
+          `INSERT OR REPLACE INTO officeUsers(id, email, name, passwordHash, teamId, policyId, isActive, mustChangePassword, sessionVersion, createdAt, updatedAt, lastLoginAt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [u.id, u.email, u.name || "", u.passwordHash, u.teamId || null, u.policyId || null, u.isActive === 0 ? 0 : 1, u.mustChangePassword ? 1 : 0, u.sessionVersion || 0, u.createdAt || new Date().toISOString(), u.updatedAt || new Date().toISOString(), u.lastLoginAt || null]
+        );
+      }
+      for (const t of payload.office.teams || []) {
+        db.run(
+          `INSERT OR REPLACE INTO officeTeams(id, name, policyId, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?)`,
+          [t.id, t.name, t.policyId || null, t.createdAt || new Date().toISOString(), t.updatedAt || new Date().toISOString()]
+        );
+      }
+      for (const p of payload.office.policies || []) {
+        db.run(
+          `INSERT OR REPLACE INTO officePolicies(id, name, limits, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?)`,
+          [p.id, p.name, typeof p.limits === "string" ? p.limits : stringifyJson(p.limits || {}), p.createdAt || new Date().toISOString(), p.updatedAt || new Date().toISOString()]
+        );
+      }
     }
     for (const c of payload.combos || []) {
       db.run(

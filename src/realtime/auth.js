@@ -1,6 +1,6 @@
 import { getProviderCredentials } from "@/sse/services/auth.js";
 import { checkAndRefreshToken } from "@/sse/services/tokenRefresh.js";
-import { getSettings, validateApiKey } from "@/lib/localDb.js";
+import { getSettings, validateApiKey, isOfficeEmployeeApiKey } from "@/lib/localDb.js";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession.js";
 import { resolveProviderId } from "@/shared/constants/providers.js";
 import { DEFAULT_REALTIME_MODEL, REALTIME_MODELS } from "./protocol.js";
@@ -109,6 +109,7 @@ export async function authenticateUpgrade(request) {
     if (apiKey) {
       requireSecureExternalCredential(request);
       if (!(await validateApiKey(apiKey))) throw new Error("Invalid PolyRouter API key.");
+      if (await isOfficeEmployeeApiKey(apiKey)) throw new Error("Realtime voice is not available for office accounts.");
     } else {
       const cookieHeader = String(request.headers?.cookie || "");
       const authToken = cookieHeader
@@ -119,7 +120,7 @@ export async function authenticateUpgrade(request) {
       const session = await getDashboardAuthSession(authToken);
       const settings = await getSettings();
       validateRealtimeRequestBoundary(request, {
-        requireLogin: settings?.requireLogin !== false,
+        requireLogin: settings?.requireLogin !== false || settings?.office?.enabled === true,
         hasSession: Boolean(session),
       });
     }

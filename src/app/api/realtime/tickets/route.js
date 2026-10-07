@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { validateApiKey } from "@/lib/localDb";
+import { validateApiKey, isOfficeEmployeeApiKey } from "@/lib/localDb";
 import { REALTIME_MODELS } from "@/realtime/constants";
 import { issueRealtimeTicket } from "@/realtime/tickets";
 import { resolveProviderId } from "@/shared/constants/providers";
@@ -17,6 +17,9 @@ export async function POST(request) {
     const apiKey = extractApiKey(request);
     if (!apiKey || !(await validateApiKey(apiKey))) {
       return NextResponse.json({ error: "Valid PolyRouter API key required" }, { status: 401 });
+    }
+    if (await isOfficeEmployeeApiKey(apiKey)) {
+      return NextResponse.json({ error: "Realtime voice is not available for office accounts" }, { status: 403 });
     }
 
     const body = await request.json();

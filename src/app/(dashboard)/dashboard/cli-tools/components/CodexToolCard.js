@@ -6,6 +6,7 @@ import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import PolyRouterSwitch from "./PolyRouterSwitch";
 import { CODEX_MODEL_SLOTS, isCodexModelSlotId } from "@/lib/codexModelCatalog";
 
 export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders, cloudEnabled, initialStatus, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl }) {
@@ -121,8 +122,9 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const manualSubagentModel = getConfiguredModel(manualSubagentSlot) || manualMainModel;
   const hasManualModel = Boolean(manualMainModel);
 
-  const checkCodexStatus = async () => {
-    setCheckingCodex(true);
+  // silent: refresh without the full-card spinner (keeps inline messages mounted)
+  const checkCodexStatus = async ({ silent = false } = {}) => {
+    if (!silent) setCheckingCodex(true);
     try {
       const res = await fetch("/api/cli-tools/codex-settings");
       const data = await res.json();
@@ -166,7 +168,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
         } else {
           setMessage({ type: "success", text: "Settings applied successfully!" });
         }
-        checkCodexStatus();
+        checkCodexStatus({ silent: true });
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
       }
@@ -189,7 +191,7 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
         setActiveModelId("");
         setSubagentModelId("");
         setManualModelId("");
-        checkCodexStatus();
+        checkCodexStatus({ silent: true });
       } else {
         setMessage({ type: "error", text: data.error || "Failed to reset settings" });
       }
@@ -348,6 +350,8 @@ description = "Default PolyRouter subagent"
 
           {!checkingCodex && codexStatus?.installed && (
             <>
+              <PolyRouterSwitch toolId="codex" toolName="Codex" status={codexStatus} onChanged={() => checkCodexStatus({ silent: true })} />
+
               <div className="flex flex-col gap-2">
                 {/* Endpoint (selector) */}
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
@@ -472,7 +476,7 @@ description = "Default PolyRouter subagent"
                 <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={(!selectedApiKey && (cloudEnabled && apiKeys.length > 0)) || !hasValidMainModel || !hasValidSubagentModel} loading={applying}>
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={restoring} loading={restoring}>
+                <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={restoring} loading={restoring} title="Restore your original Codex settings and forget PolyRouter's">
                   <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)} disabled={!hasManualModel} title={hasManualModel ? "Copy manual Codex configuration" : "Select a model before copying the manual configuration"}>

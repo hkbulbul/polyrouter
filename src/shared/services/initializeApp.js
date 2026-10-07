@@ -148,7 +148,8 @@ async function autoStartMitm(settings) {
     }
 
     const keys = await getApiKeys();
-    const activeKey = keys.find(k => k.isActive !== false);
+    // Owner keys only — office employee keys are policy-limited.
+    const activeKey = keys.find(k => k.isActive !== false && !k.userId);
 
     console.log("[InitApp] MITM was enabled, auto-starting...");
     await startMitm(activeKey?.key || "sk_polyrouter", password);
