@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getMeta, setMeta } from "../helpers/metaStore.js";
+import { invalidateOfficeUsage } from "../../office/usageCache.js";
 
 function maskApiKey(key) {
   if (!key || typeof key !== "string") return null;
@@ -238,6 +239,7 @@ export async function saveRequestUsage(entry) {
     const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
 
     let inserted = false;
+    let attributedUserId = null;
 
     // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
     // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
@@ -266,13 +268,19 @@ export async function saveRequestUsage(entry) {
         return;
       }
 
+      // Office mode: attribute the row to the employee who owns the API key.
+      const userId = entry.apiKey
+        ? db.get(`SELECT userId FROM apiKeys WHERE key = ?`, [entry.apiKey])?.userId || null
+        : null;
+      attributedUserId = userId;
+
       db.run(
-        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta, userId) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entry.timestamp, entry.provider || null, entry.model || null,
           entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-          stringifyJson(tokens), stringifyJson({}),
+          stringifyJson(tokens), stringifyJson({}), userId,
         ]
       );
 
@@ -295,6 +303,7 @@ export async function saveRequestUsage(entry) {
     if (inserted) {
       pushToRing(entry);
       scheduleStatsEvent("update", 250);
+      if (attributedUserId) invalidateOfficeUsage(attributedUserId);
     }
   } catch (e) {
     console.error("Failed to save usage stats:", e);

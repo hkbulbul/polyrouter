@@ -28,6 +28,11 @@ const navItems = [
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
+// Shown only while Office mode is on (Settings → Office mode).
+const OFFICE_NAV_ITEM = { href: "/dashboard/office", label: "Office", icon: "corporate_fare" };
+// Must match OFFICE_MODE_EVENT in dashboard/profile/OfficeModeCard.js.
+const OFFICE_MODE_EVENT = "polyrouter:office-mode-changed";
+
 const debugItems = [
   { href: "/dashboard/console-log", label: "Console Log", icon: "terminal" },
   { href: "/dashboard/translator", label: "Translator", icon: "translate" },
@@ -46,6 +51,7 @@ export default function Sidebar({ onClose }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateState, setUpdateState] = useState(null);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [officeEnabled, setOfficeEnabled] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
@@ -53,9 +59,20 @@ export default function Sidebar({ onClose }) {
   useEffect(() => {
     fetch("/api/settings")
       .then(res => res.json())
-      .then(data => { if (data.enableTranslator) setEnableTranslator(true); })
+      .then(data => {
+        if (data.enableTranslator) setEnableTranslator(true);
+        setOfficeEnabled(data.office?.enabled === true);
+      })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const onOfficeChange = (event) => setOfficeEnabled(event.detail?.enabled === true);
+    window.addEventListener(OFFICE_MODE_EVENT, onOfficeChange);
+    return () => window.removeEventListener(OFFICE_MODE_EVENT, onOfficeChange);
+  }, []);
+
+  const visibleNavItems = officeEnabled ? [...navItems, OFFICE_NAV_ITEM] : navItems;
 
   // Lazy check for new npm version on mount
   useEffect(() => {
@@ -139,7 +156,7 @@ export default function Sidebar({ onClose }) {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-2 space-y-0.5 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

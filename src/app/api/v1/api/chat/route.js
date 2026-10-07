@@ -1,3 +1,4 @@
+import { withOfficeGate } from "@/lib/office/gate.js";
 import { handleChat } from "@/sse/handlers/chat.js";
 import { initTranslators } from "open-sse/translator/index.js";
 import { transformToOllama } from "open-sse/utils/ollamaTransform.js";
@@ -21,7 +22,7 @@ export async function OPTIONS() {
   });
 }
 
-export async function POST(request) {
+async function handlePost(request) {
   await ensureInitialized();
   
   const clonedReq = request.clone();
@@ -35,3 +36,5 @@ export async function POST(request) {
   return transformToOllama(response, modelName);
 }
 
+
+export const POST = withOfficeGate(handlePost, { kind: "chat", format: "openai" });

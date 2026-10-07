@@ -9,6 +9,7 @@ import { cn } from "@/shared/utils/cn";
 import { APP_CONFIG } from "@/shared/constants/config";
 import { LOCALE_COOKIE, normalizeLocale } from "@/i18n/config";
 import { LOCALE_FLAGS } from "@/shared/constants/locales";
+import OfficeModeCard from "./OfficeModeCard";
 
 function getLocaleFromCookie() {
   if (typeof document === "undefined") return "en";
@@ -778,6 +779,9 @@ export default function ProfilePage() {
             )}
           </div>
         </Card>
+
+        {/* Office mode */}
+        <OfficeModeCard />
 
         {/* OIDC */}
         <Card>

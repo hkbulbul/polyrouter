@@ -1,3 +1,4 @@
+import { withOfficeGate } from "@/lib/office/gate.js";
 import { handleRerank } from "@/sse/handlers/rerank.js";
 
 export async function OPTIONS() {
@@ -8,6 +9,8 @@ export async function OPTIONS() {
   } });
 }
 
-export async function POST(request) {
+async function handlePost(request) {
   return handleRerank(request);
 }
+
+export const POST = withOfficeGate(handlePost, { kind: "rerank" });

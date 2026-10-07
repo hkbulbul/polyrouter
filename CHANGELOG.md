@@ -1,6 +1,13 @@
 # Unreleased
 
 ## Features
+- **Office mode**: share one PolyRouter with a team. **Settings → Office mode** turns it on and adds an **Office** page with:
+  - Employees (email and password, temporary passwords, disable, reset)
+  - Teams
+  - Limit policies: request rates, concurrency, token and USD budgets, input and output caps, allowed and blocked models, request types, working hours, block or fall back to a cheaper model, key count and lifetime
+  - A leaderboard, cost-by-team and cost-by-model analytics with CSV export, and an audit log
+
+  Employees use the `/portal` web portal (limits, usage, their own API keys, tool setup snippets) or the new zero-dependency `polyrouter-client` package (`client/`). The client signs in, mints a device key, configures Claude Code and Codex, and restores the originals on `disconnect`. Every cost-generating `/v1` route enforces the employee's policy, `/v1/models` is filtered per employee, and usage is attributed per employee (`usageHistory.userId`). Login is always required while Office mode is on. See `docs/OFFICE_MODE.md`.
 - **Use PolyRouter switch (Claude Code, Codex)**: turn PolyRouter off to go straight back to the tool's own login/subscription, and on again with the saved settings — from the CLI Tools overview or the tool page. On first Apply PolyRouter now backs up the original value of every key it overwrites (`<DATA_DIR>/cli-tool-backups/<tool>.json`) and restores exactly those on disconnect, leaving everything else in the config untouched. Settings routes accept `PATCH { enabled }`.
 
 ## Fixes

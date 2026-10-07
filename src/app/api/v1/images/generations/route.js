@@ -1,3 +1,4 @@
+import { withOfficeGate } from "@/lib/office/gate.js";
 import { handleImageGeneration } from "@/sse/handlers/imageGeneration.js";
 
 export async function OPTIONS() {
@@ -11,6 +12,8 @@ export async function OPTIONS() {
 }
 
 /** POST /v1/images/generations - OpenAI-compatible image generation endpoint */
-export async function POST(request) {
+async function handlePost(request) {
   return await handleImageGeneration(request);
 }
+
+export const POST = withOfficeGate(handlePost, { kind: "image" });

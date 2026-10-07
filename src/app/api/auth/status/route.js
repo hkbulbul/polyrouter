@@ -9,7 +9,7 @@ export async function GET() {
     const settings = await getSettings();
     const cookieStore = await cookies();
     const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value);
-    const requireLogin = settings.requireLogin !== false;
+    const requireLogin = settings.requireLogin !== false || settings.office?.enabled === true;
     const authMode = settings.authMode || "password";
     const oidcName = String(session?.oidcName || "").trim();
     const oidcEmail = String(session?.oidcEmail || "").trim();

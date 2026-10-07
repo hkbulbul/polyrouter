@@ -1,3 +1,4 @@
+import { filterModelsForRequest } from "@/lib/office/gate.js";
 import { PROVIDER_MODELS, PROVIDER_ID_TO_ALIAS, getModelKind } from "@/shared/constants/models";
 import {
   AI_PROVIDERS,
@@ -525,7 +526,7 @@ export async function GET(request) {
   try {
     // Detect cross-instance recursive /models fetch (another polyrouter fetching our /models)
     const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
-    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch });
+    const data = await filterModelsForRequest(request, await buildModelsList([LLM_KIND], { skipDynamicFetch }));
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
