@@ -10,6 +10,7 @@ import * as claude from "../../client/src/tools/claude.js";
 import * as codex from "../../client/src/tools/codex.js";
 import { normalizeServerUrl } from "../../client/src/config.js";
 import { parseArgs } from "../../client/src/cli.js";
+import { colorEnabled, bar, visibleLength } from "../../client/src/ui.js";
 
 describe("tomlEdit", () => {
   const doc = [
@@ -160,6 +161,21 @@ describe("tool apply / restore", () => {
     expect(text.startsWith('model_provider = "polyrouter"\n')).toBe(true);
     codex.restore({ home });
     expect(fs.readFileSync(codexFile(), "utf8")).toBe("");
+  });
+});
+
+describe("terminal ui", () => {
+  it("only colors real terminals, honours NO_COLOR and FORCE_COLOR", () => {
+    expect(colorEnabled({ isTTY: true }, {})).toBe(true);
+    expect(colorEnabled({ isTTY: false }, {})).toBe(false);
+    expect(colorEnabled({ isTTY: true }, { NO_COLOR: "" })).toBe(false);
+    expect(colorEnabled({ isTTY: true }, { TERM: "dumb" })).toBe(false);
+    expect(colorEnabled({ isTTY: false }, { FORCE_COLOR: "1" })).toBe(true);
+  });
+
+  it("renders fixed-width usage bars clamped to 0–100%", () => {
+    for (const p of [-5, 0, 37, 80, 100, 250]) expect(visibleLength(bar(p, 20))).toBe(20);
+    expect(visibleLength("\u001b[32mok\u001b[39m")).toBe(2);
   });
 });
 

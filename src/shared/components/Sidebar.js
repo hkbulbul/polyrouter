@@ -10,6 +10,7 @@ import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Button from "./Button";
 import Modal from "./Modal";
+import { NavGroup, NavItem, navItemClass, navItemActiveClass, navItemIdleClass, navItemCollapsedClass } from "./SidebarNav";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "speechToSpeech"];
@@ -47,43 +48,6 @@ const mediaItems = [
   })),
   { href: COMBINED_WEB_ITEM.href, label: COMBINED_WEB_ITEM.label, icon: COMBINED_WEB_ITEM.icon },
 ];
-
-const navItemClass = "relative flex h-9 items-center gap-2.5 px-3 text-[13px] leading-none transition-colors";
-const navItemActiveClass = "bg-surface-2 font-medium text-text-main before:absolute before:inset-y-1.5 before:left-0 before:w-[2px] before:bg-accent-fill";
-const navItemIdleClass = "text-text-muted hover:bg-surface-2 hover:text-text-main";
-// Icon-only rail: center the icon and drop horizontal padding/gap
-const navItemCollapsedClass = "justify-center gap-0 px-0";
-
-function NavGroup({ label, collapsed = false, children }) {
-  return (
-    <div className="flex flex-col gap-px">
-      <p className={cn("eyebrow mb-2 px-3 text-[10.5px]", collapsed && "sr-only")}>{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function NavItem({ href, label, icon, active, compact = false, collapsed = false, onNavigate }) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
-      title={collapsed ? label : undefined}
-      className={cn(
-        navItemClass,
-        compact && "h-8 text-[12.5px]",
-        collapsed && navItemCollapsedClass,
-        active ? navItemActiveClass : navItemIdleClass
-      )}
-    >
-      <span className={cn("material-symbols-outlined", compact ? "text-[16px]" : "text-[18px]", active && "fill-1 text-primary")}>
-        {icon}
-      </span>
-      <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
-    </Link>
-  );
-}
 
 const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },

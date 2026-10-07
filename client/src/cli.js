@@ -1,30 +1,39 @@
 // polyrouter-client — sign in to an office PolyRouter and wire up local AI tools.
 import os from "node:os";
+import path from "node:path";
 import { api, ApiError } from "./api.js";
 import { readConfig, writeConfig, deleteConfig, normalizeServerUrl } from "./config.js";
 import { ask, askHidden } from "./prompt.js";
 import { TOOLS, selectTools } from "./tools/index.js";
 import * as codexTool from "./tools/codex.js";
 import { getSnapshot } from "./tools/snapshot.js";
+import { c, sym, header, section, success, failure, warn, info, note, keyValues, bar, table, spin } from "./ui.js";
 
-const HELP = `polyrouter-client — use your office PolyRouter from this computer
+const CMD = "polyrouter-client";
 
-Usage:
-  polyrouter-client connect <server-url> [options]   Sign in and configure your AI tools
-  polyrouter-client status                           Your limits and usage
-  polyrouter-client sync [options]                   Refresh your key and rewrite tool configs
-  polyrouter-client env [--shell bash|powershell|cmd] Print environment variables for other tools
-  polyrouter-client disconnect                       Restore original tool configs and sign out
-
-Options:
-  --email <email>          Skip the email prompt
-  --tools <list>           Tools to configure: ${TOOLS.map((t) => t.id).join(",")} (default: those installed)
-  --claude-model <model>   Model for Claude Code (ANTHROPIC_MODEL)
-  --codex-model <model>    Model for Codex
-  --no-tools               Only sign in; don't touch any tool config
-
-The server URL is the one your admin shared, e.g. http://192.168.1.10:20128.
-Credentials are your office email and password (from the employee portal).`;
+function help() {
+  header("PolyRouter client", "use your office PolyRouter from this computer");
+  section("Usage");
+  const cmds = [
+    ["connect <server-url>", "Sign in and configure your AI tools"],
+    ["status", "Your limits and usage"],
+    ["sync", "Refresh your key and rewrite tool configs"],
+    ["env [--shell bash|powershell|cmd]", "Print environment variables for other tools"],
+    ["disconnect", "Restore original tool configs and sign out"],
+  ];
+  keyValues(cmds.map(([cmd, desc]) => [c.cyan(`${CMD} ${cmd}`), desc]));
+  section("Options");
+  keyValues([
+    ["--email <email>", "Skip the email prompt"],
+    ["--tools <list>", `Tools to configure: ${TOOLS.map((t) => t.id).join(", ")} (default: those installed)`],
+    ["--claude-model <model>", "Model for Claude Code (ANTHROPIC_MODEL)"],
+    ["--codex-model <model>", "Model for Codex"],
+    ["--no-tools", "Only sign in; don't touch any tool config"],
+  ]);
+  console.log();
+  note("  The server URL is the one your admin shared, e.g. http://192.168.1.10:20128.");
+  note("  Sign in with your office email and password (the same as the employee portal).\n");
+}
 
 export function parseArgs(argv) {
   const args = { _: [] };
@@ -37,16 +46,31 @@ export function parseArgs(argv) {
       const value = inline !== undefined ? inline : argv[i + 1];
       if (inline === undefined) i += 1;
       if (value === undefined || value.startsWith("--")) throw new Error(`--${name} needs a value`);
-      args[name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = value;
+      args[name.replace(/-([a-z])/g, (_, ch) => ch.toUpperCase())] = value;
     } else args._.push(a);
   }
   return args;
 }
 
+// Show paths under the home directory as ~/… (path.relative copes with
+// Windows slash and drive-letter case differences).
+const tildify = (file) => {
+  if (!file) return file;
+  const rel = path.relative(path.resolve(os.homedir()), path.resolve(file));
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? `~${path.sep}${rel}` : file;
+};
+
+const POLICY_SOURCES = { user: "assigned to you", team: "from your team", default: "office default" };
+
+const fmtNum = (n) => new Intl.NumberFormat().format(Math.round(Number(n) || 0));
+const fmtUsd = (n) => `$${Number(n || 0).toFixed(2)}`;
+const fmtVal = (unit, n) => (unit === "usd" ? fmtUsd(n) : fmtNum(n));
+const plural = (n, word) => `${fmtNum(n)} ${word}${n === 1 ? "" : "s"}`;
+
 function requireConfig() {
   const config = readConfig();
   if (!config?.serverUrl || !config?.deviceToken) {
-    throw new Error("Not connected. Run: polyrouter-client connect <server-url>");
+    throw new Error(`Not connected. Run: ${CMD} connect <server-url>`);
   }
   return config;
 }
@@ -54,10 +78,10 @@ function requireConfig() {
 function explain(error, serverUrl) {
   if (!(error instanceof ApiError)) return error;
   if (error.code === "password_change_required") {
-    return new Error(`${error.message}\nOpen ${serverUrl}/portal in your browser, sign in and set your password.`);
+    return new Error(`${error.message}\n  Open ${serverUrl}/portal in your browser, sign in and set your password.`);
   }
   if (error.status === 401 && /signed out|device/i.test(error.message)) {
-    return new Error(`${error.message} Run: polyrouter-client connect ${serverUrl}`);
+    return new Error(`${error.message}\n  Run: ${CMD} connect ${serverUrl}`);
   }
   return error;
 }
@@ -70,45 +94,74 @@ async function configureTools(config, args, apiKey) {
   for (const tool of tools) {
     const model = tool.id === "claude" ? args.claudeModel || config.models?.claude : tool.id === "codex" ? args.codexModel || config.models?.codex : undefined;
     try {
-      results.push({ tool, ok: true, detail: tool.apply({ home, serverUrl: config.serverUrl, apiKey, model }) });
+      results.push({ tool, ok: true, ...tool.apply({ home, serverUrl: config.serverUrl, apiKey, model }) });
     } catch (error) {
-      results.push({ tool, ok: false, detail: error.message });
+      results.push({ tool, ok: false, error: error.message });
     }
   }
   return results;
 }
 
-function printToolResults(results) {
-  if (!results.length) {
-    console.log("\nNo supported tools detected (Claude Code, Codex). Use `polyrouter-client env` for other tools.");
+function printToolResults(results, args) {
+  section("Tools");
+  if (args.noTools) {
+    note("  Skipped (--no-tools).");
     return;
   }
-  console.log("\nConfigured:");
-  for (const r of results) console.log(`  ${r.ok ? "✔" : "✖"} ${r.tool.label}: ${r.detail}`);
+  if (!results.length) {
+    note(`  No Claude Code or Codex install found. Use \`${CMD} env\` to configure other tools.`);
+    return;
+  }
+  const width = Math.max(...results.map((r) => r.tool.label.length));
+  for (const r of results) {
+    const label = r.tool.label.padEnd(width);
+    if (r.ok) console.log(`  ${c.green(sym.ok)} ${c.bold(label)}  ${c.gray(tildify(r.file))}`);
+    else console.log(`  ${c.red(sym.err)} ${c.bold(label)}  ${c.red(r.error)}`);
+  }
 }
 
-async function warnAboutModels(config, apiKey, args, results) {
+async function reportModels(config, apiKey, args, results) {
+  let ids = [];
   try {
-    const { data = [] } = await api.models(config.serverUrl, apiKey);
-    const ids = data.map((m) => m.id);
-    const chosen = [args.claudeModel, args.codexModel].filter(Boolean);
-    const unknown = chosen.filter((m) => !ids.includes(m));
-    if (unknown.length) console.log(`\n⚠ Not in your allowed model list: ${unknown.join(", ")}`);
-    // Codex keeps its own `model`; it must be one this office serves.
-    const codexConfigured = results.some((r) => r.ok && r.tool.id === "codex");
-    const codexModel = codexConfigured ? codexTool.currentModel(os.homedir()) : null;
-    if (codexConfigured && ids.length && (!codexModel || !ids.includes(codexModel))) {
-      console.log(`\n⚠ Codex is set to model "${codexModel || "(none)"}", which is not in your list. Pick one with:`);
-      console.log("  polyrouter-client sync --codex-model <model>");
-    }
-    if (ids.length) console.log(`\n${ids.length} models available to you, e.g. ${ids.slice(0, 5).join(", ")}${ids.length > 5 ? ", …" : ""}`);
-  } catch {}
+    ({ data: ids = [] } = await api.models(config.serverUrl, apiKey));
+    ids = ids.map((m) => m.id);
+  } catch {
+    return;
+  }
+  const unknown = [args.claudeModel, args.codexModel].filter(Boolean).filter((m) => !ids.includes(m));
+  // Codex keeps its own `model`; it must be one this office serves.
+  const codexConfigured = results.some((r) => r.ok && r.tool.id === "codex");
+  const codexModel = codexConfigured ? codexTool.currentModel(os.homedir()) : null;
+  const codexMismatch = codexConfigured && ids.length && (!codexModel || !ids.includes(codexModel));
+
+  section("Models");
+  if (ids.length) {
+    console.log(`  ${plural(ids.length, "model")} available to you, e.g. ${c.cyan(ids.slice(0, 4).join(", "))}${ids.length > 4 ? c.gray(", …") : ""}`);
+  } else {
+    note("  Your policy doesn't allow any models right now — ask your admin.");
+  }
+  if (unknown.length) warn(`Not in your allowed list: ${unknown.join(", ")}`);
+  if (codexMismatch) {
+    warn(`Codex is set to model ${c.bold(codexModel || "(none)")}, which this office doesn't serve. Pick one with:`);
+    console.log(`    ${c.cyan(`${CMD} sync --codex-model <model>`)}`);
+  }
+}
+
+function nextSteps() {
+  section("Next");
+  console.log(`  ${c.gray(sym.arrow)} Restart your AI tools to pick up the new settings`);
+  console.log(`  ${c.gray(sym.arrow)} ${c.cyan(`${CMD} status`)}      see your limits and usage`);
+  console.log(`  ${c.gray(sym.arrow)} ${c.cyan(`${CMD} disconnect`)}  restore your original configs\n`);
 }
 
 async function connect(args) {
-  const serverUrl = normalizeServerUrl(args._[1] || (await ask("PolyRouter server URL")));
-  const email = args.email || (await ask("Office email"));
-  const password = await askHidden("Password");
+  header("PolyRouter client", "connect this computer");
+  console.log();
+  const serverUrl = normalizeServerUrl(args._[1] || (await ask("  Server URL")));
+  if (args._[1]) note(`  Server  ${serverUrl}`);
+  const email = args.email || (await ask("  Work email"));
+  if (args.email) note(`  Email   ${email}`);
+  const password = await askHidden("  Password");
   if (!email || !password) throw new Error("Email and password are required");
 
   const previous = readConfig();
@@ -120,7 +173,9 @@ async function connect(args) {
 
   let login;
   try {
-    login = await api.login(serverUrl, { email, password, deviceName: os.hostname(), platform: process.platform });
+    login = await spin("Signing in…", () =>
+      api.login(serverUrl, { email, password, deviceName: os.hostname(), platform: process.platform })
+    );
   } catch (error) {
     throw explain(error, serverUrl);
   }
@@ -135,20 +190,23 @@ async function connect(args) {
     models: { claude: args.claudeModel || previous?.models?.claude, codex: args.codexModel || previous?.models?.codex },
   };
   writeConfig(config);
-  console.log(`\n✔ Signed in to ${config.orgName || serverUrl} as ${config.email}`);
+  console.log();
+  success(`Signed in to ${c.bold(config.orgName || serverUrl)} as ${c.bold(config.email)}`);
+  note(`  This computer is registered as "${os.hostname()}".`);
 
   const results = await configureTools(config, args, login.apiKey);
-  printToolResults(results);
-  await warnAboutModels(config, login.apiKey, args, results);
-  console.log("\nRestart your AI tools to pick up the new settings. Check your limits any time with: polyrouter-client status");
-  return 0;
+  printToolResults(results, args);
+  await reportModels(config, login.apiKey, args, results);
+  nextSteps();
+  return results.some((r) => !r.ok) ? 1 : 0;
 }
 
 async function sync(args) {
   const config = requireConfig();
+  header("PolyRouter client", "sync");
   let key;
   try {
-    key = await api.key(config.serverUrl, config.deviceToken);
+    key = await spin("Refreshing your key…", () => api.key(config.serverUrl, config.deviceToken));
   } catch (error) {
     throw explain(error, config.serverUrl);
   }
@@ -157,21 +215,14 @@ async function sync(args) {
     config.models = { ...config.models, ...(args.claudeModel && { claude: args.claudeModel }), ...(args.codexModel && { codex: args.codexModel }) };
   }
   writeConfig(config);
-  if (key.rotated) console.log("✔ Your previous key had expired or was removed — a new one was issued.");
+  console.log();
+  if (key.rotated) success("Your previous key had expired or was removed — a new one was issued.");
+  else success("Your key is valid.");
   const results = await configureTools(config, args, key.apiKey);
-  printToolResults(results);
-  await warnAboutModels(config, key.apiKey, args, results);
-  return 0;
-}
-
-function bar(percent) {
-  const filled = Math.round(Math.min(100, percent) / 10);
-  return `[${"#".repeat(filled)}${"-".repeat(10 - filled)}]`;
-}
-
-function fmt(unit, n) {
-  if (unit === "usd") return `$${Number(n || 0).toFixed(2)}`;
-  return new Intl.NumberFormat().format(Math.round(Number(n) || 0));
+  printToolResults(results, args);
+  await reportModels(config, key.apiKey, args, results);
+  console.log();
+  return results.some((r) => !r.ok) ? 1 : 0;
 }
 
 function describeRestrictions(l) {
@@ -179,10 +230,10 @@ function describeRestrictions(l) {
   if (l.allowedModels?.length) out.push(`Allowed models: ${l.allowedModels.join(", ")}`);
   if (l.blockedModels?.length) out.push(`Blocked models: ${l.blockedModels.join(", ")}`);
   if (Array.isArray(l.allowedKinds)) out.push(`Allowed request types: ${l.allowedKinds.length ? l.allowedKinds.join(", ") : "none"}`);
-  if (l.maxConcurrent) out.push(`Max ${l.maxConcurrent} requests at once`);
-  if (l.maxInputTokens) out.push(`Max input ≈${fmt("tokens", l.maxInputTokens)} tokens per request`);
-  if (l.maxOutputTokens) out.push(`Max output ${fmt("tokens", l.maxOutputTokens)} tokens per request`);
-  if (l.allowedHours) out.push(`Allowed hours ${l.allowedHours.start}–${l.allowedHours.end} (server time)`);
+  if (l.maxConcurrent) out.push(`At most ${l.maxConcurrent} requests at once`);
+  if (l.maxInputTokens) out.push(`Max input ≈${fmtNum(l.maxInputTokens)} tokens per request`);
+  if (l.maxOutputTokens) out.push(`Max output ${fmtNum(l.maxOutputTokens)} tokens per request`);
+  if (l.allowedHours) out.push(`Allowed ${l.allowedHours.start}–${l.allowedHours.end} (server time)`);
   if (l.onLimit === "fallback" && l.fallbackModel) out.push(`When a budget runs out, chat switches to ${l.fallbackModel}`);
   return out;
 }
@@ -191,23 +242,46 @@ async function status() {
   const config = requireConfig();
   let me;
   try {
-    me = await api.me(config.serverUrl, config.deviceToken);
+    me = await spin("Loading…", () => api.me(config.serverUrl, config.deviceToken));
   } catch (error) {
     throw explain(error, config.serverUrl);
   }
-  console.log(`${me.office?.orgName || config.serverUrl} — ${me.user.name || me.user.email}${me.user.team ? ` (${me.user.team.name})` : ""}`);
-  console.log(`Server: ${config.serverUrl}   Device: ${me.device?.name || os.hostname()}`);
-  console.log(`Policy: ${me.policy.name}${me.policy.source !== "none" ? ` (${me.policy.source})` : ""}\n`);
-  if (!me.limitStatus.length) console.log("No usage caps.");
-  for (const row of me.limitStatus) {
-    console.log(`${bar(row.percent)} ${String(row.percent).padStart(3)}%  ${row.label}: ${fmt(row.unit, row.used)} / ${fmt(row.unit, row.limit)}`);
+  header(me.office?.orgName || "PolyRouter", config.serverUrl);
+  console.log();
+  keyValues([
+    ["Account", `${c.bold(me.user.name || me.user.email)}${me.user.name ? c.gray(`  ${me.user.email}`) : ""}`],
+    ["Team", me.user.team?.name || c.gray("—")],
+    ["Policy", `${me.policy.name}${POLICY_SOURCES[me.policy.source] ? c.gray(`  ${POLICY_SOURCES[me.policy.source]}`) : ""}`],
+    ["Device", me.device?.name || os.hostname()],
+  ]);
+
+  section("Limits");
+  const restrictions = describeRestrictions(me.policy.limits || {});
+  if (!me.limitStatus.length && !restrictions.length) note("  No limits — use AI as you need.");
+  if (me.limitStatus.length) {
+    const width = Math.max(...me.limitStatus.map((r) => r.label.length));
+    for (const row of me.limitStatus) {
+      const pct = `${String(row.percent).padStart(3)}%`;
+      console.log(`  ${row.label.padEnd(width)}  ${bar(row.percent)} ${pct}  ${c.gray(`${fmtVal(row.unit, row.used)} / ${fmtVal(row.unit, row.limit)}`)}`);
+    }
   }
-  for (const line of describeRestrictions(me.policy.limits || {})) console.log(`• ${line}`);
-  const usageLine = (u) => `$${u.cost.toFixed(2)} · ${fmt("tokens", u.tokens)} tokens · ${u.requests} request${u.requests === 1 ? "" : "s"}`;
-  console.log(`\nToday:      ${usageLine(me.usage.day)}`);
-  console.log(`This month: ${usageLine(me.usage.month)}`);
-  const connected = TOOLS.filter((t) => getSnapshot(t.id)).map((t) => t.label);
-  console.log(`\nConfigured tools: ${connected.length ? connected.join(", ") : "none"}`);
+  for (const line of restrictions) console.log(`  ${c.gray(sym.bullet)} ${line}`);
+
+  section("Usage");
+  table(
+    ["", "Spend", "Tokens", "Requests"],
+    [
+      ["Today", fmtUsd(me.usage.day.cost), fmtNum(me.usage.day.tokens), fmtNum(me.usage.day.requests)],
+      ["This month", fmtUsd(me.usage.month.cost), fmtNum(me.usage.month.tokens), fmtNum(me.usage.month.requests)],
+    ]
+  );
+
+  section("Tools");
+  for (const tool of TOOLS) {
+    const on = Boolean(getSnapshot(tool.id));
+    console.log(`  ${on ? c.green(sym.ok) : c.gray(sym.dot)} ${tool.label}${on ? "" : c.gray("  not configured")}`);
+  }
+  console.log();
   return 0;
 }
 
@@ -222,6 +296,7 @@ async function env(args) {
     ANTHROPIC_BASE_URL: `${config.serverUrl}/v1`,
     ANTHROPIC_AUTH_TOKEN: apiKey,
   };
+  // Plain output only: this is meant to be eval'd or pasted into a shell.
   const shell = args.shell || (process.platform === "win32" ? "powershell" : "bash");
   for (const [k, v] of Object.entries(vars)) {
     if (shell === "powershell") console.log(`$env:${k} = "${v}"`);
@@ -234,22 +309,32 @@ async function env(args) {
 async function disconnect() {
   const config = readConfig();
   const home = os.homedir();
+  header("PolyRouter client", "disconnect");
+  section("Tools");
+  let restoredAny = false;
+  const width = Math.max(...TOOLS.map((t) => t.label.length));
   for (const tool of TOOLS) {
+    const label = c.bold(tool.label.padEnd(width));
     try {
       const msg = tool.restore({ home });
-      if (msg) console.log(`✔ ${tool.label}: ${msg}`);
+      if (msg) {
+        restoredAny = true;
+        console.log(`  ${c.green(sym.ok)} ${label}  ${c.gray("original settings restored")}`);
+      }
     } catch (error) {
-      console.log(`✖ ${tool.label}: ${error.message}`);
+      console.log(`  ${c.red(sym.err)} ${label}  ${c.red(error.message)}`);
     }
   }
+  if (!restoredAny) note("  Nothing to restore.");
+  console.log();
   if (config?.deviceToken) {
-    await api.logout(config.serverUrl, config.deviceToken).then(
-      () => console.log("✔ Signed this device out"),
-      () => console.log("⚠ Could not reach the server to sign out; your admin can revoke this device.")
+    await spin("Signing out…", () => api.logout(config.serverUrl, config.deviceToken)).then(
+      () => success("Signed this device out"),
+      () => warn("Could not reach the server to sign out; your admin can revoke this device.")
     );
   }
   deleteConfig();
-  console.log("Disconnected.");
+  info("Disconnected.\n");
   return 0;
 }
 
@@ -257,7 +342,7 @@ export async function main(argv) {
   const args = parseArgs(argv);
   const command = args._[0];
   if (args.help || !command || command === "help") {
-    console.log(HELP);
+    help();
     return 0;
   }
   switch (command) {
@@ -274,8 +359,8 @@ export async function main(argv) {
     case "logout":
       return disconnect();
     default:
-      console.error(`Unknown command: ${command}\n`);
-      console.log(HELP);
+      failure(`Unknown command: ${command}`);
+      help();
       return 1;
   }
 }

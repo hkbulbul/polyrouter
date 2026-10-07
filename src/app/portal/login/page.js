@@ -46,19 +46,23 @@ export default function PortalLoginPage() {
 
   if (!status) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="dot-grid flex min-h-screen items-center justify-center bg-bg">
+        <span className="material-symbols-outlined animate-spin text-[28px] text-primary">progress_activity</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4 relative overflow-hidden">
-      <div className="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true" />
+    <div className="dot-grid relative flex min-h-screen items-center justify-center overflow-hidden bg-bg p-4">
+      <div className="app-grain" aria-hidden="true" />
       <div className="relative z-10 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">{status.orgName || "PolyRouter"}</h1>
-          <p className="text-text-muted">Employee sign-in</p>
+        <div className="mb-8 flex flex-col items-center text-center">
+          <span className="mb-5 flex size-11 items-center justify-center bg-[#ededed] p-2">
+            <img src="/polyrouter-mark.png" alt="" width={28} height={28} className="size-full object-contain brightness-0" />
+          </span>
+          <p className="eyebrow mb-3">Employee portal</p>
+          <h1 className="text-2xl font-medium tracking-[-0.02em] text-text-main">{status.orgName || "PolyRouter"}</h1>
+          <p className="mt-2 text-sm text-text-muted">Sign in with your work email to manage your AI keys and usage.</p>
         </div>
         <Card>
           {!status.officeEnabled ? (

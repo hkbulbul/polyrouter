@@ -49,7 +49,7 @@ export function apply({ home, serverUrl, apiKey, model }) {
   const written = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", ...(model ? ["ANTHROPIC_MODEL"] : [])];
   updateSnapshot(id, { written: [...new Set([...(snapshot.written || []), ...written])] });
   writeSettings(file, { ...settings, env: nextEnv });
-  return `${file} → ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN${model ? ", ANTHROPIC_MODEL" : ""}`;
+  return { file };
 }
 
 export function restore({ home }) {

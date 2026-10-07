@@ -1,50 +1,19 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import ToastContainer from "../Toast";
 import Sidebar from "../Sidebar";
 import Header from "../Header";
+import { useSidebarCollapsed } from "@/shared/hooks/useSidebarCollapsed";
 
-// Desktop sidebar collapsed preference, persisted in localStorage and synced across tabs
+// Desktop sidebar collapsed preference (persisted, synced across tabs)
 const SIDEBAR_COLLAPSED_KEY = "polyrouter:sidebar-collapsed";
-const SIDEBAR_COLLAPSED_EVENT = "polyrouter:sidebar-collapsed-change";
-
-function subscribeSidebarCollapsed(callback) {
-  window.addEventListener("storage", callback);
-  window.addEventListener(SIDEBAR_COLLAPSED_EVENT, callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(SIDEBAR_COLLAPSED_EVENT, callback);
-  };
-}
-
-// In-memory fallback so the toggle still works when storage is blocked
-let memoryCollapsed = false;
-
-function readSidebarCollapsed() {
-  try {
-    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    return stored === null ? memoryCollapsed : stored === "1";
-  } catch {
-    return memoryCollapsed;
-  }
-}
-
-function writeSidebarCollapsed(collapsed) {
-  memoryCollapsed = collapsed;
-  try {
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
-  } catch {}
-  window.dispatchEvent(new Event(SIDEBAR_COLLAPSED_EVENT));
-}
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebarCollapsed = useSyncExternalStore(subscribeSidebarCollapsed, readSidebarCollapsed, () => false);
+  const [sidebarCollapsed, toggleSidebarCollapsed] = useSidebarCollapsed(SIDEBAR_COLLAPSED_KEY);
   const pathname = usePathname();
-
-  const toggleSidebarCollapsed = () => writeSidebarCollapsed(!sidebarCollapsed);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-bg">

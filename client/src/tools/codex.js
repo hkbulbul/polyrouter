@@ -56,7 +56,7 @@ export function apply({ home, serverUrl, apiKey, model }) {
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
-  return `${file} → model_provider = "polyrouter"${model ? `, model = "${model}"` : ""}, [${TABLE}]`;
+  return { file };
 }
 
 export function restore({ home }) {
