@@ -1,5 +1,6 @@
 import { ensureDirs, DATA_FILE } from "./paths.js";
 import { appendErrorLog } from "@/sse/utils/errorLog.js";
+import { SCHEMA_VERSION } from "./schema.js";
 
 // Use global to survive Next.js dev hot-reload (module state resets on reload)
 if (!global._dbAdapter) global._dbAdapter = { instance: null, initPromise: null, logged: false };
@@ -71,6 +72,26 @@ async function initAdapter() {
 
   const { runMigrationOnce } = await import("./migrate.js");
   await runMigrationOnce(adapter);
+  state.schemaVersion = SCHEMA_VERSION;
+  return adapter;
+}
+
+// The adapter lives on `global` so it survives dev hot-reloads — which also
+// means a reload that ships a newer schema would keep using the old tables
+// (e.g. INSERTs naming new columns fail) until a restart. Re-run the
+// (idempotent) migrations once when the loaded code's schema is newer.
+async function upgradeLiveAdapter(adapter) {
+  if (!state.upgradePromise) {
+    state.upgradePromise = (async () => {
+      const { applyPendingSchema } = await import("./migrate.js");
+      applyPendingSchema(adapter);
+      state.schemaVersion = SCHEMA_VERSION;
+      console.log(`[DB] live adapter migrated to schema v${SCHEMA_VERSION}`);
+    })().finally(() => {
+      state.upgradePromise = null;
+    });
+  }
+  await state.upgradePromise;
   return adapter;
 }
 
@@ -84,7 +105,10 @@ async function initAdapter() {
 const INIT_RETRY_BACKOFF_MS = 5_000;
 
 export async function getAdapter() {
-  if (state.instance) return state.instance;
+  if (state.instance) {
+    if (state.schemaVersion !== SCHEMA_VERSION) return upgradeLiveAdapter(state.instance);
+    return state.instance;
+  }
 
   if (state.initFailedAt && Date.now() - state.initFailedAt < INIT_RETRY_BACKOFF_MS) {
     throw state.initError;
