@@ -50,6 +50,7 @@ const mediaItems = [
 ];
 
 const systemItems = [
+  { href: "/dashboard/pricing", label: "Pricing", icon: "sell" },
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
 ];

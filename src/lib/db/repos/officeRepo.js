@@ -339,7 +339,8 @@ export async function getOfficeUserUsageSince(userId, sinceIso) {
     `SELECT COUNT(*) AS requests,
             COALESCE(SUM(promptTokens), 0) AS promptTokens,
             COALESCE(SUM(completionTokens), 0) AS completionTokens,
-            COALESCE(SUM(cost), 0) AS cost
+            COALESCE(SUM(cost), 0) AS cost,
+            COALESCE(SUM(unpriced), 0) AS unpricedRequests
        FROM usageHistory WHERE userId = ? AND timestamp >= ?`,
     [userId, sinceIso]
   );
@@ -351,6 +352,7 @@ export async function getOfficeUserUsageSince(userId, sinceIso) {
     completionTokens,
     tokens: promptTokens + completionTokens,
     cost: row?.cost || 0,
+    unpricedRequests: row?.unpricedRequests || 0,
   };
 }
 
@@ -369,6 +371,8 @@ export async function getOfficeUsageByUser(sinceIso) {
             COALESCE(SUM(promptTokens), 0) AS promptTokens,
             COALESCE(SUM(completionTokens), 0) AS completionTokens,
             COALESCE(SUM(cost), 0) AS cost,
+            COALESCE(SUM(unpriced), 0) AS unpricedRequests,
+            COALESCE(SUM(CASE WHEN unpriced = 1 THEN promptTokens + completionTokens ELSE 0 END), 0) AS unpricedTokens,
             COUNT(DISTINCT model) AS models,
             MAX(timestamp) AS lastUsedAt
        FROM usageHistory WHERE ${where} GROUP BY userId`,
@@ -383,7 +387,9 @@ export async function getOfficeUsageByModel(sinceIso, userId = null) {
     `SELECT model, provider, COUNT(*) AS requests,
             COALESCE(SUM(promptTokens), 0) AS promptTokens,
             COALESCE(SUM(completionTokens), 0) AS completionTokens,
-            COALESCE(SUM(cost), 0) AS cost
+            COALESCE(SUM(cost), 0) AS cost,
+            COALESCE(SUM(unpriced), 0) AS unpricedRequests,
+            COALESCE(SUM(CASE WHEN unpriced = 1 THEN promptTokens + completionTokens ELSE 0 END), 0) AS unpricedTokens
        FROM usageHistory WHERE ${where} GROUP BY model, provider ORDER BY cost DESC, requests DESC`,
     params
   );

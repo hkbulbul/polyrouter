@@ -1,4 +1,4 @@
-import { listOfficeUsers, listOfficeTeams, getOfficeUsageByUser, getOfficeUsageByModel, getOfficeUsageDaily } from "@/lib/db/index.js";
+import { listOfficeUsers, listOfficeTeams, getOfficeUsageByUser, getOfficeUsageByModel, getOfficeUsageDaily, ensureUsageCostBackfill } from "@/lib/db/index.js";
 import { ok, fail, parsePeriod, periodStartIso } from "@/lib/office/http.js";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,7 @@ export async function GET(request) {
   try {
     const period = parsePeriod(request, "30d");
     const since = periodStartIso(period);
+    await ensureUsageCostBackfill();
     const [users, teams, byUserRows, byModelRows, dailyRows] = await Promise.all([
       listOfficeUsers(), listOfficeTeams(), getOfficeUsageByUser(since), getOfficeUsageByModel(since), getOfficeUsageDaily(since),
     ]);
@@ -30,6 +31,8 @@ export async function GET(request) {
           completionTokens: r.completionTokens,
           tokens: r.promptTokens + r.completionTokens,
           cost: r.cost,
+          unpricedRequests: r.unpricedRequests || 0,
+          unpricedTokens: r.unpricedTokens || 0,
           models: r.models,
           lastUsedAt: r.lastUsedAt,
         };
@@ -54,8 +57,10 @@ export async function GET(request) {
         tokens: acc.tokens + r.tokens,
         cost: acc.cost + r.cost,
         activeUsers: acc.activeUsers + 1,
+        unpricedRequests: acc.unpricedRequests + r.unpricedRequests,
+        unpricedTokens: acc.unpricedTokens + r.unpricedTokens,
       }),
-      { requests: 0, tokens: 0, cost: 0, activeUsers: 0 }
+      { requests: 0, tokens: 0, cost: 0, activeUsers: 0, unpricedRequests: 0, unpricedTokens: 0 }
     );
     summary.totalUsers = users.length;
     summary.avgCostPerActiveUser = summary.activeUsers ? summary.cost / summary.activeUsers : 0;

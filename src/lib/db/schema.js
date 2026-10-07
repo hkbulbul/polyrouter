@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup — it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -213,6 +213,12 @@ export const TABLES = {
       meta: "TEXT",
       // Office mode: employee the request's API key belonged to (stamped at insert).
       userId: "TEXT",
+      // Cost split by billing rate (input incl. cache writes / cache reads / output incl.
+      // reasoning). They sum to `cost`. `unpriced` = tokens were used but no price is set.
+      inputCost: "REAL DEFAULT 0",
+      cachedCost: "REAL DEFAULT 0",
+      outputCost: "REAL DEFAULT 0",
+      unpriced: "INTEGER DEFAULT 0",
     },
     indexes: [
       "CREATE INDEX IF NOT EXISTS idx_uh_ts ON usageHistory(timestamp DESC)",

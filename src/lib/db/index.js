@@ -62,6 +62,11 @@ export {
   appendRequestLog, getRecentLogs,
 } from "./repos/usageRepo.js";
 
+// Usage cost maintenance (per-rate split backfill, re-pricing, used-model prices)
+export {
+  ensureUsageCostBackfill, recalculateUsageCosts, getUsedModelPricing,
+} from "./repos/usageCostRepo.js";
+
 // Installation identity and telemetry queue
 export {
   getInstallationIdentity, getOrCreateInstallationIdentity,

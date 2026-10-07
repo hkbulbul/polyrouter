@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
+import Link from "next/link";
 import { Card, Button, SegmentedControl } from "@/shared/components";
 import UsageTrendChart from "@/shared/components/office/UsageTrendChart";
 import { officeApi, fmtUsd, fmtTokens, fmtNumber, fmtRelative, downloadCsv, PERIOD_OPTIONS } from "@/shared/components/office/officeClient";
@@ -87,6 +88,21 @@ export default function AnalyticsTab() {
             <Kpi label="Avg spend / active employee" value={fmtUsd(data.summary.avgCostPerActiveUser)} />
           </div>
 
+          {data.summary.unpricedRequests > 0 && (
+            <div className="flex flex-col gap-3 border border-amber-500/30 bg-amber-500/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-[20px] text-amber-500">price_change</span>
+                <p className="text-sm text-text-main">
+                  {fmtNumber(data.summary.unpricedRequests)} employee request{data.summary.unpricedRequests === 1 ? "" : "s"} ({fmtTokens(data.summary.unpricedTokens)} tokens) used models
+                  without a price. They count as $0 here and don&apos;t use up anyone&apos;s dollar budget.
+                </p>
+              </div>
+              <Link href="/dashboard/pricing" className="shrink-0">
+                <Button size="sm" variant="secondary" icon="sell">Set prices</Button>
+              </Link>
+            </div>
+          )}
+
           <Card title="Daily trend" icon="monitoring">
             <UsageTrendChart data={data.daily} />
           </Card>
@@ -136,7 +152,14 @@ export default function AnalyticsTab() {
                         <td className="px-4 py-2 text-text-muted">{r.teamName || "—"}</td>
                         <td className="px-4 py-2 text-right font-mono">{fmtNumber(r.requests)}</td>
                         <td className="px-4 py-2 text-right font-mono">{fmtTokens(r.tokens)}</td>
-                        <td className="px-4 py-2 text-right font-mono">{fmtUsd(r.cost)}</td>
+                        <td className="px-4 py-2 text-right font-mono">
+                          <p>{fmtUsd(r.cost)}</p>
+                          {r.unpricedRequests > 0 && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400" title="Requests on models without a price">
+                              + {fmtNumber(r.unpricedRequests)} unpriced
+                            </p>
+                          )}
+                        </td>
                         <td className="px-4 py-2"><ShareBar value={r[sortBy]} max={maxMetric} /></td>
                         <td className="px-4 py-2 text-text-muted">{fmtRelative(r.lastUsedAt)}</td>
                       </tr>
@@ -180,7 +203,10 @@ export default function AnalyticsTab() {
                       <tr key={`${m.model}|${m.provider}`} className="border-b border-border/60 last:border-0">
                         <td className="py-2 min-w-0">
                           <p className="font-medium font-mono text-xs break-all">{m.model}</p>
-                          <p className="text-xs text-text-muted">{m.provider} · {fmtNumber(m.requests)} req</p>
+                          <p className="text-xs text-text-muted">
+                            {m.provider} · {fmtNumber(m.requests)} req
+                            {m.unpricedRequests > 0 && <span className="text-amber-600 dark:text-amber-400"> · no price</span>}
+                          </p>
                         </td>
                         <td className="py-2 text-right font-mono">
                           <p>{fmtUsd(m.cost)}</p>
