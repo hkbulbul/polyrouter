@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ validateApiKey: vi.fn() }));
+const mocks = vi.hoisted(() => ({ validateApiKey: vi.fn(), isOfficeEmployeeApiKey: vi.fn(async () => false) }));
 
-vi.mock("@/lib/localDb", () => ({ validateApiKey: mocks.validateApiKey }));
+vi.mock("@/lib/localDb", () => ({ validateApiKey: mocks.validateApiKey, isOfficeEmployeeApiKey: mocks.isOfficeEmployeeApiKey }));
 
 function request(body, apiKey = "valid-key") {
   return new Request("http://localhost/api/realtime/tickets", {

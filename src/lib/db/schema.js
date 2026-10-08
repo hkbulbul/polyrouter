@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup — it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 5;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -105,8 +105,76 @@ export const TABLES = {
       machineId: "TEXT",
       isActive: "INTEGER DEFAULT 1",
       createdAt: "TEXT NOT NULL",
+      // Office mode: owning employee (NULL = owner/admin key), optional expiry, and the
+      // light-client device that minted it (revoking the device revokes this key).
+      userId: "TEXT",
+      expiresAt: "TEXT",
+      deviceId: "TEXT",
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)"],
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)",
+      "CREATE INDEX IF NOT EXISTS idx_ak_user ON apiKeys(userId)",
+    ],
+  },
+  officeUsers: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      email: "TEXT UNIQUE NOT NULL",
+      name: "TEXT",
+      passwordHash: "TEXT NOT NULL",
+      teamId: "TEXT",
+      policyId: "TEXT",
+      isActive: "INTEGER DEFAULT 1",
+      mustChangePassword: "INTEGER DEFAULT 0",
+      // Bumped on password reset / disable so outstanding sessions die.
+      sessionVersion: "INTEGER DEFAULT 0",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+      lastLoginAt: "TEXT",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_ou_team ON officeUsers(teamId)"],
+  },
+  officeTeams: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      name: "TEXT UNIQUE NOT NULL",
+      policyId: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+  },
+  officePolicies: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      name: "TEXT UNIQUE NOT NULL",
+      limits: "TEXT NOT NULL",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+  },
+  officeDevices: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      userId: "TEXT NOT NULL",
+      name: "TEXT",
+      platform: "TEXT",
+      tokenHash: "TEXT UNIQUE NOT NULL",
+      createdAt: "TEXT NOT NULL",
+      lastSeenAt: "TEXT",
+      revokedAt: "TEXT",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_od_user ON officeDevices(userId)"],
+  },
+  officeAuditLog: {
+    columns: {
+      id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+      timestamp: "TEXT NOT NULL",
+      actor: "TEXT",
+      action: "TEXT NOT NULL",
+      target: "TEXT",
+      meta: "TEXT",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_oal_ts ON officeAuditLog(timestamp DESC)"],
   },
   combos: {
     columns: {
@@ -143,9 +211,18 @@ export const TABLES = {
       status: "TEXT",
       tokens: "TEXT",
       meta: "TEXT",
+      // Office mode: employee the request's API key belonged to (stamped at insert).
+      userId: "TEXT",
+      // Cost split by billing rate (input incl. cache writes / cache reads / output incl.
+      // reasoning). They sum to `cost`. `unpriced` = tokens were used but no price is set.
+      inputCost: "REAL DEFAULT 0",
+      cachedCost: "REAL DEFAULT 0",
+      outputCost: "REAL DEFAULT 0",
+      unpriced: "INTEGER DEFAULT 0",
     },
     indexes: [
       "CREATE INDEX IF NOT EXISTS idx_uh_ts ON usageHistory(timestamp DESC)",
+      "CREATE INDEX IF NOT EXISTS idx_uh_user_ts ON usageHistory(userId, timestamp)",
       "CREATE INDEX IF NOT EXISTS idx_uh_provider ON usageHistory(provider)",
       "CREATE INDEX IF NOT EXISTS idx_uh_model ON usageHistory(model)",
       "CREATE INDEX IF NOT EXISTS idx_uh_conn ON usageHistory(connectionId)",

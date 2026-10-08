@@ -113,6 +113,20 @@ const getPageInfo = (pathname) => {
       icon: "security",
       breadcrumbs: [],
     };
+  if (pathname.includes("/dashboard/pricing"))
+    return {
+      title: "Pricing",
+      description: "Model prices used for cost estimates",
+      icon: "sell",
+      breadcrumbs: [],
+    };
+  if (pathname.includes("/dashboard/office"))
+    return {
+      title: "Office",
+      description: "Employees, usage limits, leaderboard and cost analytics",
+      icon: "corporate_fare",
+      breadcrumbs: [],
+    };
   if (pathname.includes("/token-saver"))
     return {
       title: "Token Saver",

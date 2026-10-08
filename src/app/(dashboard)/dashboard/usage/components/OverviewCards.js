@@ -164,7 +164,13 @@ export default function OverviewCards({ stats }) {
           </Badge>
         </div>
         <div className="mt-2 flex items-center gap-1.5 text-xs text-text-muted">
-          <span className="truncate">Est. benchmark rate</span>
+          {stats.costBreakdown?.unpricedRequests > 0 ? (
+            <span className="truncate text-amber-600 dark:text-amber-400">
+              Excludes {fmt(stats.costBreakdown.unpricedRequests)} unpriced request{stats.costBreakdown.unpricedRequests === 1 ? "" : "s"}
+            </span>
+          ) : (
+            <span className="truncate">Est. benchmark rate</span>
+          )}
         </div>
       </Card>
     </div>

@@ -3,10 +3,32 @@
 ## Features
 - **Collapsible dashboard sidebar**: add a sidebar toggle to the page header that collapses the desktop sidebar to an icon rail (labels shown as tooltips); the choice is remembered across reloads and tabs.
 - **Compact page header**: replace the breadcrumb + title + description stack with a single line — just the page name, or parent links + name on nested pages.
+- **Office mode**: share one PolyRouter with a team. **Settings → Office mode** turns it on and adds an **Office** page with:
+  - Employees (email and password, temporary passwords, disable, reset)
+  - Teams
+  - Limit policies: request rates, concurrency, token and USD budgets, input and output caps, allowed and blocked models, request types, working hours, block or fall back to a cheaper model, key count and lifetime
+  - A leaderboard, cost-by-team and cost-by-model analytics with CSV export, and an audit log
+
+  Employees use the `/portal` web portal (limits, usage, their own API keys, tool setup snippets) or the new zero-dependency `polyrouter-client` package (`client/`). The client signs in, mints a device key, configures Claude Code and Codex, and restores the originals on `disconnect`. Every cost-generating `/v1` route enforces the employee's policy, `/v1/models` is filtered per employee, and usage is attributed per employee (`usageHistory.userId`). Login is always required while Office mode is on. See `docs/OFFICE_MODE.md`.
+- **Employee portal redesign**: `/portal` now uses the same layout as the admin dashboard: a collapsible sidebar, a compact header and the landing-style cards. It has separate Overview, API keys, Set up tools, Usage, Devices and Account pages, and a forced password-change screen.
+- **polyrouter-client output**: colored, aligned terminal output with a spinner, usage bars, a usage table and next-step hints. Colors turn off for `NO_COLOR`, pipes and dumb terminals, and symbols fall back to ASCII on legacy Windows consoles.
+- **Use PolyRouter switch (Claude Code, Codex)**: turn PolyRouter off to go straight back to the tool's own login/subscription, and on again with the saved settings — from the CLI Tools overview or the tool page. On first Apply PolyRouter now backs up the original value of every key it overwrites (`<DATA_DIR>/cli-tool-backups/<tool>.json`) and restores exactly those on disconnect, leaving everything else in the config untouched. Settings routes accept `PATCH { enabled }`.
 
 ## Fixes
+- **Built-in model prices corrected** against the official pricing pages (OpenAI, Google, Z.ai; checked 2026-10-07):
+  - GPT-5.6 Luna/Terra/Sol were 1.25–5× too high.
+  - GPT-6 Luna/Sol/6.1 Sol/Astra were missing, so their spend showed $0.
+  - Gemini 3.5–3.8 Flash used a generic fallback.
+  - GLM-5.1–5.3 (including 5.3-Flash) were up to 7× too high.
+
+  Provider variant names (e.g. `gpt-5.6-sol-thinking-agentic`, `gemini-3.8-flash-high`, `z-ai/glm-5.3-flash`) now resolve to their base model's price. Prices support a long-context tier: OpenAI bills prompts over 272K input tokens at a higher rate. Use **Pricing → Recalculate all** to re-price past usage.
+- **Cost accuracy**: the Usage table's Input / Cached / Output cost columns were a token-share split of the total, which badly under-counted output and over-counted cached tokens. Each request now stores its real per-rate cost (`usageHistory.inputCost/cachedCost/outputCost`), and existing rows are backfilled once without changing their totals.
+- **Unpriced models no longer look free**: requests on models with no price (e.g. new `gpt-6-*` models) are flagged `unpriced`. The Usage page, the Office leaderboard and Office analytics now call this out instead of showing a silent $0, because Office dollar budgets can't count that usage.
+- **Pricing page**: a new **Pricing** page (sidebar) lists every model you've used with its rates and their source (built-in, custom, or none). You can set or override a price for any provider/model and re-price past usage for that model, or for everything (`POST /api/pricing/recalculate`). It replaces the old orphaned `/dashboard/settings/pricing`, which could only edit models that already had a built-in override.
+- **Runtime i18n stale text**: re-processing the DOM on route changes no longer reverts text that React re-rendered. A persistent header kept the previous page's title, and stat cards could stay on their loading placeholder.
 - **Usage Est. Cost card**: show the full cost instead of truncating it next to the per-1k-request badge; amounts now use thousands separators.
 - **Branding**: replace leftover `9router` identifiers with PolyRouter (Zed executor `User-Agent` is now `polyrouter/zed`); upstream attribution in LICENSE/README is kept as required by the MIT license.
+- **Claude Code / Codex reset**: Reset now restores the user's original values instead of deleting keys — it no longer leaves `ANTHROPIC_DEFAULT_FABLE_MODEL` pointing at a PolyRouter model, and no longer drops a pre-existing gateway URL, the user's own Exa MCP, their own `OPENAI_API_KEY`, or Codex's `auth_mode: "chatgpt"` (ChatGPT subscription login). Partial updates from the CLI launcher no longer remove the Exa MCP.
 - **Command Code model routing**: map `cmc/glm-5.3-flash` to Command Code's canonical `z-ai/glm-5.3-flash` identifier, preserve Command Code's native nested-model request envelope and current client identity headers, fall back across all public DNS addresses when a Cloudflare edge is unreachable, and skip futile token-refresh retries for static API-key 401/403 responses.
 - **Command Code API key setup**: automatically store the selected PolyRouter key in Command Code's native provider credential store, so new Command Code processes work without manually setting `POLYROUTER_API_KEY`; preserve unrelated login/provider credentials and remove only PolyRouter-owned data on reset.
 

@@ -93,6 +93,8 @@ export const CLI_TOOLS = {
     color: "#16a34a",
     description: "Anthropic Claude Code CLI",
     configType: "env",
+    // Settings route supports PATCH { enabled } — switch between PolyRouter and the tool's own login
+    supportsDisconnect: true,
     envVars: {
       baseUrl: "ANTHROPIC_BASE_URL",
       model: "ANTHROPIC_MODEL",
@@ -125,6 +127,7 @@ export const CLI_TOOLS = {
     color: "#10A37F",
     description: "OpenAI Codex CLI",
     configType: "custom",
+    supportsDisconnect: true,
   },
   opencode: {
     id: "opencode",

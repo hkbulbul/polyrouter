@@ -14,8 +14,31 @@ import {
   isPolyRouterCatalogModel,
 } from "@/lib/codexModelCatalog";
 import { deleteModelAlias, getModelAliases, setModelAlias } from "@/models";
+import {
+  readCliSnapshot,
+  writeCliSnapshot,
+  clearCliSnapshot,
+  captureValues,
+  restoreValues,
+  mergeCaptured,
+} from "@/lib/cliToolSnapshot";
 
 const execAsync = promisify(exec);
+
+const TOOL_ID = "codex";
+
+// Keys PolyRouter writes. Their original values (e.g. the user's own model, or
+// auth_mode "chatgpt" for a ChatGPT subscription login) are backed up on first
+// connect and restored on disconnect.
+const CONFIG_MANAGED_PATHS = [
+  ["model"],
+  ["model_provider"],
+  ["model_providers", "polyrouter"],
+  ["agents", "subagent", "model"],
+  ["agents", "subagent", "description"],
+  ["model_catalog_json"],
+];
+const AUTH_MANAGED_PATHS = [["OPENAI_API_KEY"], ["auth_mode"]];
 
 const getCodexDir = () => path.join(os.homedir(), ".codex");
 const getCodexConfigPath = () => path.join(getCodexDir(), "config.toml");
@@ -38,17 +61,6 @@ const setNestedSection = (obj, dottedKey, value) => {
     cur = cur[keys[i]];
   }
   cur[keys[keys.length - 1]] = value;
-};
-
-// Delete a nested key from a flat dotted path
-const deleteNestedSection = (obj, dottedKey) => {
-  const keys = dottedKey.split(".");
-  let cur = obj;
-  for (let i = 0; i < keys.length - 1; i++) {
-    cur = cur?.[keys[i]];
-    if (cur == null) return;
-  }
-  delete cur[keys[keys.length - 1]];
 };
 
 const getCodexCommandEnv = () => {
@@ -217,6 +229,33 @@ const hasPolyRouterConfig = (config) => {
   return config.includes("model_provider = \"polyrouter\"") || config.includes("[model_providers.polyrouter]");
 };
 
+const readJsonFile = async (filePath) => {
+  try {
+    return JSON.parse(await fs.readFile(filePath, "utf-8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
+
+// Marks values PolyRouter itself wrote, so configs applied before backups existed
+// are never mistaken for the user's originals.
+const makePolyRouterValueCheck = (parsedConfig) => {
+  const connected = parsedConfig?.model_provider === "polyrouter" || !!parsedConfig?.model_providers?.polyrouter;
+  const bearer = parsedConfig?.model_providers?.polyrouter?.experimental_bearer_token;
+  return {
+    config: ([key, , leaf], value) => {
+      if (key === "model_catalog_json") return isManagedModelCatalogPath(value);
+      if (leaf === "description") return value === CODEX_SUBAGENT_DESCRIPTION;
+      return connected;
+    },
+    auth: (authData) => connected && !!bearer && authData?.OPENAI_API_KEY === bearer,
+  };
+};
+
+const captureAuth = (authData, isPolyRouterAuth) =>
+  captureValues(authData || {}, AUTH_MANAGED_PATHS, () => isPolyRouterAuth(authData));
+
 // GET - Check codex CLI and read current settings
 export async function GET() {
   try {
@@ -233,6 +272,7 @@ export async function GET() {
     const config = await readConfig();
     const availableModelIds = await getManagedModelIds();
     const modelSlots = await readCodexModelSlots();
+    const snapshot = await readCliSnapshot(TOOL_ID);
     let modelCatalogRegistered = false;
     try {
       const parsed = config ? parseTOML(config) : null;
@@ -243,6 +283,8 @@ export async function GET() {
       installed: true,
       config,
       hasPolyRouter: hasPolyRouterConfig(config),
+      hasBackup: !!snapshot?.original,
+      canReconnect: !!snapshot?.lastApplied,
       configPath: getCodexConfigPath(),
       modelCatalogRegistered,
       availableModelIds,
@@ -254,11 +296,10 @@ export async function GET() {
   }
 }
 
-// POST - Update PolyRouter settings (merge with existing config)
-export async function POST(request) {
+// Write PolyRouter settings into config.toml + auth.json, backing up the user's originals first.
+const applyCodexSettings = async ({ baseUrl, apiKey, model, subagentModel, catalogModels, modelSlots }) => {
   try {
-    const { baseUrl, apiKey, model, subagentModel, catalogModels, modelSlots } = await request.json();
-    
+
     if (!baseUrl || !apiKey || !model) {
       return NextResponse.json({ error: "baseUrl, apiKey and model are required" }, { status: 400 });
     }
@@ -328,6 +369,22 @@ export async function POST(request) {
       };
     }
 
+    const authPath = getCodexAuthPath();
+    let authData = {};
+    try {
+      authData = (await readJsonFile(authPath)) || {};
+    } catch { /* Unreadable auth — rewritten below as before */ }
+
+    // Back up whatever the user had before PolyRouter touched these keys.
+    const snapshot = (await readCliSnapshot(TOOL_ID)) || {};
+    const isPolyRouterValue = makePolyRouterValueCheck(parsed);
+    const original = snapshot.original || { capturedAt: new Date().toISOString(), files: {} };
+    original.files.config = mergeCaptured(
+      original.files.config,
+      captureValues(parsed, CONFIG_MANAGED_PATHS, isPolyRouterValue.config)
+    );
+    original.files.auth = mergeCaptured(original.files.auth, captureAuth(authData, isPolyRouterValue.auth));
+
     // Update only PolyRouter related fields (api_key goes to auth.json, not config.toml)
     parsed.model = model;
     parsed.model_provider = "polyrouter";
@@ -362,18 +419,26 @@ export async function POST(request) {
     const configContent = stringifyTOML(parsed);
     await fs.writeFile(configPath, configContent);
 
-    // Update auth.json with OPENAI_API_KEY (Codex reads this first)
-    const authPath = getCodexAuthPath();
-    let authData = {};
-    try {
-      const existingAuth = await fs.readFile(authPath, "utf-8");
-      authData = JSON.parse(existingAuth);
-    } catch { /* No existing auth */ }
-    
+    // Update auth.json with OPENAI_API_KEY (Codex reads this first).
     // Force apikey mode (keep existing tokens untouched for ChatGPT login reuse)
     authData.OPENAI_API_KEY = apiKey;
     authData.auth_mode = "apikey";
     await fs.writeFile(authPath, JSON.stringify(authData, null, 2));
+
+    await writeCliSnapshot(TOOL_ID, {
+      original,
+      lastApplied: {
+        appliedAt: new Date().toISOString(),
+        payload: {
+          baseUrl,
+          apiKey,
+          model,
+          subagentModel: effectiveSubagentModel,
+          catalogModels: requestedCatalogModels,
+          modelSlots: normalizedModelSlots,
+        },
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -386,81 +451,119 @@ export async function POST(request) {
     console.log("Error updating codex settings:", error);
     return NextResponse.json({ error: "Failed to update codex settings" }, { status: 500 });
   }
+};
+
+// POST - Update PolyRouter settings (merge with existing config)
+export async function POST(request) {
+  try {
+    return await applyCodexSettings(await request.json());
+  } catch (error) {
+    console.log("Error updating codex settings:", error);
+    return NextResponse.json({ error: "Failed to update codex settings" }, { status: 500 });
+  }
 }
 
-// DELETE - Remove PolyRouter settings only (keep other settings)
-export async function DELETE() {
-  try {
-    const configPath = getCodexConfigPath();
+// Put the user's original Codex values back. `forget` also drops the saved
+// PolyRouter settings and model slots (Reset); otherwise they are kept so the
+// tool can be reconnected.
+const disconnectCodex = async ({ forget }) => {
+  const configPath = getCodexConfigPath();
+  const authPath = getCodexAuthPath();
+  const snapshot = (await readCliSnapshot(TOOL_ID)) || {};
 
+  let parsed = null;
+  try {
+    const existingConfig = await readConfig();
+    if (existingConfig !== null) parsed = parsedToWritable(parseTOML(existingConfig));
+  } catch (error) {
+    if (error.code) throw error;
+    throw new Error("~/.codex/config.toml could not be parsed — fix it manually before disconnecting");
+  }
+  const authData = await readJsonFile(authPath).catch(() => undefined);
+  const isPolyRouterValue = makePolyRouterValueCheck(parsed);
+
+  // Remember a legacy connection (applied before backups existed) so it can be switched back on.
+  let lastApplied = snapshot.lastApplied;
+  const provider = parsed?.model_providers?.polyrouter;
+  if (!lastApplied && provider?.base_url && provider?.experimental_bearer_token && parsed?.model) {
+    lastApplied = {
+      appliedAt: new Date().toISOString(),
+      payload: {
+        baseUrl: provider.base_url,
+        apiKey: provider.experimental_bearer_token,
+        model: parsed.model,
+        subagentModel: parsed.agents?.subagent?.model || parsed.model,
+        catalogModels: await getManagedModelIds(),
+        modelSlots: await readCodexModelSlots(),
+      },
+    };
+  }
+
+  let removedModelCatalog = false;
+  if (parsed) {
+    // No backup: keep any value that isn't PolyRouter's.
+    const configOriginal = snapshot.original?.files?.config
+      ?? captureValues(parsed, CONFIG_MANAGED_PATHS, isPolyRouterValue.config);
+    removedModelCatalog = isManagedModelCatalogPath(parsed.model_catalog_json);
+    restoreValues(parsed, configOriginal, CONFIG_MANAGED_PATHS);
+    removedModelCatalog = removedModelCatalog && !isManagedModelCatalogPath(parsed.model_catalog_json);
+    await fs.writeFile(configPath, stringifyTOML(parsed));
+  }
+
+  // auth.json: put back the original OPENAI_API_KEY / auth_mode (e.g. "chatgpt").
+  if (authData) {
+    const authOriginal = snapshot.original?.files?.auth ?? captureAuth(authData, isPolyRouterValue.auth);
+    restoreValues(authData, authOriginal, AUTH_MANAGED_PATHS);
+    if (Object.keys(authData).length === 0) await fs.unlink(authPath);
+    else await fs.writeFile(authPath, JSON.stringify(authData, null, 2));
+  }
+
+  if (forget) {
     for (const slot of CODEX_MODEL_SLOTS) {
       await deleteModelAlias(slot.id);
     }
+    if (removedModelCatalog || !parsed) await removeManagedModelCatalogFile();
+    await clearCliSnapshot(TOOL_ID);
+  } else {
+    await writeCliSnapshot(TOOL_ID, { lastApplied });
+  }
 
-    // Read and parse existing config
-    let parsed = {};
-    try {
-      const existingConfig = await fs.readFile(configPath, "utf-8");
-      parsed = parsedToWritable(parseTOML(existingConfig));
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        await removeManagedModelCatalogFile();
-        return NextResponse.json({
-          success: true,
-          message: "No config file to reset",
-        });
+  return { configFound: !!parsed, removedModelCatalog };
+};
+
+// PATCH - { enabled: false } restores the user's original Codex config (e.g. back to
+// the ChatGPT subscription) but keeps PolyRouter settings; { enabled: true } re-applies them.
+export async function PATCH(request) {
+  try {
+    const { enabled } = await request.json();
+
+    if (enabled) {
+      const snapshot = await readCliSnapshot(TOOL_ID);
+      if (!snapshot?.lastApplied?.payload) {
+        return NextResponse.json(
+          { error: "No saved PolyRouter settings — configure and click Apply first" },
+          { status: 409 }
+        );
       }
-      throw error;
+      return await applyCodexSettings(snapshot.lastApplied.payload);
     }
 
-    // Remove PolyRouter related root fields only if they point to polyrouter
-    if (parsed.model_provider === "polyrouter") {
-      delete parsed.model;
-      delete parsed.model_provider;
-    }
+    await disconnectCodex({ forget: false });
+    return NextResponse.json({ success: true, message: "Original Codex settings restored" });
+  } catch (error) {
+    console.log("Error toggling codex settings:", error);
+    return NextResponse.json({ error: error.message || "Failed to toggle codex settings" }, { status: 500 });
+  }
+}
 
-    // Remove polyrouter provider section
-    deleteNestedSection(parsed, "model_providers.polyrouter");
-
-    // Remove the PolyRouter subagent model without deleting other agent settings
-    const subagentSettings = parsed.agents?.subagent;
-    if (subagentSettings && typeof subagentSettings === "object") {
-      delete subagentSettings.model;
-      if (subagentSettings.description === CODEX_SUBAGENT_DESCRIPTION) {
-        delete subagentSettings.description;
-      }
-      if (Object.keys(subagentSettings).length === 0) delete parsed.agents.subagent;
-      if (parsed.agents && Object.keys(parsed.agents).length === 0) delete parsed.agents;
-    }
-
-    const removedModelCatalog = isManagedModelCatalogPath(parsed.model_catalog_json);
-    if (removedModelCatalog) delete parsed.model_catalog_json;
-
-    // Write updated config
-    const configContent = stringifyTOML(parsed);
-    await fs.writeFile(configPath, configContent);
-
-    if (removedModelCatalog) await removeManagedModelCatalogFile();
-
-    // Remove OPENAI_API_KEY from auth.json
-    const authPath = getCodexAuthPath();
-    try {
-      const existingAuth = await fs.readFile(authPath, "utf-8");
-      const authData = JSON.parse(existingAuth);
-      delete authData.OPENAI_API_KEY;
-      delete authData.auth_mode;
-
-      // Write back or delete if empty
-      if (Object.keys(authData).length === 0) {
-        await fs.unlink(authPath);
-      } else {
-        await fs.writeFile(authPath, JSON.stringify(authData, null, 2));
-      }
-    } catch { /* No auth file */ }
+// DELETE - Reset: restore the original settings and forget PolyRouter's
+export async function DELETE() {
+  try {
+    const { configFound, removedModelCatalog } = await disconnectCodex({ forget: true });
 
     return NextResponse.json({
       success: true,
-      message: "PolyRouter settings removed successfully",
+      message: configFound ? "PolyRouter settings removed successfully" : "No config file to reset",
       modelCatalogRemoved: removedModelCatalog,
     });
   } catch (error) {

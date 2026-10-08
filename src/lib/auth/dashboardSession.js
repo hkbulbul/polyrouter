@@ -18,7 +18,15 @@ function loadJwtSecret() {
   return generated;
 }
 
-const SECRET = new TextEncoder().encode(loadJwtSecret());
+const RAW_SECRET = loadJwtSecret();
+const SECRET = new TextEncoder().encode(RAW_SECRET);
+
+// Signing key for a separate token family (e.g. office-mode employee sessions).
+// Derived from the dashboard secret but never equal to it, so a token from one
+// family can never verify as the other.
+export function getScopedSigningKey(scope) {
+  return new Uint8Array(crypto.createHash("sha256").update(`${RAW_SECRET}:${scope}`).digest());
+}
 
 export function shouldUseSecureCookie(request) {
   const forceSecureCookie = process.env.AUTH_COOKIE_SECURE === "true";
@@ -38,8 +46,9 @@ export async function createDashboardAuthToken(claims = {}) {
 export async function verifyDashboardAuthToken(token) {
   if (!token) return false;
   try {
-    await jwtVerify(token, SECRET);
-    return true;
+    const { payload } = await jwtVerify(token, SECRET);
+    // Scoped tokens (office employee sessions) are never admin sessions.
+    return !payload.scope;
   } catch {
     return false;
   }
@@ -49,7 +58,7 @@ export async function getDashboardAuthSession(token) {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, SECRET);
-    return payload;
+    return payload.scope ? null : payload;
   } catch {
     return null;
   }

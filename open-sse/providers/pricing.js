@@ -50,9 +50,23 @@ export const MODEL_PRICING = {
   "gpt-5.3-codex":                { input: 1.75,  output: 14.00, cached: 0.175, reasoning: 14.00,  cache_creation: 1.75  },
   "gpt-5.3-codex-spark":         { input: 3.00,  output: 12.00, cached: 0.30,  reasoning: 12.00,  cache_creation: 3.00  },
   "gpt-5.6":                      { input: 2.50,  output: 15.00, cached: 0.25,  reasoning: 15.00,  cache_creation: 2.50  },
-  "gpt-5.6-luna":                 { input: 1.00,  output: 6.00,  cached: 0.10,  reasoning: 6.00,   cache_creation: 1.00  },
-  "gpt-5.6-terra":                { input: 2.50,  output: 15.00, cached: 0.25,  reasoning: 15.00,  cache_creation: 2.50  },
-  "gpt-5.6-sol":                  { input: 5.00,  output: 30.00, cached: 0.50,  reasoning: 30.00,  cache_creation: 5.00  },
+  // GPT-5.6 / GPT-6: official standard-tier rates (developers.openai.com/api/docs/pricing,
+  // checked 2026-10-07). Prompts over 272K input tokens bill the whole request at
+  // the `longContext` rates. Reasoning is billed as output.
+  "gpt-5.6-luna":                 { input: 0.20,  output: 1.20,  cached: 0.02,  reasoning: 1.20,   cache_creation: 0.25,
+                                    longContext: { threshold: 272000, input: 0.40, output: 1.80, cached: 0.04, reasoning: 1.80, cache_creation: 0.50 } },
+  "gpt-5.6-terra":                { input: 2.00,  output: 12.00, cached: 0.20,  reasoning: 12.00,  cache_creation: 2.50,
+                                    longContext: { threshold: 272000, input: 4.00, output: 18.00, cached: 0.40, reasoning: 18.00, cache_creation: 5.00 } },
+  "gpt-5.6-sol":                  { input: 4.00,  output: 20.00, cached: 0.40,  reasoning: 20.00,  cache_creation: 5.00,
+                                    longContext: { threshold: 272000, input: 8.00, output: 30.00, cached: 0.80, reasoning: 30.00, cache_creation: 10.00 } },
+  "gpt-6-luna":                   { input: 0.10,  output: 0.50,  cached: 0.01,  reasoning: 0.50,   cache_creation: 0.125,
+                                    longContext: { threshold: 272000, input: 0.20, output: 0.75, cached: 0.02, reasoning: 0.75, cache_creation: 0.25 } },
+  "gpt-6-sol":                    { input: 2.00,  output: 10.00, cached: 0.20,  reasoning: 10.00,  cache_creation: 2.50,
+                                    longContext: { threshold: 272000, input: 4.00, output: 15.00, cached: 0.40, reasoning: 15.00, cache_creation: 5.00 } },
+  "gpt-6.1-sol":                  { input: 2.00,  output: 10.00, cached: 0.10,  reasoning: 10.00,  cache_creation: 2.50,
+                                    longContext: { threshold: 272000, input: 4.00, output: 15.00, cached: 0.20, reasoning: 15.00, cache_creation: 5.00 } },
+  "gpt-6-astra":                  { input: 10.00, output: 50.00, cached: 1.00,  reasoning: 50.00,  cache_creation: 12.50,
+                                    longContext: { threshold: 272000, input: 20.00, output: 75.00, cached: 2.00, reasoning: 75.00, cache_creation: 25.00 } },
   "o1":                           { input: 15.00, output: 60.00, cached: 7.50,  reasoning: 90.00,  cache_creation: 15.00 },
   "o1-mini":                      { input: 3.00,  output: 12.00, cached: 1.50,  reasoning: 18.00,  cache_creation: 3.00  },
 
@@ -63,8 +77,15 @@ export const MODEL_PRICING = {
   "gemini-3.1-pro-high":          { input: 4.00,  output: 18.00, cached: 0.50,  reasoning: 27.00,  cache_creation: 4.00  },
   "gemini-pro-agent":             { input: 4.00,  output: 18.00, cached: 0.50,  reasoning: 27.00,  cache_creation: 4.00  },
   "gemini-3-flash-agent":         { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  },
-  "gemini-3.5-flash-low":         { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  },
-  "gemini-3.5-flash-extra-low":   { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  },
+  // Gemini 3.5–3.8 Flash: official paid-tier rates (ai.google.dev/gemini-api/docs/pricing,
+  // checked 2026-10-07). Output includes thinking. 3.6–3.8 Flash rates double on 2027-01-01.
+  "gemini-3.8-flash":             { input: 0.75,  output: 3.75,  cached: 0.075, reasoning: 3.75,   cache_creation: 0.75  },
+  "gemini-3.7-flash":             { input: 0.75,  output: 3.75,  cached: 0.075, reasoning: 3.75,   cache_creation: 0.75  },
+  "gemini-3.6-flash":             { input: 0.75,  output: 3.75,  cached: 0.075, reasoning: 3.75,   cache_creation: 0.75  },
+  "gemini-3.5-flash":             { input: 1.50,  output: 9.00,  cached: 0.15,  reasoning: 9.00,   cache_creation: 1.50  },
+  "gemini-3.5-flash-lite":        { input: 0.30,  output: 2.50,  cached: 0.03,  reasoning: 2.50,   cache_creation: 0.30  },
+  "gemini-3.5-flash-low":         { input: 1.50,  output: 9.00,  cached: 0.15,  reasoning: 9.00,   cache_creation: 1.50  },
+  "gemini-3.5-flash-extra-low":   { input: 1.50,  output: 9.00,  cached: 0.15,  reasoning: 9.00,   cache_creation: 1.50  },
   "gemini-3-flash":               { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  },
   "gemini-2.5-pro":               { input: 2.00,  output: 12.00, cached: 0.25,  reasoning: 18.00,  cache_creation: 2.00  },
   "gemini-2.5-flash":             { input: 0.30,  output: 2.50,  cached: 0.03,  reasoning: 3.75,   cache_creation: 0.30  },
@@ -103,6 +124,12 @@ export const MODEL_PRICING = {
   "glm-4.6v":                     { input: 0.75,  output: 3.00,  cached: 0.375, reasoning: 4.50,   cache_creation: 0.75  },
   "glm-4.7":                      { input: 0.75,  output: 3.00,  cached: 0.375, reasoning: 4.50,   cache_creation: 0.75  },
   "glm-5":                        { input: 1.00,  output: 4.00,  cached: 0.50,  reasoning: 6.00,   cache_creation: 1.00  },
+  // GLM-5.1–5.3: official Z.ai list rates (docs.z.ai/guides/overview/pricing, checked 2026-10-07).
+  "glm-5.3-flash":                { input: 0.15,  output: 0.50,  cached: 0.03,  reasoning: 0.50,   cache_creation: 0.15  },
+  "glm-5.3-flashx":               { input: 0.37,  output: 1.25,  cached: 0.075, reasoning: 1.25,   cache_creation: 0.37  },
+  "glm-5.3":                      { input: 1.40,  output: 4.40,  cached: 0.26,  reasoning: 4.40,   cache_creation: 1.40  },
+  "glm-5.2":                      { input: 1.40,  output: 4.40,  cached: 0.26,  reasoning: 4.40,   cache_creation: 1.40  },
+  "glm-5.1":                      { input: 1.40,  output: 4.40,  cached: 0.26,  reasoning: 4.40,   cache_creation: 1.40  },
 
   // === MiniMax ===
   "MiniMax-M3":                   { input: 0.30,  output: 1.20,  cached: 0.06,  reasoning: 1.80,   cache_creation: 0.30  },
@@ -162,6 +189,12 @@ export const PATTERN_PRICING = [
   { pattern: "claude-*",        pricing: { input: 3.00,  output: 15.00, cached: 0.30,  reasoning: 15.00,  cache_creation: 3.75  } },
 
   // --- Gemini (specific first, generic last) ---
+  // Provider tier/effort suffixes (e.g. antigravity "gemini-3.8-flash-high") bill as the base model.
+  { pattern: "gemini-3.8-flash*", pricing: MODEL_PRICING["gemini-3.8-flash"] },
+  { pattern: "gemini-3.7-flash*", pricing: MODEL_PRICING["gemini-3.7-flash"] },
+  { pattern: "gemini-3.6-flash*", pricing: MODEL_PRICING["gemini-3.6-flash"] },
+  { pattern: "gemini-3.5-flash-lite*", pricing: MODEL_PRICING["gemini-3.5-flash-lite"] },
+  { pattern: "gemini-3.5-flash*", pricing: MODEL_PRICING["gemini-3.5-flash"] },
   { pattern: "gemini-*-flash-lite", pricing: { input: 0.15, output: 1.25, cached: 0.015, reasoning: 1.875, cache_creation: 0.15 } },
   { pattern: "gemini-*-flash",  pricing: { input: 0.30,  output: 2.50,  cached: 0.03,  reasoning: 3.75,   cache_creation: 0.30  } },
   { pattern: "gemini-*-pro",    pricing: { input: 2.00,  output: 12.00, cached: 0.25,  reasoning: 18.00,  cache_creation: 2.00  } },
@@ -170,6 +203,14 @@ export const PATTERN_PRICING = [
   { pattern: "gemini-*",        pricing: { input: 0.50,  output: 3.00,  cached: 0.03,  reasoning: 4.50,   cache_creation: 0.50  } },
 
   // --- GPT (specific first, generic last) ---
+  // Variant suffixes (kiro "-thinking", "-agentic", …) bill as the base model.
+  { pattern: "gpt-6.1-sol*",     pricing: MODEL_PRICING["gpt-6.1-sol"] },
+  { pattern: "gpt-6-astra*",     pricing: MODEL_PRICING["gpt-6-astra"] },
+  { pattern: "gpt-6-sol*",       pricing: MODEL_PRICING["gpt-6-sol"] },
+  { pattern: "gpt-6-luna*",      pricing: MODEL_PRICING["gpt-6-luna"] },
+  { pattern: "gpt-5.6-sol*",     pricing: MODEL_PRICING["gpt-5.6-sol"] },
+  { pattern: "gpt-5.6-terra*",   pricing: MODEL_PRICING["gpt-5.6-terra"] },
+  { pattern: "gpt-5.6-luna*",    pricing: MODEL_PRICING["gpt-5.6-luna"] },
   { pattern: "gpt-5.6-*",       pricing: { input: 2.50,  output: 15.00, cached: 0.25,  reasoning: 15.00,  cache_creation: 2.50  } },
   { pattern: "gpt-5.3-*",       pricing: { input: 1.75,  output: 14.00, cached: 0.175, reasoning: 14.00,  cache_creation: 1.75  } },
   { pattern: "gpt-5.2-*",       pricing: { input: 1.75,  output: 14.00, cached: 0.175, reasoning: 14.00,  cache_creation: 1.75  } },
@@ -204,6 +245,11 @@ export const PATTERN_PRICING = [
   { pattern: "deepseek-*",      pricing: { input: 0.14,  output: 0.28,  cached: 0.0028, reasoning: 0.28,   cache_creation: 0.14  } },
 
   // --- GLM ---
+  { pattern: "glm-5.3-flashx*", pricing: MODEL_PRICING["glm-5.3-flashx"] },
+  { pattern: "glm-5.3-flash*",  pricing: MODEL_PRICING["glm-5.3-flash"] },
+  { pattern: "glm-5.3*",        pricing: MODEL_PRICING["glm-5.3"] },
+  { pattern: "glm-5.2*",        pricing: MODEL_PRICING["glm-5.2"] },
+  { pattern: "glm-5.1*",        pricing: MODEL_PRICING["glm-5.1"] },
   { pattern: "glm-5*",          pricing: { input: 1.00,  output: 4.00,  cached: 0.50,  reasoning: 6.00,   cache_creation: 1.00  } },
   { pattern: "glm-4*",          pricing: { input: 0.75,  output: 3.00,  cached: 0.375, reasoning: 4.50,   cache_creation: 0.75  } },
   { pattern: "glm-*",           pricing: { input: 0.50,  output: 2.00,  cached: 0.25,  reasoning: 3.00,   cache_creation: 0.50  } },
@@ -292,16 +338,21 @@ export function calculateCostFromTokens(tokens, pricing) {
 export function calculateCostBreakdownFromTokens(tokens, pricing) {
   if (!tokens || !pricing) return null;
   const validRate = (rate) => typeof rate === "number" && Number.isFinite(rate) && rate >= 0;
-  const rates = {
-    input: pricing.input,
-    output: pricing.output,
-    cached: pricing.cached ?? pricing.input,
-    cache_creation: pricing.cache_creation ?? pricing.input,
-    reasoning: pricing.reasoning ?? pricing.output,
-  };
-  if (!Object.values(rates).every(validRate)) return null;
   const count = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   const input = count(tokens.prompt_tokens ?? tokens.input_tokens);
+  // Long-context tier: when the prompt (cache-inclusive) exceeds the threshold,
+  // the whole request is billed at the long-context rates.
+  const lc = pricing.longContext;
+  const longContext = Boolean(lc && input > (lc.threshold ?? Infinity));
+  const tier = longContext ? { ...pricing, ...lc } : pricing;
+  const rates = {
+    input: tier.input,
+    output: tier.output,
+    cached: tier.cached ?? tier.input,
+    cache_creation: tier.cache_creation ?? tier.input,
+    reasoning: tier.reasoning ?? tier.output,
+  };
+  if (!Object.values(rates).every(validRate)) return null;
   const cached = count(tokens.cached_tokens ?? tokens.cache_read_input_tokens);
   const creation = count(tokens.cache_creation_input_tokens);
   const output = count(tokens.completion_tokens ?? tokens.output_tokens);
@@ -319,5 +370,5 @@ export function calculateCostBreakdownFromTokens(tokens, pricing) {
   const outputCost = components.output + components.reasoning;
   const totalCost = inputCost + outputCost;
   if (!Number.isFinite(totalCost)) return null;
-  return { inputCost, outputCost, totalCost, components, rates };
+  return { inputCost, outputCost, totalCost, components, rates, longContext };
 }

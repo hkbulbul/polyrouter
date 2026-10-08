@@ -10,6 +10,7 @@ import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Button from "./Button";
 import Modal from "./Modal";
+import { NavGroup, NavItem, navItemClass, navItemActiveClass, navItemIdleClass, navItemCollapsedClass } from "./SidebarNav";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "speechToSpeech"];
@@ -28,6 +29,11 @@ const navItems = [
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
+// Shown only while Office mode is on (Settings → Office mode).
+const OFFICE_NAV_ITEM = { href: "/dashboard/office", label: "Office", icon: "corporate_fare" };
+// Must match OFFICE_MODE_EVENT in dashboard/profile/OfficeModeCard.js.
+const OFFICE_MODE_EVENT = "polyrouter:office-mode-changed";
+
 const debugItems = [
   { href: "/dashboard/console-log", label: "Console Log", icon: "terminal" },
   { href: "/dashboard/translator", label: "Translator", icon: "translate" },
@@ -43,44 +49,8 @@ const mediaItems = [
   { href: COMBINED_WEB_ITEM.href, label: COMBINED_WEB_ITEM.label, icon: COMBINED_WEB_ITEM.icon },
 ];
 
-const navItemClass = "relative flex h-9 items-center gap-2.5 px-3 text-[13px] leading-none transition-colors";
-const navItemActiveClass = "bg-surface-2 font-medium text-text-main before:absolute before:inset-y-1.5 before:left-0 before:w-[2px] before:bg-accent-fill";
-const navItemIdleClass = "text-text-muted hover:bg-surface-2 hover:text-text-main";
-// Icon-only rail: center the icon and drop horizontal padding/gap
-const navItemCollapsedClass = "justify-center gap-0 px-0";
-
-function NavGroup({ label, collapsed = false, children }) {
-  return (
-    <div className="flex flex-col gap-px">
-      <p className={cn("eyebrow mb-2 px-3 text-[10.5px]", collapsed && "sr-only")}>{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function NavItem({ href, label, icon, active, compact = false, collapsed = false, onNavigate }) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
-      title={collapsed ? label : undefined}
-      className={cn(
-        navItemClass,
-        compact && "h-8 text-[12.5px]",
-        collapsed && navItemCollapsedClass,
-        active ? navItemActiveClass : navItemIdleClass
-      )}
-    >
-      <span className={cn("material-symbols-outlined", compact ? "text-[16px]" : "text-[18px]", active && "fill-1 text-primary")}>
-        {icon}
-      </span>
-      <span className={cn("truncate", collapsed && "sr-only")}>{label}</span>
-    </Link>
-  );
-}
-
 const systemItems = [
+  { href: "/dashboard/pricing", label: "Pricing", icon: "sell" },
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
 ];
@@ -94,6 +64,7 @@ export default function Sidebar({ onClose, collapsed = false, onToggleCollapse }
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateState, setUpdateState] = useState(null);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [officeEnabled, setOfficeEnabled] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
@@ -101,9 +72,20 @@ export default function Sidebar({ onClose, collapsed = false, onToggleCollapse }
   useEffect(() => {
     fetch("/api/settings")
       .then(res => res.json())
-      .then(data => { if (data.enableTranslator) setEnableTranslator(true); })
+      .then(data => {
+        if (data.enableTranslator) setEnableTranslator(true);
+        setOfficeEnabled(data.office?.enabled === true);
+      })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const onOfficeChange = (event) => setOfficeEnabled(event.detail?.enabled === true);
+    window.addEventListener(OFFICE_MODE_EVENT, onOfficeChange);
+    return () => window.removeEventListener(OFFICE_MODE_EVENT, onOfficeChange);
+  }, []);
+
+  const visibleNavItems = officeEnabled ? [...navItems, OFFICE_NAV_ITEM] : navItems;
 
   // Lazy check for new npm version on mount
   useEffect(() => {
@@ -191,7 +173,7 @@ export default function Sidebar({ onClose, collapsed = false, onToggleCollapse }
         {/* Navigation */}
         <nav aria-label="Dashboard" className={cn("flex flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden custom-scrollbar py-5", collapsed ? "px-2" : "px-3")}>
           <NavGroup label="Workspace" collapsed={collapsed}>
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <NavItem key={item.href} {...item} collapsed={collapsed} active={isActive(item.href)} onNavigate={onClose} />
             ))}
           </NavGroup>

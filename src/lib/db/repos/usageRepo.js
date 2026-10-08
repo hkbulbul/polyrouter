@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { getMeta, setMeta } from "../helpers/metaStore.js";
+import { invalidateOfficeUsage } from "../../office/usageCache.js";
 
 function maskApiKey(key) {
   if (!key || typeof key !== "string") return null;
@@ -45,9 +46,16 @@ function scheduleStatsEvent(event, delayMs = 150) {
   statsEmitTimers[key]?.unref?.();
 }
 
-function getLocalDateKey(timestamp) {
+export function getLocalDateKey(timestamp) {
   const d = timestamp ? new Date(timestamp) : new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Cost split + unpriced counters carried alongside `cost` in every aggregate.
+export const COST_FIELDS = ["inputCost", "cachedCost", "outputCost", "unpricedRequests", "unpricedTokens"];
+
+function addCostFields(target, values) {
+  for (const f of COST_FIELDS) target[f] = (target[f] || 0) + (values[f] || 0);
 }
 
 function addToCounter(target, key, values) {
@@ -57,21 +65,47 @@ function addToCounter(target, key, values) {
   target[key].completionTokens += values.completionTokens || 0;
   target[key].cachedTokens += values.cachedTokens || 0;
   target[key].cost += values.cost || 0;
+  addCostFields(target[key], values);
   if (values.meta) Object.assign(target[key], values.meta);
+}
+
+// Per-row cost values in the shape addToCounter/addCostFields expect.
+export function rowCostValues(parts, promptTokens, completionTokens) {
+  return {
+    cost: parts.cost || 0,
+    inputCost: parts.inputCost || 0,
+    cachedCost: parts.cachedCost || 0,
+    outputCost: parts.outputCost || 0,
+    unpricedRequests: parts.unpriced ? 1 : 0,
+    unpricedTokens: parts.unpriced ? (promptTokens || 0) + (completionTokens || 0) : 0,
+  };
+}
+
+// The usageDaily sub-map keys a usage row contributes to (mirrors aggregateEntryToDay).
+export function dayKeysForRow(row) {
+  const apiKeyVal = row.apiKey && typeof row.apiKey === "string" ? row.apiKey : "local-no-key";
+  return {
+    byProvider: row.provider || null,
+    byModel: row.provider ? `${row.model}|${row.provider}` : row.model,
+    byAccount: row.connectionId || null,
+    byApiKey: `${apiKeyVal}|${row.model}|${row.provider || "unknown"}`,
+    byEndpoint: `${row.endpoint || "Unknown"}|${row.model}|${row.provider || "unknown"}`,
+  };
 }
 
 function aggregateEntryToDay(day, entry) {
   const promptTokens = entry.tokens?.prompt_tokens || entry.tokens?.input_tokens || 0;
   const completionTokens = entry.tokens?.completion_tokens || entry.tokens?.output_tokens || 0;
   const cachedTokens = entry.tokens?.cached_tokens || entry.tokens?.cache_read_input_tokens || 0;
-  const cost = entry.cost || 0;
-  const vals = { promptTokens, completionTokens, cachedTokens, cost };
+  const costValues = rowCostValues(entry.costParts || { cost: entry.cost || 0 }, promptTokens, completionTokens);
+  const vals = { promptTokens, completionTokens, cachedTokens, ...costValues };
 
   day.requests = (day.requests || 0) + 1;
   day.promptTokens = (day.promptTokens || 0) + promptTokens;
   day.completionTokens = (day.completionTokens || 0) + completionTokens;
   day.cachedTokens = (day.cachedTokens || 0) + cachedTokens;
-  day.cost = (day.cost || 0) + cost;
+  day.cost = (day.cost || 0) + costValues.cost;
+  addCostFields(day, costValues);
 
   day.byProvider ||= {};
   day.byModel ||= {};
@@ -131,10 +165,9 @@ async function ensureRingInitialized() {
   } catch {}
 }
 
-async function calculateCost(provider, model, tokens) {
-  const { calculateRequestCost } = await import("../helpers/requestCost.js");
-  const breakdown = await calculateRequestCost(provider, model, tokens);
-  return breakdown.totalCost ?? 0;
+async function calculateCostParts(provider, model, tokens) {
+  const { calculateRequestCost, toCostParts } = await import("../helpers/requestCost.js");
+  return toCostParts(await calculateRequestCost(provider, model, tokens));
 }
 
 export function trackPendingRequest(model, provider, connectionId, started, error = false) {
@@ -231,13 +264,15 @@ export async function saveRequestUsage(entry) {
     const db = await getAdapter();
 
     if (!entry.timestamp) entry.timestamp = new Date().toISOString();
-    entry.cost = await calculateCost(entry.provider, entry.model, entry.tokens);
+    entry.costParts = await calculateCostParts(entry.provider, entry.model, entry.tokens);
+    entry.cost = entry.costParts.cost;
 
     const tokens = entry.tokens || {};
     const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
     const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
 
     let inserted = false;
+    let attributedUserId = null;
 
     // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
     // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
@@ -266,13 +301,20 @@ export async function saveRequestUsage(entry) {
         return;
       }
 
+      // Office mode: attribute the row to the employee who owns the API key.
+      const userId = entry.apiKey
+        ? db.get(`SELECT userId FROM apiKeys WHERE key = ?`, [entry.apiKey])?.userId || null
+        : null;
+      attributedUserId = userId;
+
       db.run(
-        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta, userId, inputCost, cachedCost, outputCost, unpriced) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entry.timestamp, entry.provider || null, entry.model || null,
           entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-          stringifyJson(tokens), stringifyJson({}),
+          stringifyJson(tokens), stringifyJson({}), userId,
+          entry.costParts.inputCost, entry.costParts.cachedCost, entry.costParts.outputCost, entry.costParts.unpriced,
         ]
       );
 
@@ -295,6 +337,7 @@ export async function saveRequestUsage(entry) {
     if (inserted) {
       pushToRing(entry);
       scheduleStatsEvent("update", 250);
+      if (attributedUserId) invalidateOfficeUsage(attributedUserId);
     }
   } catch (e) {
     console.error("Failed to save usage stats:", e);
@@ -333,6 +376,8 @@ function loadDaysInRange(adapter, maxDays) {
 
 export async function getUsageStats(period = "all") {
   const db = await getAdapter();
+  // Rows recorded before the per-rate cost split existed get it filled in once.
+  await (await import("./usageCostRepo.js")).ensureUsageCostBackfill();
 
   const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }] = await Promise.all([
     import("./connectionsRepo.js"),
@@ -383,6 +428,8 @@ export async function getUsageStats(period = "all") {
   const stats = {
     totalRequests: 0,
     totalPromptTokens: 0, totalCompletionTokens: 0, totalCachedTokens: 0, totalCost: 0,
+    // Cost split by rate + requests/tokens that had no price (counted as $0).
+    costBreakdown: { inputCost: 0, cachedCost: 0, outputCost: 0, unpricedRequests: 0, unpricedTokens: 0 },
     byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
     last10Minutes: [],
     pending: pendingRequests,
@@ -445,6 +492,7 @@ export async function getUsageStats(period = "all") {
       stats.totalCompletionTokens += day.completionTokens || 0;
       stats.totalCachedTokens += day.cachedTokens || 0;
       stats.totalCost += day.cost || 0;
+      addCostFields(stats.costBreakdown, day);
 
       for (const [prov, p] of Object.entries(day.byProvider || {})) {
         if (!stats.byProvider[prov]) stats.byProvider[prov] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
@@ -453,6 +501,7 @@ export async function getUsageStats(period = "all") {
         stats.byProvider[prov].completionTokens += p.completionTokens || 0;
         stats.byProvider[prov].cachedTokens += p.cachedTokens || 0;
         stats.byProvider[prov].cost += p.cost || 0;
+        addCostFields(stats.byProvider[prov], p);
       }
 
       for (const [mk, m] of Object.entries(day.byModel || {})) {
@@ -461,13 +510,14 @@ export async function getUsageStats(period = "all") {
         const statsKey = provider ? `${rawModel} (${provider})` : rawModel;
         const providerDisplayName = providerNodeNameMap[provider] || provider;
         if (!stats.byModel[statsKey]) {
-          stats.byModel[statsKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel, provider: providerDisplayName, lastUsed: dateKey };
+          stats.byModel[statsKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel, provider: providerDisplayName, providerId: provider, lastUsed: dateKey };
         }
         stats.byModel[statsKey].requests += m.requests || 0;
         stats.byModel[statsKey].promptTokens += m.promptTokens || 0;
         stats.byModel[statsKey].completionTokens += m.completionTokens || 0;
         stats.byModel[statsKey].cachedTokens += m.cachedTokens || 0;
         stats.byModel[statsKey].cost += m.cost || 0;
+        addCostFields(stats.byModel[statsKey], m);
         if (dateKey > (stats.byModel[statsKey].lastUsed || "")) stats.byModel[statsKey].lastUsed = dateKey;
       }
 
@@ -485,6 +535,7 @@ export async function getUsageStats(period = "all") {
         stats.byAccount[accountKey].completionTokens += a.completionTokens || 0;
         stats.byAccount[accountKey].cachedTokens += a.cachedTokens || 0;
         stats.byAccount[accountKey].cost += a.cost || 0;
+        addCostFields(stats.byAccount[accountKey], a);
         if (dateKey > (stats.byAccount[accountKey].lastUsed || "")) stats.byAccount[accountKey].lastUsed = dateKey;
       }
 
@@ -505,6 +556,7 @@ export async function getUsageStats(period = "all") {
         stats.byApiKey[akKey].completionTokens += ak.completionTokens || 0;
         stats.byApiKey[akKey].cachedTokens += ak.cachedTokens || 0;
         stats.byApiKey[akKey].cost += ak.cost || 0;
+        addCostFields(stats.byApiKey[akKey], ak);
         if (dateKey > (stats.byApiKey[akKey].lastUsed || "")) stats.byApiKey[akKey].lastUsed = dateKey;
       }
 
@@ -521,6 +573,7 @@ export async function getUsageStats(period = "all") {
         stats.byEndpoint[epKey].completionTokens += ep.completionTokens || 0;
         stats.byEndpoint[epKey].cachedTokens += ep.cachedTokens || 0;
         stats.byEndpoint[epKey].cost += ep.cost || 0;
+        addCostFields(stats.byEndpoint[epKey], ep);
         if (dateKey > (stats.byEndpoint[epKey].lastUsed || "")) stats.byEndpoint[epKey].lastUsed = dateKey;
       }
     }
@@ -562,7 +615,7 @@ export async function getUsageStats(period = "all") {
       cutoff = new Date(Date.now() - PERIOD_MS["24h"]).toISOString();
     }
     const filtered = db.all(
-      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens FROM usageHistory WHERE timestamp >= ?`,
+      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens, inputCost, cachedCost, outputCost, unpriced FROM usageHistory WHERE timestamp >= ?`,
       [cutoff]
     );
 
@@ -572,12 +625,14 @@ export async function getUsageStats(period = "all") {
       const completionTokens = tokens.completion_tokens || 0;
       const cachedTokens = tokens.cached_tokens || tokens.cache_read_input_tokens || 0;
       const entryCost = r.cost || 0;
+      const costValues = rowCostValues(r, promptTokens, completionTokens);
       const providerDisplayName = providerNodeNameMap[r.provider] || r.provider;
 
       stats.totalPromptTokens += promptTokens;
       stats.totalCompletionTokens += completionTokens;
       stats.totalCachedTokens += cachedTokens;
       stats.totalCost += entryCost;
+      addCostFields(stats.costBreakdown, costValues);
 
       if (!stats.byProvider[r.provider]) stats.byProvider[r.provider] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
       stats.byProvider[r.provider].requests++;
@@ -585,16 +640,18 @@ export async function getUsageStats(period = "all") {
       stats.byProvider[r.provider].completionTokens += completionTokens;
       stats.byProvider[r.provider].cachedTokens += cachedTokens;
       stats.byProvider[r.provider].cost += entryCost;
+      addCostFields(stats.byProvider[r.provider], costValues);
 
       const modelKey = r.provider ? `${r.model} (${r.provider})` : r.model;
       if (!stats.byModel[modelKey]) {
-        stats.byModel[modelKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, lastUsed: r.timestamp };
+        stats.byModel[modelKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, providerId: r.provider, lastUsed: r.timestamp };
       }
       stats.byModel[modelKey].requests++;
       stats.byModel[modelKey].promptTokens += promptTokens;
       stats.byModel[modelKey].completionTokens += completionTokens;
       stats.byModel[modelKey].cachedTokens += cachedTokens;
       stats.byModel[modelKey].cost += entryCost;
+      addCostFields(stats.byModel[modelKey], costValues);
       if (new Date(r.timestamp) > new Date(stats.byModel[modelKey].lastUsed)) stats.byModel[modelKey].lastUsed = r.timestamp;
 
       if (r.connectionId) {
@@ -608,6 +665,7 @@ export async function getUsageStats(period = "all") {
         stats.byAccount[accountKey].completionTokens += completionTokens;
         stats.byAccount[accountKey].cachedTokens += cachedTokens;
         stats.byAccount[accountKey].cost += entryCost;
+        addCostFields(stats.byAccount[accountKey], costValues);
         if (new Date(r.timestamp) > new Date(stats.byAccount[accountKey].lastUsed)) stats.byAccount[accountKey].lastUsed = r.timestamp;
       }
 
@@ -620,14 +678,14 @@ export async function getUsageStats(period = "all") {
           stats.byApiKey[akKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKeyMasked, keyName, apiKeyKey: apiKeyMasked, lastUsed: r.timestamp };
         }
         const ake = stats.byApiKey[akKey];
-        ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost;
+        ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost; addCostFields(ake, costValues);
         if (new Date(r.timestamp) > new Date(ake.lastUsed)) ake.lastUsed = r.timestamp;
       } else {
         if (!stats.byApiKey["local-no-key"]) {
           stats.byApiKey["local-no-key"] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, rawModel: r.model, provider: providerDisplayName, apiKeyMasked: null, keyName: "Local (No API Key)", apiKeyKey: "local-no-key", lastUsed: r.timestamp };
         }
         const ake = stats.byApiKey["local-no-key"];
-        ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost;
+        ake.requests++; ake.promptTokens += promptTokens; ake.completionTokens += completionTokens; ake.cachedTokens += cachedTokens; ake.cost += entryCost; addCostFields(ake, costValues);
         if (new Date(r.timestamp) > new Date(ake.lastUsed)) ake.lastUsed = r.timestamp;
       }
 
@@ -637,12 +695,16 @@ export async function getUsageStats(period = "all") {
         stats.byEndpoint[epKey] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, endpoint, rawModel: r.model, provider: providerDisplayName, lastUsed: r.timestamp };
       }
       const epe = stats.byEndpoint[epKey];
-      epe.requests++; epe.promptTokens += promptTokens; epe.completionTokens += completionTokens; epe.cachedTokens += cachedTokens; epe.cost += entryCost;
+      epe.requests++; epe.promptTokens += promptTokens; epe.completionTokens += completionTokens; epe.cachedTokens += cachedTokens; epe.cost += entryCost; addCostFields(epe, costValues);
       if (new Date(r.timestamp) > new Date(epe.lastUsed)) epe.lastUsed = r.timestamp;
     }
   }
 
   stats.totalRequests = Object.values(stats.byProvider).reduce((sum, p) => sum + (p.requests || 0), 0);
+  stats.unpricedModels = Object.values(stats.byModel)
+    .filter((m) => (m.unpricedRequests || 0) > 0)
+    .map((m) => ({ model: m.rawModel, provider: m.providerId || m.provider, providerName: m.provider, requests: m.unpricedRequests, tokens: m.unpricedTokens || 0 }))
+    .sort((a, b) => b.tokens - a.tokens);
   return stats;
 }
 

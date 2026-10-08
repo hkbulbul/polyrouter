@@ -1,3 +1,4 @@
+import { filterModelsForRequest } from "@/lib/office/gate.js";
 import { buildModelsList } from "../route.js";
 
 // URL slug → service kind(s). `web` covers both webSearch and webFetch.
@@ -25,7 +26,7 @@ export async function OPTIONS() {
  * GET /v1/models/{kind} - OpenAI-compatible models list filtered by capability.
  * Supported kinds: image, tts, stt, embedding, image-to-text, web.
  */
-export async function GET(_request, { params }) {
+export async function GET(request, { params }) {
   try {
     const { kind } = await params;
     const kindFilter = KIND_SLUG_MAP[kind];
@@ -42,7 +43,7 @@ export async function GET(_request, { params }) {
       );
     }
 
-    const data = await buildModelsList(kindFilter);
+    const data = await filterModelsForRequest(request, await buildModelsList(kindFilter));
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });

@@ -4,10 +4,11 @@ import { getConsistentMachineId } from "@/shared/utils/machineId";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/keys - List API keys
+// GET /api/keys - List owner API keys. Office employee keys are managed under
+// /api/office/admin and are excluded so admin tools never pick one up.
 export async function GET() {
   try {
-    const keys = await getApiKeys();
+    const keys = (await getApiKeys()).filter((k) => !k.userId);
     return NextResponse.json({ keys });
   } catch (error) {
     console.log("Error fetching keys:", error);
