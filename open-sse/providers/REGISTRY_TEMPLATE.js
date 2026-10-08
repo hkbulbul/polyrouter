@@ -20,6 +20,8 @@ export default {
   aliases: ["example-ai"],       // optional extra lookup tokens.
   uiAlias: "ex",                 // optional UI badge token.
   category: "apikey",            // REQUIRED. "apikey" | "oauth" | "freeTier" | ...
+  // availability: "unavailable", // Optional static status for a visible but non-runnable provider.
+  // availabilityReason: "...",   // User-facing explanation for an unavailable provider.
 
   // ── auth hints (only when relevant) ──────────────────────────────────────
   authType: "apikey",            // "apikey" | "oauth".

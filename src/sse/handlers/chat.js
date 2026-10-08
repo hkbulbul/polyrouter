@@ -29,6 +29,7 @@ import {
   isToolSchemaValidationError,
   isAccountValidationRequiredError,
 } from "open-sse/services/accountFallback.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 /**
  * Handle chat completion request
@@ -191,6 +192,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   }
 
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) {
+    log.warn("CHAT", unavailableError);
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
 
   // Routing shown in the unified "▶" line (client model → provider/model)
 

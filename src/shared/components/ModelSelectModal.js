@@ -8,10 +8,11 @@ import CapacityBadges from "./CapacityBadges";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, AI_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, getProviderAlias } from "@/shared/constants/providers";
+import { supportsLiveModelCatalog } from "@/shared/utils/liveModelCatalog";
 
 // Provider order: OAuth first, then Free Tier, then API Key (matches dashboard/providers)
 const PROVIDER_ORDER = [
-  ...Object.keys(OAUTH_PROVIDERS),
+  ...Object.keys(OAUTH_PROVIDERS).filter((id) => OAUTH_PROVIDERS[id].availability !== "unavailable"),
   ...Object.keys(FREE_PROVIDERS),
   ...Object.keys(FREE_TIER_PROVIDERS),
   ...Object.keys(APIKEY_PROVIDERS),
@@ -36,8 +37,9 @@ export default function ModelSelectModal({
 }) {
   // Filter activeProviders by serviceKinds when kindFilter set (e.g. "webSearch", "webFetch")
   const filteredActiveProviders = useMemo(() => {
-    if (!kindFilter) return activeProviders;
-    return activeProviders.filter((p) => {
+    const availableProviders = activeProviders.filter((p) => AI_PROVIDERS[p.provider]?.availability !== "unavailable");
+    if (!kindFilter) return availableProviders;
+    return availableProviders.filter((p) => {
       const info = AI_PROVIDERS[p.provider];
       const kinds = info?.serviceKinds || ["llm"];
       return kinds.includes(kindFilter);
@@ -49,48 +51,51 @@ export default function ModelSelectModal({
   const [providerNodes, setProviderNodes] = useState([]);
   const [customModels, setCustomModels] = useState([]);
   const [disabledModels, setDisabledModels] = useState({});
-  const [cursorModels, setCursorModels] = useState([]);
+  const [liveCatalogModels, setLiveCatalogModels] = useState({});
 
-  // Cursor exposes the usable catalog per account. Keep the static catalog only
-  // as a fallback, since it quickly becomes stale and different accounts can
-  // have different model entitlements.
-  const cursorConnectionIds = useMemo(
-    () => activeProviders
-      .filter((provider) => provider.provider === "cursor" && provider.id)
-      .map((provider) => provider.id),
+  // Keep each account-specific catalog separate by provider.
+  const liveCatalogConnections = useMemo(
+    () => activeProviders.reduce((groups, provider) => {
+      if (!supportsLiveModelCatalog(provider.provider) || !provider.id) return groups;
+      (groups[provider.provider] ||= []).push(provider.id);
+      return groups;
+    }, {}),
     [activeProviders],
   );
 
   useEffect(() => {
-    if (!isOpen || cursorConnectionIds.length === 0) {
-      void Promise.resolve().then(() => setCursorModels([]));
+    if (!isOpen || Object.keys(liveCatalogConnections).length === 0) {
+      void Promise.resolve().then(() => setLiveCatalogModels({}));
       return undefined;
     }
 
     let cancelled = false;
-    Promise.all(cursorConnectionIds.map(async (connectionId) => {
-      const response = await fetch(`/api/providers/${connectionId}/models`, { cache: "no-store" });
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data.models) ? data.models : [];
+    Promise.all(Object.entries(liveCatalogConnections).map(async ([providerId, connectionIds]) => {
+      const modelLists = await Promise.all(connectionIds.map(async (connectionId) => {
+        const response = await fetch(`/api/providers/${connectionId}/models`, { cache: "no-store" });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return Array.isArray(data.models) ? data.models : [];
+      }));
+      const seen = new Set();
+      const models = modelLists.flat().filter((model) => {
+        if (!model?.id || seen.has(model.id)) return false;
+        seen.add(model.id);
+        return true;
+      });
+      return [providerId, models];
     }))
-      .then((modelLists) => {
+      .then((catalogs) => {
         if (cancelled) return;
-        const seen = new Set();
-        setCursorModels(modelLists.flat().filter((model) => {
-          if (!model?.id || seen.has(model.id)) return false;
-          seen.add(model.id);
-          return true;
-        }));
+        setLiveCatalogModels(Object.fromEntries(catalogs));
       })
       .catch((error) => {
-        // Do not hide the static fallback when the account catalog is unavailable.
-        console.warn("Unable to load Cursor models for selector:", error);
-        if (!cancelled) setCursorModels([]);
+        console.warn("Unable to load live provider models for selector:", error);
+        if (!cancelled) setLiveCatalogModels({});
       });
 
     return () => { cancelled = true; };
-  }, [isOpen, cursorConnectionIds]);
+  }, [isOpen, liveCatalogConnections]);
 
   const fetchCombos = async () => {
     try {
@@ -156,7 +161,10 @@ export default function ModelSelectModal({
     if (isOpen) void Promise.resolve().then(fetchDisabledModels);
   }, [isOpen]);
 
-  const allProviders = useMemo(() => ({ ...OAUTH_PROVIDERS, ...FREE_PROVIDERS, ...FREE_TIER_PROVIDERS, ...APIKEY_PROVIDERS }), []);
+  const allProviders = useMemo(() => Object.fromEntries(
+    Object.entries({ ...OAUTH_PROVIDERS, ...FREE_PROVIDERS, ...FREE_TIER_PROVIDERS, ...APIKEY_PROVIDERS })
+      .filter(([, provider]) => provider.availability !== "unavailable")
+  ), []);
 
   // Group models by provider with priority order
   const groupedModels = useMemo(() => {
@@ -323,8 +331,9 @@ export default function ModelSelectModal({
           hasModels: mergedModels.length > 0,
         };
       } else {
-        const hardcodedModels = providerId === "cursor" && cursorModels.length > 0
-          ? cursorModels
+        const providerLiveModels = liveCatalogModels[providerId] || [];
+        const hardcodedModels = supportsLiveModelCatalog(providerId) && providerLiveModels.length > 0
+          ? providerLiveModels
           : getModelsByProviderId(providerId);
         const hardcodedIds = new Set(hardcodedModels.map((m) => m.id));
 
@@ -394,7 +403,7 @@ export default function ModelSelectModal({
     });
 
     return groups;
-  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, cursorModels]);
+  }, [filteredActiveProviders, modelAliases, allProviders, providerNodes, customModels, disabledModels, kindFilter, activeProviders, liveCatalogModels]);
 
   // Filter combos by search query (and hide combos when kindFilter is set — combos are LLM-only by design)
   const filteredCombos = useMemo(() => {
@@ -506,9 +515,9 @@ export default function ModelSelectModal({
                     className={`
                       px-2 py-1  text-xs font-medium transition-all border hover:cursor-pointer flex items-center gap-1
                       ${isSelected
-                        ? "bg-primary text-white border-primary"
+                        ? "bg-primary text-on-primary border-primary"
                         : addedModelValues.includes(combo.name)
-                          ? "bg-primary border-primary text-white hover:bg-primary-hover"
+                          ? "bg-primary border-primary text-on-primary hover:bg-primary-hover"
                           : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
                       }
                     `}
@@ -558,9 +567,9 @@ export default function ModelSelectModal({
                       ${isPlaceholder
                         ? "border-dashed border-border text-text-muted hover:border-primary/50 hover:text-primary bg-surface italic"
                         : isSelected
-                          ? "bg-primary text-white border-primary"
+                          ? "bg-primary text-on-primary border-primary"
                           : addedModelValues.includes(model.value)
-                            ? "bg-primary border-primary text-white hover:bg-primary-hover"
+                            ? "bg-primary border-primary text-on-primary hover:bg-primary-hover"
                             : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
                       }
                     `}

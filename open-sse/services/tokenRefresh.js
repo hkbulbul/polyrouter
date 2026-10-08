@@ -1,4 +1,5 @@
 import { PROVIDERS } from "../config/providers.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 import { OAUTH_ENDPOINTS, REFRESH_LEAD_MS } from "../config/appConstants.js";
 import {
   refreshXaiToken,
@@ -47,7 +48,7 @@ export function isUnrecoverableRefreshError(result) {
 
 export function getRefreshLeadMs(provider) {
   if (REFRESH_LEAD_MS[provider]) return REFRESH_LEAD_MS[provider];
-  // Legacy id after kimi-coding → kimi merge
+  // Legacy ids after provider merges retain the canonical refresh window.
   if (provider === "kimi-coding" && REFRESH_LEAD_MS.kimi) return REFRESH_LEAD_MS.kimi;
   return TOKEN_EXPIRY_BUFFER_MS;
 }
@@ -166,8 +167,10 @@ async function _getAccessTokenInternal(provider, credentials, log) {
 }
 
 export async function refreshTokenByProvider(provider, credentials, log) {
-  if (!credentials.refreshToken) return null;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) throw new Error(unavailableError);
   const handler = REFRESH_HANDLERS[provider];
+  if (!credentials.refreshToken) return null;
   return handler ? handler(credentials, log) : refreshAccessToken(provider, credentials.refreshToken, credentials, log);
 }
 
@@ -228,7 +231,10 @@ export async function getAllAccessTokens(userInfo, log) {
     for (const connection of userInfo.connections) {
       if (connection.isActive && connection.provider) {
         const token = await getAccessToken(connection.provider, {
-          refreshToken: connection.refreshToken
+          accessToken: connection.accessToken,
+          apiKey: connection.apiKey,
+          refreshToken: connection.refreshToken,
+          providerSpecificData: connection.providerSpecificData,
         }, log);
 
         if (token) {

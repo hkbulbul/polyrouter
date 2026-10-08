@@ -3,6 +3,9 @@
 
 const ICON_ALIASES = {
   "alims-intl": "alicode-intl",
+  airforce: "api-airforce",
+  "bazaar-link": "bazaarlink",
+  kilogateway: "kilo-gateway",
   "perplexity-agent": "perplexity",
   "gitlab-duo": "gitlab",
   "vercel-ai-gateway": "vercel",

@@ -8,6 +8,8 @@ import { handleSttCore } from "open-sse/handlers/sttCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
+import { resolveSelfHostedEndpoint } from "open-sse/utils/selfHostedEndpoint.js";
 import * as log from "../utils/logger.js";
 
 // Providers requiring credentials for STT
@@ -43,11 +45,18 @@ export async function handleStt(request) {
   if (!modelInfo.provider) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
 
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
   log.info("ROUTING", `Provider: ${provider}, Model: ${model}`);
 
   // noAuth providers
   if (!CREDENTIALED_PROVIDERS.has(provider)) {
-    const result = await handleSttCore({ provider, model, formData, sttConfig: AI_PROVIDERS[provider]?.sttConfig });
+    const result = await handleSttCore({
+      provider,
+      model,
+      formData,
+      sttConfig: AI_PROVIDERS[provider]?.sttConfig,
+    });
     if (result.success) return result.response;
     return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "STT failed");
   }
@@ -72,7 +81,11 @@ export async function handleStt(request) {
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
-    const result = await handleSttCore({ provider, model, formData, credentials, sttConfig: AI_PROVIDERS[provider]?.sttConfig });
+    const sttConfig = { ...AI_PROVIDERS[provider]?.sttConfig };
+    if (provider === "selfhosted-stt") {
+      sttConfig.baseUrl = resolveSelfHostedEndpoint(credentials.providerSpecificData?.baseUrl, "stt");
+    }
+    const result = await handleSttCore({ provider, model, formData, credentials, sttConfig });
 
     if (result.success) return result.response;
 

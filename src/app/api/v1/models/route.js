@@ -17,6 +17,7 @@ import { resolveCursorModels } from "open-sse/services/cursorModels.js";
 import { updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { capabilitiesFromServiceKind, getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 // Per-provider live model resolvers. Each receives a connection record and
 // returns { models: [{ id, name? }, ...] } | null on failure.
@@ -104,7 +105,7 @@ const LIVE_MODEL_RESOLVERS = {
       providerSpecificData: conn.providerSpecificData || {},
     }, { log: console });
     return result?.models?.length ? { models: result.models } : null;
-  }
+  },
 };
 
 const parseOpenAIStyleModels = (data) => {
@@ -208,6 +209,7 @@ async function fetchCompatibleModelIds(connection) {
 // LLM is the default kind for providers missing serviceKinds.
 function providerMatchesKinds(providerId, kindFilter) {
   const provider = AI_PROVIDERS[providerId];
+  if (getUnavailableProviderError(providerId)) return false;
   const kinds = Array.isArray(provider?.serviceKinds) && provider.serviceKinds.length > 0
     ? provider.serviceKinds
     : [LLM_KIND];
@@ -233,7 +235,7 @@ export async function buildModelsList(kindFilter, options = {}) {
   let connections = [];
   try {
     connections = await getProviderConnections();
-    connections = connections.filter(c => c.isActive !== false);
+    connections = connections.filter(c => c.isActive !== false && !getUnavailableProviderError(c.provider));
   } catch (e) {
     console.log("Could not fetch providers, returning all models");
   }
@@ -314,7 +316,7 @@ export async function buildModelsList(kindFilter, options = {}) {
       // Custom models without active connection are LLM-only by current schema
       if (!kindFilter.includes(LLM_KIND)) continue;
       const providerAlias = customModel.providerAlias;
-      if (!providerAlias) continue;
+      if (!providerAlias || getUnavailableProviderError(providerAlias)) continue;
 
       const modelId = String(customModel.id).trim();
       if (!modelId) continue;

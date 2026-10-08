@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createErrorResult } from "../utils/error.js";
 import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { getTtsAdapter, synthesizeViaConfig } from "./ttsProviders/index.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 
 // Re-export voice fetchers + voices APIs for backward compat with existing routes
 export {
@@ -49,6 +50,8 @@ function createTtsResponse(base64Audio, format, responseFormat) {
  * @returns {Promise<{success, response, status?, error?}>}
  */
 export async function handleTtsCore({ provider, model, input, credentials, responseFormat = "mp3", language, voice, audioFormat }) {
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) return createErrorResult(HTTP_STATUS.BAD_REQUEST, unavailableError);
   if (!input?.trim()) {
     return createErrorResult(HTTP_STATUS.BAD_REQUEST, "Missing required field: input");
   }

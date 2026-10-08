@@ -24,6 +24,7 @@ const MEDIA_KEYS = new Set([
   "serviceKinds", "ttsConfig", "sttConfig", "embeddingConfig",
   "imageConfig", "imageToTextConfig", "videoConfig", "musicConfig",
   "searchViaChat", "searchConfig", "fetchConfig",
+  "credentialFallback",
   "modelsFetcher", "mediaPriority", "hiddenKinds", "speechToSpeechConfig",
   "imageEditConfig", "rerankConfig",
 ]);
@@ -32,6 +33,29 @@ export const PROVIDERS = {};
 export const PROVIDER_MODELS = {};
 export const PROVIDER_OAUTH = {};
 export const PROVIDER_MEDIA = {};
+
+// Registry entries may be visible in the dashboard before their runtime
+// contract is implemented. Keep these providers out of generic fallbacks.
+export const UNAVAILABLE_PROVIDERS = Object.fromEntries(
+  REGISTRY
+    .filter((entry) => entry.availability === "unavailable")
+    .flatMap((entry) => {
+      const reason = entry.availabilityReason || "Provider unavailable";
+      return [entry.id, entry.alias, ...(entry.aliases || [])]
+        .filter(Boolean)
+        .map((key) => [key, reason]);
+    })
+);
+
+export function getUnavailableProviderReason(provider) {
+  return UNAVAILABLE_PROVIDERS[provider] || null;
+}
+
+export function getUnavailableProviderError(provider) {
+  const reason = getUnavailableProviderReason(provider);
+  return reason ? `Provider '${provider}' is unavailable: ${reason}` : null;
+}
+
 for (const entry of REGISTRY) {
   if (entry.transport) {
     PROVIDERS[entry.id] = buildTransport(entry.transport, entry.oauth);

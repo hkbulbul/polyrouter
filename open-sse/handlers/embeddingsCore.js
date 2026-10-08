@@ -3,6 +3,7 @@ import { HTTP_STATUS } from "../config/runtimeConfig.js";
 import { getExecutor } from "../executors/index.js";
 import { refreshWithRetry } from "../services/tokenRefresh.js";
 import { getEmbeddingAdapter } from "./embeddingProviders/index.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 
 /**
  * Core embeddings handler — orchestrator only. Provider-specific URL/headers/body/normalize
@@ -19,6 +20,10 @@ export async function handleEmbeddingsCore({
   onRequestSuccess,
 }) {
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) {
+    return createErrorResult(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
 
   // Validate input
   const input = body.input;

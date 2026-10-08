@@ -7,6 +7,7 @@ import { getCachedClaudeHeaders } from "../utils/claudeHeaderCache.js";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { stripUnsupportedParams } from "../translator/concerns/paramSupport.js";
+import { getUnavailableProviderError } from "../providers/index.js";
 
 // Auth header descriptors — derived from registry transport.auth, fallback to hardcoded defaults.
 const BEARER = { combined: true, header: "Authorization", scheme: "bearer" };
@@ -79,6 +80,8 @@ const REFRESH_GRANTS = Object.fromEntries(
 
 export class DefaultExecutor extends BaseExecutor {
   constructor(provider) {
+    const unavailableError = getUnavailableProviderError(provider);
+    if (unavailableError) throw new Error(unavailableError);
     super(provider, PROVIDERS[provider] || PROVIDERS.openai);
   }
 

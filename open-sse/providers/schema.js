@@ -23,6 +23,8 @@ import { DEFAULT_RETRY_CONFIG, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtim
  * @property {Object}  [features]     Feature flags, e.g. {usage:true}.
  * @property {Object}  [thinkingConfig] Reasoning UI: {options:[...],defaultMode}.
  * @property {boolean} [passthroughModels] Forward client model id untouched.
+ * @property {string}  [availability] Static provider availability, "available" or "unavailable".
+ * @property {string}  [availabilityReason] User-facing reason when the provider is unavailable.
  *
  * TransportConfig: { baseUrl, format, headers, auth, forceStream, urlSuffix, quirks, retry, timeoutMs,
  *   executor, clientId, clientSecret, tokenUrl, refreshUrl, usage, cliVersion, apiClient, regions,
@@ -34,7 +36,7 @@ import { DEFAULT_RETRY_CONFIG, FETCH_CONNECT_TIMEOUT_MS } from "../config/runtim
  *   userInfoUrl }.
  *
  * MediaConfig: { serviceKinds:[...], ttsConfig, sttConfig, embeddingConfig, imageConfig, imageEditConfig,
- *   rerankConfig,
+ *   rerankConfig, credentialFallback,
  *   searchViaChat:{defaultModel,pricingUrl}, hiddenKinds } — each *Config: {baseUrl,authType,authHeader,
  *   format,defaultModel,models:[{id,name,dimensions?}]}.
  */

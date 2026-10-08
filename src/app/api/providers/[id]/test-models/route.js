@@ -4,6 +4,7 @@ import { getProviderModels, PROVIDER_ID_TO_ALIAS } from "open-sse/config/provide
 import { AI_PROVIDERS, isOpenAICompatibleProvider, isAnthropicCompatibleProvider } from "@/shared/constants/providers";
 import { UPDATER_CONFIG } from "@/shared/constants/config";
 import { pingModelByKind } from "@/app/api/models/test/ping";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 /**
  * POST /api/providers/[id]/test-models
@@ -19,6 +20,11 @@ export async function POST(request, { params }) {
     }
 
     const providerId = connection.provider;
+    const unavailableError = getUnavailableProviderError(providerId);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
+    }
+
     const isCompatible = isOpenAICompatibleProvider(providerId) || isAnthropicCompatibleProvider(providerId);
     const alias = PROVIDER_ID_TO_ALIAS[providerId] || providerId;
 

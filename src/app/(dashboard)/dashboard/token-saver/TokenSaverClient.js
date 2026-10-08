@@ -602,7 +602,7 @@ export default function TokenSaverClient() {
                 <button
                   onClick={handleInstallExtras}
                   disabled={extrasActionLoading}
-                  className="text-xs px-2.5 py-1  bg-primary text-white hover:opacity-90 disabled:opacity-50"
+                  className="text-xs px-2.5 py-1  bg-primary text-on-primary hover:opacity-90 disabled:opacity-50"
                 >
                   {extrasActionLoading
                     ? "Installing…"
@@ -659,7 +659,7 @@ export default function TokenSaverClient() {
                       onClick={() => handleCavemanLevel(lvl.id)}
                       className={`px-3 py-1.5  text-xs font-medium border transition-colors ${
                         cavemanLevel === lvl.id
-                          ? "bg-primary text-white border-primary"
+                          ? "bg-primary text-on-primary border-primary"
                           : "bg-transparent border-border text-text-muted hover:bg-surface-2"
                       }`}
                       title={lvl.desc}
@@ -710,7 +710,7 @@ export default function TokenSaverClient() {
                       onClick={() => handlePonytailLevel(lvl.id)}
                       className={`px-3 py-1.5  text-xs font-medium border transition-colors ${
                         ponytailLevel === lvl.id
-                          ? "bg-primary text-white border-primary"
+                          ? "bg-primary text-on-primary border-primary"
                           : "bg-transparent border-border text-text-muted hover:bg-surface-2"
                       }`}
                       title={lvl.desc}

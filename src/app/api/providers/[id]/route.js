@@ -6,6 +6,7 @@ import {
   deleteProviderConnection,
 } from "@/models";
 import { sanitizeProviderConnection, stripManagedProviderData } from "@/lib/providerNormalization";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import {
   WebCookieSigninError,
   removeManagedBrowserProfile,
@@ -102,6 +103,11 @@ export async function PUT(request, { params }) {
     const existing = await getProviderConnectionById(id);
     if (!existing) {
       return NextResponse.json({ error: "Connection not found" }, { status: 404 });
+    }
+
+    const unavailableError = getUnavailableProviderError(existing.provider);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
     }
 
     const proxyConfig = normalizeProxyConfig(body);

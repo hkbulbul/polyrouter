@@ -61,7 +61,15 @@ function successResult(data) {
  * Run a single dedicated search provider attempt.
  * @returns {Promise<{success:boolean, status?:number, error?:string, data?:object}>}
  */
-async function tryDedicatedProvider({ provider, providerConfig, body, credentials, log, globalStartTime }) {
+async function tryDedicatedProvider({
+  provider,
+  providerConfig,
+  body,
+  credentials,
+  log,
+  onRequestSuccess,
+  globalStartTime,
+}) {
   const startTime = Date.now();
   const token = credentials?.apiKey || credentials?.accessToken || undefined;
 
@@ -111,6 +119,11 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
     const normalized = normalizeSearchResponse(provider.id, data, params.query, params.searchType);
     const results = normalized.results.slice(0, params.maxResults);
     const duration = Date.now() - startTime;
+    try {
+      await onRequestSuccess?.();
+    } catch (error) {
+      log?.warn?.("SEARCH", `Failed to clear account error: ${error.message}`);
+    }
 
     return {
       success: true,
@@ -121,6 +134,7 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
         answer: null,
         usage: { queries_used: 1, search_cost_usd: providerConfig.costPerQuery || 0 },
         metrics: { response_time_ms: duration, upstream_latency_ms: duration, total_results_available: normalized.totalResults },
+        ...(normalized.pagination ? { pagination: normalized.pagination } : {}),
         errors: []
       }
     };
@@ -144,7 +158,14 @@ async function tryDedicatedProvider({ provider, providerConfig, body, credential
  * @param {object|null} options.credentials  Provider credentials
  * @param {object}   [options.log]           Logger
  */
-export async function handleSearchCore({ body, provider, providerConfig, credentials, log }) {
+export async function handleSearchCore({
+  body,
+  provider,
+  providerConfig,
+  credentials,
+  log,
+  onRequestSuccess,
+}) {
   const globalStartTime = Date.now();
 
   // 1. Sanitize query
@@ -161,6 +182,7 @@ export async function handleSearchCore({ body, provider, providerConfig, credent
       body: normalizedBody,
       credentials,
       log,
+      onRequestSuccess,
       globalStartTime
     });
   } else if (provider.searchViaChat) {

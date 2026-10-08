@@ -14,7 +14,7 @@ function CopyButton({ value, label = "Copy link" }) {
   return (
     <button
       onClick={() => copy(value)}
-      className="px-2 py-1  bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors cursor-pointer shrink-0 inline-flex items-center gap-1"
+      className="px-2 py-1  bg-primary text-on-primary text-[11px] font-medium hover:bg-primary/90 transition-colors cursor-pointer shrink-0 inline-flex items-center gap-1"
       title={value}
     >
       <span className="material-symbols-outlined text-[12px]">
@@ -37,7 +37,7 @@ function SkillRow({ skill }) {
     >
       <div
         className={`size-9  flex items-center justify-center shrink-0 ${
-          skill.isEntry ? "bg-primary text-white" : "bg-primary/10 text-primary"
+          skill.isEntry ? "bg-primary text-on-primary" : "bg-primary/10 text-primary"
         }`}
       >
         <span className="material-symbols-outlined text-[18px]">{skill.icon}</span>

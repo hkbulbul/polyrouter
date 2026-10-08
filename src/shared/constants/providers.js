@@ -6,6 +6,7 @@ const MEDIA_ENTRY_KEYS = [
   "serviceKinds", "ttsConfig", "sttConfig", "embeddingConfig",
   "imageConfig", "imageToTextConfig", "videoConfig", "musicConfig",
   "searchViaChat", "searchConfig", "fetchConfig",
+  "credentialFallback",
   "modelsFetcher", "mediaPriority", "hiddenKinds", "speechToSpeechConfig",
   "imageEditConfig", "rerankConfig",
 ];
@@ -37,6 +38,8 @@ function buildProviderEntry(r) {
     ...(r.authModes ? { authModes: r.authModes } : {}),
     ...(r.authType ? { authType: r.authType } : {}),
     ...(r.authHint ? { authHint: r.authHint } : {}),
+    ...(r.availability ? { availability: r.availability } : {}),
+    ...(r.availabilityReason ? { availabilityReason: r.availabilityReason } : {}),
   };
 }
 
@@ -157,6 +160,7 @@ export function getProvidersByKind(kind) {
       const kinds = p.serviceKinds ?? ["llm"];
       if (!kinds.includes(kind)) return false;
       if (p.hidden) return false;
+      if (p.availability === "unavailable") return false;
       if (p.hiddenKinds?.includes(kind)) return false;
       return true;
     })

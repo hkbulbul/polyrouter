@@ -142,7 +142,7 @@ export default function PxpipeClient() {
                 onClick={() => setWindowId(tab.id)}
                 className={`px-3 py-1  text-xs font-medium transition-colors ${
                   windowId === tab.id
-                    ? "bg-primary text-white shadow-sm"
+                    ? "bg-primary text-on-primary shadow-sm"
                     : "text-text-muted hover:text-text hover:bg-bg-hover"
                 }`}
               >

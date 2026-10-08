@@ -25,7 +25,7 @@ export default function SegmentedControl({
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1 p-1 border border-border/60 bg-surface-2 overflow-x-auto",
+        "inline-flex items-center gap-0.5 p-0.5 border border-border bg-bg overflow-x-auto",
         className
       )}
       role="tablist"
@@ -43,8 +43,8 @@ export default function SegmentedControl({
               "inline-flex items-center justify-center shrink-0 font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap",
               sizes[size],
               isSelected
-                ? "bg-surface text-text-main shadow-xs font-semibold"
-                : "text-text-muted hover:text-text-main hover:bg-surface-2/70"
+                ? "bg-surface text-text-main font-semibold outline outline-1 -outline-offset-1 outline-border-strong"
+                : "text-text-muted hover:text-text-main hover:bg-surface-2"
             )}
           >
             {option.icon && (

@@ -103,6 +103,13 @@ export const TTS_PROVIDER_CONFIG = {
     modelKey: "inworld-tts-models",
     apiEndpoint: "/api/media-providers/tts/inworld/voices",
   },
+  "fish-audio": {
+    hasModelSelector: true,
+    hasBrowseButton: false,
+    hasVoiceIdInput: true,
+    voiceSource: "config",
+    modelKey: "fish-audio-tts-models",
+  },
   "qwen": {
     hasModelSelector: true,
     hasBrowseButton: false,

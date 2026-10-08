@@ -7,6 +7,7 @@ import {
   pollForToken 
 } from "@/lib/oauth/providers";
 import { createProviderConnection } from "@/models";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import {
   startCodexProxy,
   stopCodexProxy,
@@ -69,6 +70,10 @@ async function completeXaiManualCode(code, state) {
 export async function GET(request, { params }) {
   try {
     const { provider, action } = await params;
+    const unavailableError = getUnavailableProviderError(provider);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
+    }
     const { searchParams } = new URL(request.url);
 
     if (action === "authorize") {
@@ -179,7 +184,6 @@ export async function GET(request, { params }) {
         "kilocode",
         "codebuddy-cn",
         "qoder",
-        "muse-code",
         "grok-cli",
       ];
       let deviceData;
@@ -211,6 +215,10 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const { provider, action } = await params;
+    const unavailableError = getUnavailableProviderError(provider);
+    if (unavailableError) {
+      return NextResponse.json({ error: unavailableError }, { status: 400 });
+    }
     let body;
     try {
       body = await request.json();
@@ -303,7 +311,6 @@ export async function POST(request, { params }) {
 
       // Providers that don't use PKCE for device code
       const noPkceProviders = ["github", "kimi", "kimi-coding", "kilocode", "codebuddy-cn",
-        "muse-code",
         "grok-cli"];
       let result;
       if (noPkceProviders.includes(provider)) {

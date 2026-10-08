@@ -8,6 +8,7 @@ import openrouter from "./openrouter.js";
 import gemini, { fetchGeminiVoices } from "./gemini.js";
 import { FORMAT_HANDLERS } from "./genericFormats.js";
 import { parseModelVoice } from "./_base.js";
+import { resolveSelfHostedEndpoint } from "../../utils/selfHostedEndpoint.js";
 
 // Special providers with custom synthesize() logic
 const SPECIAL_ADAPTERS = {
@@ -34,14 +35,18 @@ export async function synthesizeViaConfig(provider, text, model, credentials, re
   const apiKey = credentials?.apiKey;
   if (cfg.authType !== "none" && !apiKey) throw new Error(`${provider} API key required`);
   const { PROVIDER_MODELS } = await import("open-sse/config/providerModels.js");
-  const ttsModels = (PROVIDER_MODELS[provider] || []).filter(m => (m.kind || m.type) === "tts");
-  const defaultModel = ttsModels[0]?.id || "";
+  const providerModels = (PROVIDER_MODELS[provider] || []).filter(m => (m.kind || m.type) === "tts");
+  const ttsModels = providerModels.length ? providerModels : cfg.models || [];
+  const defaultModel = ttsModels[0]?.id || cfg.defaultModel || "";
   // ZenMux model IDs already contain provider/model slashes, so a trailing segment is not a voice.
   const { modelId, voiceId } = provider === "zenmux"
     ? { modelId: model || defaultModel, voiceId: requestedVoice }
     : parseModelVoice(model, defaultModel, requestedVoice, ttsModels);
+  const baseUrl = provider === "selfhosted-tts"
+    ? resolveSelfHostedEndpoint(credentials?.providerSpecificData?.baseUrl, "tts")
+    : cfg.baseUrl;
   return handler({
-    baseUrl: cfg.baseUrl,
+    baseUrl,
     apiKey,
     text,
     modelId,

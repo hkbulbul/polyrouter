@@ -154,6 +154,24 @@ async function openaiCompat({ baseUrl, apiKey, text, modelId, voiceId }) {
   return responseToBase64(res, "mp3");
 }
 
+async function fishAudio({ baseUrl, apiKey, text, modelId, voiceId }) {
+  const res = await fetch(baseUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      model: modelId || "s2.1-pro-free",
+    },
+    body: JSON.stringify({
+      text,
+      format: "mp3",
+      ...(voiceId ? { reference_id: voiceId } : {}),
+    }),
+  });
+  if (!res.ok) await throwUpstreamError(res);
+  return responseToBase64(res, "mp3");
+}
+
 // ZenMux returns JSON with base64 audio instead of an OpenAI-style binary body.
 async function zenmux({ baseUrl, apiKey, text, modelId, voiceId, audioFormat, proxyOptions }) {
   const requestBody = {
@@ -186,6 +204,7 @@ export const FORMAT_HANDLERS = {
   coqui,
   tortoise,
   openai: openaiCompat,
+  "fish-audio": fishAudio,
   zenmux,
   "minimax-tts": minimaxTts,
 };

@@ -13,6 +13,7 @@ import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 /**
  * Handle web search request for the SSE/Next.js server.
@@ -93,6 +94,11 @@ export async function handleSearch(request) {
 async function handleSingleProviderSearch(body, providerInput, request, apiKey, settings) {
   const query = body.query;
   const providerId = resolveProviderId(providerInput);
+  const unavailableError = getUnavailableProviderError(providerId);
+  if (unavailableError) {
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
+
   const resolvedProvider = AI_PROVIDERS[providerId];
 
   if (!resolvedProvider) {
@@ -144,12 +150,13 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
   }
 
   // Credential + fallback loop
+  const credentialProviderId = resolvedProvider.credentialFallback || providerId;
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
+    const credentials = await getProviderCredentials(credentialProviderId, excludeConnectionIds);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
@@ -168,7 +175,7 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
 
     log.info("AUTH", `\x1b[32mUsing ${providerId} account: ${credentials.connectionName}\x1b[0m`);
 
-    const refreshedCredentials = await checkAndRefreshToken(providerId, credentials);
+    const refreshedCredentials = await checkAndRefreshToken(credentialProviderId, credentials);
 
     const result = await handleSearchCore({
       body: coreBody,
@@ -185,13 +192,18 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
         });
       },
       onRequestSuccess: async () => {
-        await clearAccountError(credentials.connectionId, credentials);
+          await clearAccountError(credentials.connectionId, credentials);
       }
     });
 
     if (result.success) return result.response;
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, providerId);
+    const { shouldFallback } = await markAccountUnavailable(
+      credentials.connectionId,
+      result.status,
+      result.error,
+      credentialProviderId,
+    );
 
     if (shouldFallback) {
       log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);

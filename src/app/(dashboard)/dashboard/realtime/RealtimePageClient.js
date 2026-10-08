@@ -237,7 +237,7 @@ export default function RealtimePageClient({ providerId = "codex", providerName 
               type="button"
               onClick={isRecording ? stop : start}
               disabled={isConnecting}
-              className="px-4 py-2 text-sm font-medium bg-primary text-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+              className="px-4 py-2 text-sm font-medium bg-primary text-on-primary hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
             >
               {isRecording ? "Stop" : isConnecting ? "Connecting..." : "Start talking"}
             </button>

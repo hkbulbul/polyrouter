@@ -3,10 +3,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getApiKeys: vi.fn(),
   getConsistentMachineId: vi.fn(),
+  getModelAliases: vi.fn(),
+  getComboByName: vi.fn(),
+  getProviderNodes: vi.fn(),
 }));
 
+// The route imports getModelInfo, which transitively reaches getProviderNodes /
+// getComboByName / getModelAliases. A partial factory here throws inside the route
+// and surfaces as a 500, so every touched export must be present.
 vi.mock("@/lib/localDb", () => ({
   getApiKeys: mocks.getApiKeys,
+  getModelAliases: mocks.getModelAliases,
+  getComboByName: mocks.getComboByName,
+  getProviderNodes: mocks.getProviderNodes,
 }));
 
 vi.mock("@/shared/utils/machineId", () => ({
@@ -31,6 +40,9 @@ describe("model test route kind routing", () => {
     vi.clearAllMocks();
     mocks.getApiKeys.mockResolvedValue([{ key: "sk-internal", isActive: true }]);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");
+    mocks.getModelAliases.mockResolvedValue([]);
+    mocks.getComboByName.mockResolvedValue(null);
+    mocks.getProviderNodes.mockResolvedValue([]);
     global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       created: 1,
       data: [{ b64_json: "abc" }],

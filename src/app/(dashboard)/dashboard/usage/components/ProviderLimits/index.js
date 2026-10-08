@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import ProviderIcon from "@/shared/components/ProviderIcon";
 import QuotaTrackerTable from "../../../quota/components/QuotaTrackerTable";
 import {
   parseQuotaData,
@@ -12,11 +11,9 @@ import {
   buildLoadingState,
   filterQuotaStateByConnections,
   getConnectionsEmptyMessage,
-  getPageSizeLabel,
   getConnectionsPaginationSummary,
   getSafePagination,
   getSafeTotals,
-  shouldResetPage,
   getPaginationPageValue,
   getProviderOptions,
   getPageQuotaSummary,
@@ -31,11 +28,11 @@ import {
   CONNECTIONS_PAGE_SIZE,
   ACCOUNT_PAGE_SIZE_OPTIONS,
   ACCOUNT_PAGE_SIZE_MAX,
-  ACCOUNT_FILTER_OPTIONS,
-  QUOTA_SORT_OPTIONS,
 } from "./utils";
 import Card from "@/shared/components/Card";
 import { ConfirmModal, EditConnectionModal } from "@/shared/components";
+import QuotaPageSkeleton from "../../../quota/components/QuotaPageSkeleton";
+import QuotaToolbar from "../../../quota/components/QuotaToolbar";
 import { USAGE_SUPPORTED_PROVIDERS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 
@@ -128,6 +125,7 @@ export default function QuotaTracker() {
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
   const [resettingLimitId, setResettingLimitId] = useState(null);
@@ -142,7 +140,6 @@ export default function QuotaTracker() {
   const [quotaSortMode, setQuotaSortMode] = useState("default");
   const [quotaVisibility, setQuotaVisibility] = useState({});
   const [expiringFirst, setExpiringFirst] = useState(false);
-  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [bulkToggling, setBulkToggling] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(CONNECTIONS_PAGE_SIZE);
@@ -167,6 +164,7 @@ export default function QuotaTracker() {
   const fetchConnections = useCallback(
     async (targetPage = page) => {
       try {
+        setConnectionError(null);
         const params = new URLSearchParams({
           page: String(targetPage),
           pageSize: String(pageSize),
@@ -196,6 +194,7 @@ export default function QuotaTracker() {
         return connectionList;
       } catch (error) {
         console.error("Error fetching connections:", error);
+        setConnectionError(error.message || "Failed to load quota accounts");
         setConnections([]);
         setProviderOptions([]);
         setPagination({ page: 1, pageSize, total: 0, totalPages: 1 });
@@ -737,8 +736,6 @@ export default function QuotaTracker() {
     bulkSetActive(ids, true);
   };
 
-  const selectedProviderLabel =
-    providerFilter === "all" ? "All providers" : providerFilter;
   const hasEligibleConnections = totals.eligibleConnections > 0;
   const hasVisibleConnections = sortedConnections.length > 0;
   const emptyState = getConnectionsEmptyMessage(
@@ -748,11 +745,35 @@ export default function QuotaTracker() {
   );
   const connectionsPageSummary = getConnectionsPaginationSummary(pagination);
   const isCustomPageSize = !ACCOUNT_PAGE_SIZE_OPTIONS.includes(pageSize);
-  const pageSizeLabel = getPageSizeLabel(pageSize, isCustomPageSize);
   const pageQuotaSummary = useMemo(
     () => getPageQuotaSummary(sortedConnections, quotaData),
     [sortedConnections, quotaData],
   );
+
+  if (connectionsLoading) {
+    return <QuotaPageSkeleton />;
+  }
+
+  if (connectionError) {
+    return (
+      <Card padding="lg" className="border-red-500/20">
+        <div className="mx-auto max-w-lg py-8 text-center">
+          <span className="material-symbols-outlined text-[48px] text-red-500/80" aria-hidden="true">cloud_off</span>
+          <h3 className="mt-3 text-lg font-semibold text-text-primary">Couldn’t load quota accounts</h3>
+          <p className="mt-2 text-sm text-text-muted">{connectionError}</p>
+          <button
+            type="button"
+            onClick={() => refreshAll(true)}
+            disabled={refreshingAll}
+            className="mt-5 inline-flex h-9 items-center gap-2 bg-primary px-4 text-sm font-semibold text-on-primary transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            <span className={`material-symbols-outlined text-[17px] ${refreshingAll ? "animate-spin" : ""}`} aria-hidden="true">refresh</span>
+            Try again
+          </button>
+        </div>
+      </Card>
+    );
+  }
 
   if (!connectionsLoading && !hasEligibleConnections) {
     return (
@@ -793,224 +814,34 @@ export default function QuotaTracker() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 border-b border-border pb-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="max-w-xl">
-          <h2 className="text-lg font-semibold tracking-tight text-text-primary">Capacity at a glance</h2>
-          <p className="mt-1 text-sm text-text-muted">Read available fallback capacity, then act on the accounts that need attention.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setProviderMenuOpen((prev) => !prev)}
-              className="flex h-8 items-center justify-between gap-1  border border-black/10 bg-black/[0.02] px-2 text-xs text-text-primary transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
-              aria-haspopup="menu"
-              aria-expanded={providerMenuOpen}
-              title="Filter quota providers"
-            >
-              <span className="flex min-w-0 items-center gap-1.5">
-                {providerFilter === "all" ? (
-                  <span className="material-symbols-outlined text-[14px] text-text-muted">
-                    apps
-                  </span>
-                ) : (
-                  <ProviderIcon
-                    src={`/providers/${providerFilter}.png`}
-                    alt={providerFilter}
-                    size={18}
-                    className="size-[18px]  object-contain"
-                    fallbackText={providerFilter.slice(0, 2).toUpperCase()}
-                  />
-                )}
-                <span className="truncate capitalize hidden lg:inline">
-                  {selectedProviderLabel}
-                </span>
-              </span>
-              <span className="material-symbols-outlined text-[14px] text-text-muted">
-                expand_more
-              </span>
-            </button>
-
-            {providerMenuOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-30 bg-transparent"
-                  aria-label="Close provider filter"
-                  onClick={() => setProviderMenuOpen(false)}
-                />
-                <div className="absolute left-0 z-40 mt-2 w-64 overflow-hidden  border border-black/10 bg-surface/95 p-1.5 shadow-xl shadow-black/10 backdrop-blur dark:border-white/10 dark:bg-surface/95 sm:w-72">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (shouldResetPage(providerFilter, "all")) {
-                        setPage(1);
-                      }
-                      setProviderFilter("all");
-                      setProviderMenuOpen(false);
-                    }}
-                    className={`flex w-full items-center gap-3  px-3 py-2.5 text-left text-sm transition-colors ${providerFilter === "all" ? "bg-primary/10 text-primary" : "text-text-primary hover:bg-black/5 dark:hover:bg-white/10"}`}
-                  >
-                    <span className="material-symbols-outlined text-[22px]">
-                      apps
-                    </span>
-                    <span className="font-medium">All providers</span>
-                    {providerFilter === "all" && (
-                      <span className="material-symbols-outlined ml-auto text-[20px]">
-                        check
-                      </span>
-                    )}
-                  </button>
-                  <div className="my-1 h-px bg-black/10 dark:bg-white/10" />
-                  <div className="max-h-72 overflow-y-auto pr-1">
-                    {providerOptions.map((provider) => (
-                      <button
-                        key={provider}
-                        type="button"
-                        onClick={() => {
-                          if (shouldResetPage(providerFilter, provider)) {
-                            setPage(1);
-                          }
-                          setProviderFilter(provider);
-                          setProviderMenuOpen(false);
-                        }}
-                        className={`flex w-full items-center gap-3  px-3 py-2.5 text-left text-sm transition-colors ${providerFilter === provider ? "bg-primary/10 text-primary" : "text-text-primary hover:bg-black/5 dark:hover:bg-white/10"}`}
-                      >
-                        <ProviderIcon
-                          src={`/providers/${provider}.png`}
-                          alt={provider}
-                          size={24}
-                          className="size-6  object-contain"
-                          fallbackText={provider.slice(0, 2).toUpperCase()}
-                        />
-                        <span className="font-medium capitalize">
-                          {provider}
-                        </span>
-                        {providerFilter === provider && (
-                          <span className="material-symbols-outlined ml-auto text-[20px]">
-                            check
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          <select
-            value={accountFilter}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              if (shouldResetPage(accountFilter, nextValue)) {
-                setPage(1);
-              }
-              setAccountFilter(nextValue);
-            }}
-            className="h-8  border border-black/10 bg-black/[0.02] px-2 text-xs text-text-primary outline-none transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
-            aria-label="Filter accounts by status"
-          >
-            {ACCOUNT_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-
-          {providerFilter === "codex" && (
-            <select
-              value={quotaSortMode}
-              onChange={(event) => setQuotaSortMode(event.target.value)}
-              className="h-8  border border-black/10 bg-black/[0.02] px-2 text-xs text-text-primary outline-none transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/10"
-              aria-label="Sort Codex quotas by remaining"
-            >
-              {QUOTA_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setExpiringFirst((prev) => !prev)}
-            aria-pressed={expiringFirst}
-            className={`flex h-8 shrink-0 items-center gap-1  border px-2 text-xs transition-colors ${expiringFirst ? "border-green-500/40 bg-green-500/10 text-green-500" : "border-black/10 text-text-primary hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"}`}
-            title="Sort accounts by earliest quota reset time"
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              hourglass_top
-            </span>
-            <span className="hidden sm:inline">Expiring first</span>
-          </button>
-
-          {/* Bulk: disable depleted */}
-          <button
-            type="button"
-            onClick={handleDisableDepleted}
-            disabled={bulkToggling}
-            className="flex h-8 shrink-0 items-center gap-1  border border-red-500/30 px-2 text-xs text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-            title="Disable connections with depleted quota on the current page"
-          >
-            <span className="material-symbols-outlined text-[14px]">block</span>
-            <span className="hidden sm:inline">Turn off Empty</span>
-          </button>
-
-          {/* Bulk: enable available */}
-          <button
-            type="button"
-            onClick={handleEnableAvailable}
-            disabled={bulkToggling}
-            className="flex h-8 shrink-0 items-center gap-1  border border-emerald-500/30 px-2 text-xs text-emerald-500 transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
-            title="Enable connections that still have quota on the current page"
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              check_circle
-            </span>
-            <span className="hidden sm:inline">Turn on Available</span>
-          </button>
-
-          {/* Auto-refresh toggle */}
-          <button
-            onClick={() => setAutoRefresh((prev) => !prev)}
-            className="flex h-8 shrink-0 items-center gap-1  border border-black/10 px-2 text-xs transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-            title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}
-          >
-            <span
-              className={`material-symbols-outlined text-[14px] ${
-                autoRefresh ? "text-primary" : "text-text-muted"
-              }`}
-            >
-              {autoRefresh ? "toggle_on" : "toggle_off"}
-            </span>
-            <span className="hidden text-text-primary sm:inline">
-              Auto-refresh
-            </span>
-            {autoRefresh && (
-              <span className="text-[10px] text-text-muted tabular-nums">
-                ({countdown}s)
-              </span>
-            )}
-          </button>
-
-
-          {/* Refresh all button */}
-          <button
-            type="button"
-            onClick={() => refreshAll(true)}
-            disabled={refreshingAll}
-            className="flex h-8 shrink-0 items-center gap-1  border border-black/10 px-2 text-xs text-text-primary transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5 disabled:opacity-50"
-            title="Refresh all"
-          >
-            <span
-              className={`material-symbols-outlined text-[14px] ${refreshingAll ? "animate-spin" : ""}`}
-            >
-              refresh
-            </span>
-          </button>
-        </div>
-      </div>
+      <QuotaToolbar
+        providerFilter={providerFilter}
+        setProviderFilter={setProviderFilter}
+        providerOptions={providerOptions}
+        accountFilter={accountFilter}
+        setAccountFilter={setAccountFilter}
+        quotaSortMode={quotaSortMode}
+        setQuotaSortMode={setQuotaSortMode}
+        expiringFirst={expiringFirst}
+        setExpiringFirst={setExpiringFirst}
+        autoRefresh={autoRefresh}
+        setAutoRefresh={setAutoRefresh}
+        countdown={countdown}
+        refreshingAll={refreshingAll}
+        refreshAll={refreshAll}
+        lastUpdated={lastUpdated}
+        bulkToggling={bulkToggling}
+        onDisableDepleted={handleDisableDepleted}
+        onEnableAvailable={handleEnableAvailable}
+        onClearFilters={() => {
+          setProviderFilter("all");
+          setAccountFilter("all");
+          setQuotaSortMode("default");
+          setExpiringFirst(false);
+          setPage(1);
+        }}
+        onResetPage={() => setPage(1)}
+      />
 
       <section aria-label="Capacity on this page" className="border border-border bg-surface shadow-[var(--shadow-soft)]">
         <div className="grid divide-y divide-border sm:grid-cols-[1.4fr_repeat(3,minmax(0,1fr))] sm:divide-x sm:divide-y-0">

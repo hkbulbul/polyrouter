@@ -12,6 +12,7 @@ import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 /**
  * Handle embeddings request for the SSE/Next.js server.
@@ -72,6 +73,11 @@ export async function handleEmbeddings(request) {
   }
 
   const { provider, model } = modelInfo;
+  const unavailableError = getUnavailableProviderError(provider);
+  if (unavailableError) {
+    log.warn("EMBEDDINGS", unavailableError);
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
+  }
 
   if (modelStr !== `${provider}/${model}`) {
     log.info("ROUTING", `${modelStr} → ${provider}/${model}`);

@@ -300,7 +300,7 @@ export function getRemainingPercentage(quota) {
   return calculatePercentage(quota?.used, quota?.total);
 }
 
-export function getPageQuotaSummary(connections = [], quotaData = {}) {
+export function getPageQuotaSummary(connections = [], quotaData = {}, quotaVisibility = {}) {
   const now = Date.now();
   let ready = 0;
   let depleted = 0;

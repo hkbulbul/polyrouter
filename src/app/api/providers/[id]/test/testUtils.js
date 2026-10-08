@@ -19,6 +19,7 @@ import {
   KIMCHI_CONFIG,
 } from "@/lib/oauth/constants/oauth";
 import { buildClineHeaders } from "@/shared/utils/clineAuth";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 // OAuth provider test endpoints
 const OAUTH_TEST_CONFIG = {
@@ -821,7 +822,7 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         }, effectiveProxy);
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
       }
-      default:
+        default:
         return { valid: false, error: "Provider test not supported" };
     }
   } catch (err) {
@@ -835,6 +836,18 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
 export async function testSingleConnection(id) {
   const connection = await getProviderConnectionById(id);
   if (!connection) return { valid: false, error: "Connection not found", latencyMs: 0, testedAt: new Date().toISOString() };
+
+  const unavailableError = getUnavailableProviderError(connection.provider);
+  if (unavailableError) {
+    return {
+      valid: false,
+      error: unavailableError,
+      unavailable: true,
+      statusCode: 400,
+      latencyMs: 0,
+      testedAt: new Date().toISOString(),
+    };
+  }
 
   const effectiveProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
 

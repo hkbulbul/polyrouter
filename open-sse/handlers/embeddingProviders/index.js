@@ -2,6 +2,7 @@
 import createOpenAIEmbeddingAdapter from "./openai.js";
 import gemini from "./gemini.js";
 import openaiCompatNode from "./openaiCompatNode.js";
+import { resolveSelfHostedEndpoint } from "../../utils/selfHostedEndpoint.js";
 
 const OPENAI_COMPAT_PROVIDERS = [
   "openai", "openrouter", "mistral", "voyage-ai", "fireworks",
@@ -17,6 +18,13 @@ const ADAPTERS = {
 
 export function getEmbeddingAdapter(provider) {
   if (ADAPTERS[provider]) return ADAPTERS[provider];
+  if (provider === "selfhosted-embedding") {
+    return {
+      ...openaiCompatNode,
+      buildUrl: (_model, creds) =>
+        resolveSelfHostedEndpoint(creds?.providerSpecificData?.baseUrl, "embedding"),
+    };
+  }
   if (provider?.startsWith?.("openai-compatible-") || provider?.startsWith?.("custom-embedding-")) {
     return openaiCompatNode;
   }

@@ -33,6 +33,45 @@ const debugItems = [
   { href: "/dashboard/translator", label: "Translator", icon: "translate" },
 ];
 
+// Media kinds shown under the Media group, plus the combined web search/fetch page
+const mediaItems = [
+  ...MEDIA_PROVIDER_KINDS.filter((k) => VISIBLE_MEDIA_KINDS.includes(k.id)).map((kind) => ({
+    href: `/dashboard/media-providers/${kind.id}`,
+    label: kind.label,
+    icon: kind.icon,
+  })),
+  { href: COMBINED_WEB_ITEM.href, label: COMBINED_WEB_ITEM.label, icon: COMBINED_WEB_ITEM.icon },
+];
+
+const navItemClass = "relative flex h-9 items-center gap-2.5 px-3 text-[13px] leading-none transition-colors";
+const navItemActiveClass = "bg-surface-2 font-medium text-text-main before:absolute before:inset-y-1.5 before:left-0 before:w-[2px] before:bg-accent-fill";
+const navItemIdleClass = "text-text-muted hover:bg-surface-2 hover:text-text-main";
+
+function NavGroup({ label, children }) {
+  return (
+    <div className="flex flex-col gap-px">
+      <p className="eyebrow mb-2 px-3 text-[10.5px]">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function NavItem({ href, label, icon, active, compact = false, onNavigate }) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(navItemClass, compact && "h-8 text-[12.5px]", active ? navItemActiveClass : navItemIdleClass)}
+    >
+      <span className={cn("material-symbols-outlined", compact ? "text-[16px]" : "text-[18px]", active && "fill-1 text-primary")}>
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+    </Link>
+  );
+}
+
 const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
@@ -40,7 +79,8 @@ const systemItems = [
 
 export default function Sidebar({ onClose }) {
   const pathname = usePathname();
-  const [mediaOpen, setMediaOpen] = useState(false);
+  const onMediaRoute = pathname.startsWith("/dashboard/media-providers");
+  const [mediaOpen, setMediaOpen] = useState(onMediaRoute);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -114,202 +154,82 @@ export default function Sidebar({ onClose }) {
 
   return (
     <>
-      <aside className="flex w-72 flex-col border-r border-border-subtle bg-vibrancy backdrop-blur-xl transition-colors duration-300 min-h-full">
+      <aside className="flex w-[248px] flex-col border-r border-border bg-sidebar transition-colors duration-300 min-h-full">
 
-        {/* Logo */}
-        <div className="px-5 py-4 flex flex-col gap-2 border-b border-border-subtle/50">
-          <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="size-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-border-subtle bg-surface shadow-xs transition-transform duration-200 group-hover:scale-105">
-              <img
-                src="/favicon.svg"
-                alt="PolyRouter"
-                width={36}
-                height={36}
-                className="size-full object-contain"
-              />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <h1 className="text-base font-semibold tracking-tight leading-tight truncate">
-                <span className="text-brand-500">Poly</span><span className="text-text-main">Router</span>
-              </h1>
-              <span className="text-[11px] text-text-muted font-mono">v{APP_CONFIG.version}</span>
-            </div>
+        {/* Wordmark: logo in a light tile followed by the name in mono caps (landing style) */}
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border px-5">
+          <Link href="/dashboard" onClick={onClose} aria-label="PolyRouter dashboard" className="inline-flex items-center gap-2.5 whitespace-nowrap font-mono text-sm uppercase leading-none text-text-main">
+            <span className="flex size-[30px] items-center justify-center bg-[#ededed] p-[5px]">
+              <img src="/polyrouter-mark.png" alt="" width={20} height={20} className="size-full object-contain brightness-0" />
+            </span>
+            PolyRouter
           </Link>
+          <span className="font-mono text-[10.5px] leading-none text-text-muted">v{APP_CONFIG.version}</span>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-2 space-y-0.5 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onClose}
-              className={cn(
-                "flex items-center gap-3 px-3 py-1 transition-all group",
-                isActive(item.href)
-                  ? "bg-primary/10 text-primary"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-              )}
-            >
-              <span
-                className={cn(
-                  "material-symbols-outlined text-[18px]",
-                  isActive(item.href) ? "fill-1" : "group-hover:text-primary transition-colors"
-                )}
-              >
-                {item.icon}
-              </span>
-              <span className="text-[13px] font-medium">{item.label}</span>
-            </Link>
-          ))}
+        <nav aria-label="Dashboard" className="flex flex-1 flex-col gap-6 overflow-y-auto custom-scrollbar px-3 py-5">
+          <NavGroup label="Workspace">
+            {navItems.map((item) => (
+              <NavItem key={item.href} {...item} active={isActive(item.href)} onNavigate={onClose} />
+            ))}
+          </NavGroup>
 
-          {/* System section */}
-          <div className="pt-3 mt-2 space-y-0.5">
-            <p className="px-4 text-xs font-semibold text-text-muted/60 uppercase tracking-wider mb-2">
-              System
-            </p>
-
-            {/* Media Providers accordion */}
+          <NavGroup label="Media">
             <button
+              type="button"
               onClick={() => setMediaOpen((v) => !v)}
+              aria-expanded={mediaOpen}
               className={cn(
-                "w-full flex items-center gap-3 px-3 py-1 transition-all group",
-                pathname.startsWith("/dashboard/media-providers")
-                  ? "bg-primary/10 text-primary"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                navItemClass,
+                "w-full",
+                onMediaRoute && !mediaOpen ? navItemActiveClass : navItemIdleClass
               )}
             >
               <span className="material-symbols-outlined text-[18px]">perm_media</span>
-              <span className="text-[13px] font-medium flex-1 text-left">Media Providers</span>
-              <span className="material-symbols-outlined text-[14px] transition-transform" style={{ transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+              <span className="flex-1 text-left">Media Providers</span>
+              <span className={cn("material-symbols-outlined text-[16px] transition-transform duration-200", mediaOpen && "rotate-180")}>
                 expand_more
               </span>
             </button>
             {mediaOpen && (
-              <div className="pl-4">
-                {MEDIA_PROVIDER_KINDS.filter((k) => VISIBLE_MEDIA_KINDS.includes(k.id)).map((kind) => (
-                  <Link
-                    key={kind.id}
-                    href={`/dashboard/media-providers/${kind.id}`}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-1 transition-all group",
-                      pathname.startsWith(`/dashboard/media-providers/${kind.id}`)
-                        ? "bg-primary/10 text-primary"
-                        : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-                    )}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">{kind.icon}</span>
-                    <span className="text-sm">{kind.label}</span>
-                  </Link>
+              <div className="ml-[21px] flex flex-col gap-px border-l border-border pl-2">
+                {mediaItems.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    {...item}
+                    compact
+                    active={pathname.startsWith(item.href)}
+                    onNavigate={onClose}
+                  />
                 ))}
-                <Link
-                  key={COMBINED_WEB_ITEM.id}
-                  href={COMBINED_WEB_ITEM.href}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-1 transition-all group",
-                    pathname.startsWith(COMBINED_WEB_ITEM.href)
-                      ? "bg-primary/10 text-primary"
-                      : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-                  )}
-                >
-                  <span className="material-symbols-outlined text-[16px]">{COMBINED_WEB_ITEM.icon}</span>
-                  <span className="text-sm">{COMBINED_WEB_ITEM.label}</span>
-                </Link>
               </div>
             )}
+          </NavGroup>
 
+          <NavGroup label="System">
             {systemItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-1 transition-all group",
-                  isActive(item.href)
-                    ? "bg-primary/10 text-primary"
-                    : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-                )}
-              >
-                <span
-                  className={cn(
-                    "material-symbols-outlined text-[18px]",
-                    isActive(item.href) ? "fill-1" : "group-hover:text-primary transition-colors"
-                  )}
-                >
-                  {item.icon}
-                </span>
-                <span className="text-[13px] font-medium">{item.label}</span>
-              </Link>
+              <NavItem key={item.href} {...item} active={isActive(item.href)} onNavigate={onClose} />
             ))}
-
-            {/* Debug items (inside System section, before Settings) */}
-            {debugItems.map((item) => {
-              const show = item.href !== "/dashboard/translator" || enableTranslator;
-              return show ? (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onClose}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-1 transition-all group",
-                    isActive(item.href)
-                      ? "bg-primary/10 text-primary"
-                      : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "material-symbols-outlined text-[18px]",
-                      isActive(item.href) ? "fill-1" : "group-hover:text-primary transition-colors"
-                    )}
-                  >
-                    {item.icon}
-                  </span>
-                  <span className="text-[13px] font-medium">{item.label}</span>
-                </Link>
-              ) : null;
-            })}
-
-            {/* Settings */}
-            <Link
-              href="/dashboard/profile"
-              onClick={onClose}
-              className={cn(
-                "flex items-center gap-3 px-3 py-1 transition-all group",
-                isActive("/dashboard/profile")
-                  ? "bg-primary/10 text-primary"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text-main"
-              )}
-            >
-              <span
-                className={cn(
-                  "material-symbols-outlined text-[18px]",
-                  isActive("/dashboard/profile") ? "fill-1" : "group-hover:text-primary transition-colors"
-                )}
-              >
-                settings
-              </span>
-              <span className="text-[13px] font-medium">Settings</span>
-            </Link>
-          </div>
+            {debugItems
+              .filter((item) => item.href !== "/dashboard/translator" || enableTranslator)
+              .map((item) => (
+                <NavItem key={item.href} {...item} active={isActive(item.href)} onNavigate={onClose} />
+              ))}
+            <NavItem href="/dashboard/profile" label="Settings" icon="settings" active={isActive("/dashboard/profile")} onNavigate={onClose} />
+          </NavGroup>
         </nav>
 
         {updateInfo && (
-          <div className="shrink-0 border-t border-border-subtle px-4 py-4">
-            <div className="border border-brand-500/20 bg-brand-500/[0.07] px-3 py-3">
-              <div className="flex items-start gap-2.5">
-                <span className="material-symbols-outlined mt-0.5 text-[18px] text-brand-500">
-                  system_update_alt
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-text-main">Update available</p>
-                  <p className="mt-0.5 text-[11px] leading-4 text-text-muted">
-                    v{updateInfo.currentVersion} to v{updateInfo.latestVersion}
-                  </p>
-                </div>
-              </div>
+          <div className="shrink-0 border-t border-border p-3">
+            <div className="border border-primary/30 bg-primary/[0.06] p-3">
+              <p className="eyebrow flex items-center gap-2 text-primary">
+                <span className="size-1.5 bg-accent-fill animate-pulse" aria-hidden="true" />
+                Update available
+              </p>
+              <p className="mt-2 font-mono text-[12px] leading-none text-text-main">
+                v{updateInfo.currentVersion} <span className="text-text-muted">→</span> v{updateInfo.latestVersion}
+              </p>
               <Button
                 type="button"
                 size="sm"

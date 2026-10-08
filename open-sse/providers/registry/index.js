@@ -107,6 +107,25 @@ import p104 from "./trae.js";
 import p105 from "./agentrouter.js";
 import p106 from "./nara.js";
 import p107 from "./explabs.js";
+import p108 from "./api-airforce.js";
+import p109 from "./kilo-gateway.js";
+import p110 from "./ollama-search.js";
+import p111 from "./opencode-zen.js";
+import p112 from "./sambanova.js";
+import p113 from "./selfhosted-embedding.js";
+import p114 from "./selfhosted-stt.js";
+import p115 from "./selfhosted-tts.js";
+import p116 from "./tencent.js";
+import p117 from "./baidu.js";
+import p118 from "./bazaarlink.js";
+import p119 from "./bluesminds.js";
+import p120 from "./llm7.js";
+import p121 from "./morph.js";
+import p122 from "./fish-audio.js";
+import p123 from "./xquik.js";
+import p124 from "./devin-cli.js";
+import p125 from "./windsurf.js";
+import p126 from "./zed.js";
 
 export default [
   p0,
@@ -217,4 +236,23 @@ export default [
   p105,
   p106,
   p107,
+  p108,
+  p109,
+  p110,
+  p111,
+  p112,
+  p113,
+  p114,
+  p115,
+  p116,
+  p117,
+  p118,
+  p119,
+  p120,
+  p121,
+  p122,
+  p123,
+  p124,
+  p125,
+  p126,
 ];

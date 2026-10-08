@@ -46,6 +46,7 @@
     },
     "usage": {
       "quotaApiUrl": "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+      "retrieveUserQuotaUrl": "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
       "loadProjectApiUrl": "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
       "tokenUrl": "https://oauth2.googleapis.com/token"
     },
@@ -1133,5 +1134,127 @@
         }
       }
     ]
+  },
+  "api-airforce": {
+    "baseUrl": "https://api.airforce/v1/chat/completions",
+    "validateUrl": "https://api.airforce/v1/models",
+    "headers": {
+      "HTTP-Referer": "https://polyrouter.local",
+      "X-Title": "PolyRouter"
+    },
+    "forceStream": true,
+    "format": "openai"
+  },
+  "kilo-gateway": {
+    "baseUrl": "https://api.kilo.ai/api/gateway/chat/completions",
+    "validateUrl": "https://api.kilo.ai/api/gateway/models",
+    "format": "openai"
+  },
+  "opencode-zen": {
+    "baseUrl": "https://opencode.ai/zen/v1/chat/completions",
+    "usage": {
+      "url": "https://opencode.ai/zen/v1/usage"
+    },
+    "format": "openai",
+    "transports": [
+      {
+        "format": "openai",
+        "baseUrl": "https://opencode.ai/zen/v1/chat/completions",
+        "auth": {
+          "combined": true,
+          "header": "Authorization",
+          "scheme": "bearer"
+        }
+      },
+      {
+        "format": "claude",
+        "baseUrl": "https://opencode.ai/zen/v1/messages",
+        "auth": {
+          "combined": true,
+          "header": "x-api-key",
+          "scheme": "raw",
+          "anthropicVersion": true
+        }
+      },
+      {
+        "format": "openai-responses",
+        "baseUrl": "https://opencode.ai/zen/v1/responses",
+        "auth": {
+          "combined": true,
+          "header": "Authorization",
+          "scheme": "bearer"
+        }
+      }
+    ]
+  },
+  "sambanova": {
+    "baseUrl": "https://api.sambanova.ai/v1/chat/completions",
+    "validateUrl": "https://api.sambanova.ai/v1/models",
+    "format": "openai"
+  },
+  "tencent": {
+    "baseUrl": "https://api.hunyuan.cloud.tencent.com/v1/chat/completions",
+    "validateUrl": "https://api.hunyuan.cloud.tencent.com/v1/models",
+    "format": "openai"
+  },
+  "baidu": {
+    "baseUrl": "https://qianfan.baidubce.com/v2/chat/completions",
+    "validateUrl": "https://qianfan.baidubce.com/v2/models",
+    "format": "openai"
+  },
+  "bazaarlink": {
+    "baseUrl": "https://bazaarlink.ai/api/v1/chat/completions",
+    "validateUrl": "https://bazaarlink.ai/api/v1/models",
+    "format": "openai"
+  },
+  "bluesminds": {
+    "baseUrl": "https://api.bluesminds.com/v1/chat/completions",
+    "validateUrl": "https://api.bluesminds.com/v1/models",
+    "format": "openai"
+  },
+  "llm7": {
+    "baseUrl": "https://api.llm7.io/v1/chat/completions",
+    "validateUrl": "https://api.llm7.io/v1/models",
+    "format": "openai"
+  },
+  "morph": {
+    "baseUrl": "https://api.morphllm.com/v1/chat/completions",
+    "validateUrl": "https://api.morphllm.com/v1/models",
+    "format": "openai"
+  },
+  "devin-cli": {
+    "baseUrl": "devin://acp/stdio",
+    "format": "openai"
+  },
+  "windsurf": {
+    "baseUrl": "https://server.codeium.com/exa.language_server_pb.LanguageServerService/GetChatMessage",
+    "format": "openai",
+    "headers": {
+      "Content-Type": "application/grpc-web+proto",
+      "Accept": "application/grpc-web+proto",
+      "X-Grpc-Web": "1"
+    },
+    "auth": {
+      "combined": true,
+      "header": "Authorization",
+      "scheme": "Bearer"
+    }
+  },
+  "zed": {
+    "baseUrl": "https://cloud.zed.dev/completions",
+    "format": "openai",
+    "forceStream": true,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "auth": {
+      "combined": true,
+      "header": "Authorization",
+      "scheme": "<user_id> <access_token>"
+    },
+    "usage": {
+      "url": "https://cloud.zed.dev/client/users/me"
+    },
+    "modelsUrl": "https://cloud.zed.dev/models"
   }
 }

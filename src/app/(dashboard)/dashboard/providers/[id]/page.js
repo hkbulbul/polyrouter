@@ -14,6 +14,7 @@ import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { translate } from "@/i18n/runtime";
 import { fetchSuggestedModels } from "@/shared/utils/providerModelsFetcher";
 import { getProviderCustomModelRows } from "@/shared/utils/providerCustomModels";
+import { supportsLiveModelCatalog } from "@/shared/utils/liveModelCatalog";
 import ModelRow from "./ModelRow";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
@@ -87,10 +88,12 @@ export default function ProviderDetailPage() {
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
 
   const openOAuthConnection = () => {
+    if (isUnavailable) return;
     setShowOAuthModal(true);
   };
 
   const triggerOAuthConnection = () => {
+    if (isUnavailable) return;
     if (providerId === "antigravity" && typeof window !== "undefined") {
       const confirmed = window.localStorage.getItem(AG_RISK_STORAGE_KEY) === "true";
       if (!confirmed) {
@@ -107,6 +110,7 @@ export default function ProviderDetailPage() {
   };
 
   const triggerApiKeyConnection = () => {
+    if (isUnavailable) return;
     setAddConnectionError("");
     setShowAddApiKeyModal(true);
   };
@@ -152,11 +156,12 @@ export default function ProviderDetailPage() {
       }
     : (OAUTH_PROVIDERS[providerId] || APIKEY_PROVIDERS[providerId] || FREE_PROVIDERS[providerId] || FREE_TIER_PROVIDERS[providerId] || WEB_COOKIE_PROVIDERS[providerId]);
   const authModes = providerInfo?.authModes || [];
-  const isOAuth = !!OAUTH_PROVIDERS[providerId] || !!FREE_PROVIDERS[providerId] || authModes.includes("oauth");
+  const isUnavailable = providerInfo?.availability === "unavailable";
+  const isOAuth = !isUnavailable && (!!OAUTH_PROVIDERS[providerId] || !!FREE_PROVIDERS[providerId] || authModes.includes("oauth"));
   const supportsApiKeyAuth = !!APIKEY_PROVIDERS[providerId] || authModes.includes("apikey");
   const isFreeNoAuth = !!FREE_PROVIDERS[providerId]?.noAuth;
   const staticModels = getModelsByProviderId(providerId);
-  const models = providerId === "cursor" && liveModels.length > 0
+  const models = supportsLiveModelCatalog(providerId) && liveModels.length > 0
     ? liveModels
     : staticModels;
   const providerAlias = getProviderAlias(providerId);
@@ -469,13 +474,11 @@ export default function ProviderDetailPage() {
     fetchDisabledModels();
   }, [fetchConnections, fetchAliases, fetchCustomModels, fetchDisabledModels]);
 
-  // Cursor's model availability is account-specific and changes frequently.
-  // Load the active account's live catalog for the dashboard; the static
-  // registry remains the fallback while the request is pending or unavailable.
+  // Cursor and Zed expose account-specific catalogs; keep static models as fallback.
   useEffect(() => {
-    if (providerId !== "cursor") {
-      setLiveModels([]);
-      return;
+    if (!supportsLiveModelCatalog(providerId)) {
+      void Promise.resolve().then(() => setLiveModels([]));
+      return undefined;
     }
 
     const connection = connections.find((item) => item.isActive !== false);
@@ -1273,6 +1276,37 @@ export default function ProviderDetailPage() {
         <Link href="/dashboard/providers" className="text-primary mt-4 inline-block">
           Back to Providers
         </Link>
+      </div>
+    );
+  }
+
+  if (isUnavailable) {
+    return (
+      <div className="flex min-w-0 flex-col gap-6 px-1 sm:px-0">
+        <Link
+          href="/dashboard/providers"
+          className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-primary transition-colors"
+        >
+          <span className="material-symbols-outlined text-lg">arrow_back</span>
+          Back to Providers
+        </Link>
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <div
+              className="flex size-12 items-center justify-center"
+              style={{ backgroundColor: `${providerInfo.color || "#0082FB"}15` }}
+            >
+              <span className="text-lg font-bold" style={{ color: providerInfo.color || "#0082FB" }}>
+                {providerInfo.textIcon || providerInfo.id.slice(0, 2).toUpperCase()}
+              </span>
+            </div>
+            <h1 className="text-2xl font-semibold">{providerInfo.name}</h1>
+            <Badge variant="default" size="sm">Unavailable</Badge>
+            <p className="max-w-xl text-sm text-text-muted">
+              {providerInfo.availabilityReason || "This provider is not available yet."}
+            </p>
+          </div>
+        </Card>
       </div>
     );
   }

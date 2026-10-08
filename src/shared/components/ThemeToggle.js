@@ -8,16 +8,15 @@ export default function ThemeToggle({ className, variant = "default" }) {
 
   const variants = {
     default: cn(
-      "flex items-center justify-center size-10 rounded-full",
+      "flex items-center justify-center size-9 border border-transparent",
       "text-text-muted hover:text-text-main",
-      "hover:bg-surface-2 transition-colors"
+      "hover:border-border hover:bg-surface-2 transition-colors"
     ),
     card: cn(
-      "flex items-center justify-center size-11 rounded-full",
-      "bg-surface/60 hover:bg-surface",
-      "border border-border",
-      "backdrop-blur-md shadow-sm hover:shadow-[var(--shadow-warm)]",
-      "text-text-muted hover:text-brand-500",
+      "flex items-center justify-center size-10",
+      "bg-surface hover:bg-surface-2",
+      "border border-border hover:border-border-strong",
+      "text-text-muted hover:text-primary",
       "transition-all group"
     ),
   };
@@ -31,7 +30,7 @@ export default function ThemeToggle({ className, variant = "default" }) {
     >
       <span
         className={cn(
-          "material-symbols-outlined text-[22px]",
+          "material-symbols-outlined text-[20px]",
           variant === "card" && "transition-transform duration-300 group-hover:rotate-12"
         )}
       >

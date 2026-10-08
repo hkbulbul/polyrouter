@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Card, Button, Input, Select, Toggle } from "@/shared/components";
 import { AI_PROVIDERS, AUTH_METHODS } from "@/shared/constants/config";
 
-const providerOptions = Object.values(AI_PROVIDERS).map((p) => ({
+const providerOptions = Object.values(AI_PROVIDERS).filter((p) => p.availability !== "unavailable").map((p) => ({
   value: p.id,
   label: p.name,
 }));

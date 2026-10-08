@@ -75,7 +75,7 @@ export default function NineRemotePromoModal({ isOpen, onClose }) {
           {/* CTA */}
           <button
             onClick={() => window.open(NINE_REMOTE_URL, "_blank")}
-            className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold text-white rounded-[var(--radius-brand)] bg-primary hover:bg-primary-hover shadow-[var(--shadow-warm)] active:scale-[0.98] transition-all"
+            className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold text-on-primary rounded-[var(--radius-brand)] bg-primary hover:bg-primary-hover shadow-[var(--shadow-warm)] active:scale-[0.98] transition-all"
           >
             <span className="material-symbols-outlined text-base">
               open_in_new

@@ -7,6 +7,7 @@ import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { errorResponse, unavailableResponse, parseUpstreamError } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { proxyAwareFetch } from "open-sse/utils/proxyFetch.js";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 
 function cloneFormData(source, upstreamModel) {
   const copy = new FormData();
@@ -35,6 +36,8 @@ export async function handleImageEdit(request) {
   if (!prompt) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing prompt");
 
   const modelInfo = await getModelInfo(modelId);
+  const unavailableError = getUnavailableProviderError(modelInfo.provider);
+  if (unavailableError) return errorResponse(HTTP_STATUS.BAD_REQUEST, unavailableError);
   const config = AI_PROVIDERS[modelInfo.provider]?.imageEditConfig;
   if (!modelInfo.provider || !config?.baseUrl) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Provider does not support image editing");
 

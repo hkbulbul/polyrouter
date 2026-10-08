@@ -28,9 +28,11 @@ import {
   CODEBUDDY_CONFIG,
   KIMCHI_CONFIG,
   GROK_CLI_CONFIG,
+  ZED_HOSTED_CONFIG,
   getOAuthClientMetadata,
 } from "./constants/oauth";
 import { XAI_CONFIG, XAI_PKCE_VERIFIER_BYTES } from "./constants/xai";
+import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import {
   validateXaiOAuthEndpoint,
   decodeXaiIdTokenEmail,
@@ -38,6 +40,14 @@ import {
   extractCodexAccountInfo,
   fetchKiroProfileArn,
 } from "./providerHelpers";
+import {
+  createZedNativeAuthData,
+  decodeZedSystemIdVerifier,
+  decryptZedAccessToken,
+  fetchZedAuthenticatedUser,
+  parseZedCallbackPayload,
+  resolveZedOrganizationId,
+} from "open-sse/shared/zedAuth.js";
 
 export { extractCodexAccountInfo, fetchKiroProfileArn };
 
@@ -386,8 +396,7 @@ const PROVIDERS = {
   },
 
 
-  // Muse Code (Meta) â€” Device Code flow to auth.meta.com, inference on api.meta.ai
-    "gemini-cli": {
+  "gemini-cli": {
     config: GEMINI_CONFIG,
     flowType: "authorization_code",
     buildAuthUrl: (config, redirectUri, state) => {
@@ -1544,12 +1553,60 @@ const PROVIDERS = {
       };
     },
   },
+
+  zed: {
+    config: ZED_HOSTED_CONFIG,
+    flowType: "authorization_code",
+    callbackPath: "/",
+    prepareConfig: (config) => ({ ...config, ...createZedNativeAuthData(config) }),
+    buildAuthUrl: (config) => config.authUrl,
+    exchangeToken: async (config, callbackUrl, redirectUri, codeVerifier) => {
+      const { userId, encryptedAccessToken } = parseZedCallbackPayload(callbackUrl);
+      return {
+        accessToken: decryptZedAccessToken(encryptedAccessToken, codeVerifier),
+        userId,
+        systemId: decodeZedSystemIdVerifier(codeVerifier),
+      };
+    },
+    postExchange: async (tokens) => {
+      const credentials = {
+        accessToken: tokens.accessToken,
+        providerSpecificData: { userId: tokens.userId, systemId: tokens.systemId },
+      };
+      let userInfo = null;
+      try {
+        userInfo = await fetchZedAuthenticatedUser(credentials, { config: ZED_HOSTED_CONFIG });
+      } catch {
+        // Profile metadata is optional; the completion API validates the credential.
+      }
+      return {
+        email: userInfo?.email || null,
+        name: userInfo?.name || userInfo?.display_name || null,
+        organizationId: resolveZedOrganizationId(credentials, userInfo),
+      };
+    },
+    mapTokens: (tokens, extra) => ({
+      accessToken: tokens.accessToken,
+      refreshToken: null,
+      expiresIn: null,
+      email: extra?.email || undefined,
+      displayName: extra?.name || undefined,
+      providerSpecificData: {
+        authMethod: "rsa_callback",
+        userId: tokens.userId,
+        systemId: tokens.systemId,
+        organizationId: extra?.organizationId || "",
+      },
+    }),
+  },
 };
 
 /**
  * Get provider handler
  */
 export function getProvider(name) {
+  const unavailableError = getUnavailableProviderError(name);
+  if (unavailableError) throw new Error(unavailableError);
   // Legacy kimi-coding â†’ kimi (dual-auth merge)
   const key = name === "kimi-coding" ? "kimi" : name;
   const provider = PROVIDERS[key];
@@ -1575,7 +1632,9 @@ export async function generateAuthData(providerName, redirectUri, meta) {
   const config = provider.prepareConfig
     ? await provider.prepareConfig(provider.config, meta || {})
     : provider.config;
-  const { codeVerifier, codeChallenge, state } = generatePKCE(provider.pkceVerifierBytes);
+  const generated = generatePKCE(provider.pkceVerifierBytes);
+  const codeVerifier = config.privateKeyVerifier || generated.codeVerifier;
+  const { codeChallenge, state } = generated;
 
   let authUrl;
   if (provider.flowType === "device_code") {
@@ -1605,7 +1664,7 @@ export async function generateAuthData(providerName, redirectUri, meta) {
  */
 export async function exchangeTokens(providerName, code, redirectUri, codeVerifier, state, meta) {
   const provider = getProvider(providerName);
-  const config = provider.prepareConfig
+  const config = provider.prepareConfig && providerName !== "zed"
     ? await provider.prepareConfig(provider.config, meta || {})
     : provider.config;
 
@@ -1651,7 +1710,15 @@ export async function pollForToken(providerName, deviceCode, codeVerifier, extra
       // Call postExchange to get additional data (copilotToken, userInfo, etc.)
       let extra = null;
       if (provider.postExchange) {
-        extra = await provider.postExchange(result.data);
+        try {
+          extra = await provider.postExchange(result.data);
+        } catch (err) {
+          return {
+            success: false,
+            error: "post_exchange_failed",
+            errorDescription: err.message || "Failed to complete token post-exchange",
+          };
+        }
       }
       const tokens = provider.mapTokens(result.data, extra);
       // Kiro IDC/Builder-ID tokens lack profileArn; resolve it to avoid 403
