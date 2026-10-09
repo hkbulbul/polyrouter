@@ -1,0 +1,25 @@
+{
+  "name": "polyrouter-client",
+  "version": "0.1.0",
+  "description": "Light PolyRouter client for employees: sign in to your office PolyRouter and auto-configure Claude Code, Codex and other AI tools",
+  "type": "module",
+  "bin": {
+    "polyrouter-client": "./bin.js"
+  },
+  "files": [
+    "bin.js",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "polyrouter",
+    "claude-code",
+    "codex",
+    "ai-gateway",
+    "office"
+  ],
+  "license": "MIT"
+}

@@ -13,8 +13,9 @@ const SETTINGS_RESPONSE_HEADERS = {
   "Cache-Control": "no-store"
 };
 
-// Secrets must never be mass-assigned from request body (CWE-915)
-const PROTECTED_SETTING_KEYS = ["password", "mitmSudoEncrypted"];
+// Secrets must never be mass-assigned from request body (CWE-915).
+// `office` is validated and written only by /api/office/admin/settings.
+const PROTECTED_SETTING_KEYS = ["password", "mitmSudoEncrypted", "office"];
 
 export async function GET() {
   try {

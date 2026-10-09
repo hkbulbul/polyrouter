@@ -19,7 +19,7 @@ import { getUnavailableProviderError } from "open-sse/providers/index.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { hasSpecializedExecutor } from "open-sse/executors/index.js";
 
-describe("9Router provider transfers", () => {
+describe("Upstream provider transfers", () => {
   it.each([
     ["api-airforce", "https://api.airforce/v1/chat/completions"],
     ["baidu", "https://qianfan.baidubce.com/v2/chat/completions"],

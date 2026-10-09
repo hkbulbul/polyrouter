@@ -6,6 +6,7 @@ import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import PolyRouterSwitch from "./PolyRouterSwitch";
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 
@@ -120,8 +121,9 @@ export default function ClaudeToolCard({
     }
   }, [claudeStatus, apiKeys, tool.defaultModels, onModelMappingChange]);
 
-  const checkClaudeStatus = async () => {
-    setCheckingClaude(true);
+  // silent: refresh without the full-card spinner (keeps inline messages mounted)
+  const checkClaudeStatus = async ({ silent = false } = {}) => {
+    if (!silent) setCheckingClaude(true);
     try {
       const res = await fetch("/api/cli-tools/claude-settings");
       const data = await res.json();
@@ -171,7 +173,7 @@ export default function ClaudeToolCard({
       const data = await res.json();
       if (res.ok) {
         setMessage({ type: "success", text: "Settings applied successfully!" });
-        setClaudeStatus(prev => ({ ...prev, hasBackup: true, settings: { ...prev?.settings, env }, exaMcpEnabled }));
+        checkClaudeStatus({ silent: true });
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
       }
@@ -192,7 +194,7 @@ export default function ClaudeToolCard({
         setMessage({ type: "success", text: "Settings reset successfully!" });
         tool.defaultModels.forEach((model) => onModelMappingChange(model.alias, model.defaultValue || ""));
         setSelectedApiKey("");
-        setExaMcpEnabled(false);
+        checkClaudeStatus({ silent: true });
       } else {
         setMessage({ type: "error", text: data.error || "Failed to reset settings" });
       }
@@ -298,6 +300,8 @@ export default function ClaudeToolCard({
 
           {!checkingClaude && claudeStatus?.installed && (
             <>
+              <PolyRouterSwitch toolId="claude" toolName="Claude Code" status={claudeStatus} onChanged={() => checkClaudeStatus({ silent: true })} />
+
               <div className="flex flex-col gap-2">
                 {/* Endpoint (selector) */}
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
@@ -383,7 +387,7 @@ export default function ClaudeToolCard({
                 <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={!hasActiveProviders} loading={applying}>
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={!claudeStatus?.hasPolyRouter} loading={restoring}>
+                <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={!claudeStatus?.hasPolyRouter && !claudeStatus?.canReconnect} loading={restoring} title="Restore your original Claude Code settings and forget PolyRouter's">
                   <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>

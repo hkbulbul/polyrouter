@@ -1,3 +1,4 @@
+import { withOfficeGate } from "@/lib/office/gate.js";
 import { handleSearch } from "@/sse/handlers/search.js";
 
 /**
@@ -16,6 +17,8 @@ export async function OPTIONS() {
 /**
  * POST /v1/search - Web search endpoint
  */
-export async function POST(request) {
+async function handlePost(request) {
   return await handleSearch(request);
 }
+
+export const POST = withOfficeGate(handlePost, { kind: "search" });

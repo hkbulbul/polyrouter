@@ -213,19 +213,12 @@ function importLegacyDetails(adapter, data) {
 }
 
 // ─── Main entry ──────────────────────────────────────────────────────────
-export async function runMigrationOnce(adapter) {
-  if (_migratedAdapters.has(adapter)) return;
-  _migratedAdapters.add(adapter);
-
-  // Capture freshness BEFORE migrations stamp _meta (otherwise we'd misclassify
-  // a brand-new DB as non-fresh once schemaVersion is written).
-  const fresh = isFreshDb(adapter);
-
-  // Prune stale backups every boot so old oversized backups shrink to KEEP.
-  pruneOldBackups();
-
-  // Bootstrap _meta so we can read the stored backup schema version below
-  // (runVersionedMigrations also ensures this, but we need it earlier here).
+/**
+ * Bring an open adapter's schema up to SCHEMA_VERSION: lightweight backup when
+ * the schema is changing on an existing DB, versioned migrations, additive sync.
+ * Idempotent. Also used to upgrade a live adapter kept across dev hot-reloads.
+ */
+export function applyPendingSchema(adapter, { fresh = false } = {}) {
   adapter.exec(buildCreateTableSql("_meta", TABLES._meta));
 
   // Detect a pending schema change via the central SCHEMA_VERSION const.
@@ -244,13 +237,28 @@ export async function runMigrationOnce(adapter) {
   }
 
   // 1. Always run versioned migrations chain (skip-version safe)
-  const migInfo = runVersionedMigrations(adapter);
+  runVersionedMigrations(adapter);
 
   // 2. Additive sync (auto add missing columns/indexes declared in TABLES)
   syncSchemaFromTables(adapter);
 
   // Stamp the schema version we just reached so future boots skip re-backup.
   setMetaSync(adapter, "backupSchemaVersion", SCHEMA_VERSION);
+}
+
+export async function runMigrationOnce(adapter) {
+  if (_migratedAdapters.has(adapter)) return;
+  _migratedAdapters.add(adapter);
+
+  // Capture freshness BEFORE migrations stamp _meta (otherwise we'd misclassify
+  // a brand-new DB as non-fresh once schemaVersion is written).
+  const fresh = isFreshDb(adapter);
+
+  // Prune stale backups every boot so old oversized backups shrink to KEEP.
+  pruneOldBackups();
+
+  // Backup (if changing), versioned migrations, additive sync, version stamp.
+  applyPendingSchema(adapter, { fresh });
 
   // 3. One-time legacy JSON import (only if DB was fresh on entry)
   const alreadyImported = fs.existsSync(MIGRATED_MARKER);

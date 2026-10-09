@@ -1,3 +1,4 @@
+import { withOfficeGate } from "@/lib/office/gate.js";
 import { handleChat } from "@/sse/handlers/chat.js";
 import {
   clearAccountError,
@@ -50,7 +51,7 @@ export async function OPTIONS() {
  * The upstream handleChat returns OpenAI SSE format; we transform it to
  * Gemini SSE format on the fly via transformOpenAISSEToGeminiSSE().
  */
-export async function POST(request, { params }) {
+async function handlePost(request, { params }) {
   await ensureInitialized();
 
   try {
@@ -583,3 +584,15 @@ async function convertOpenAIResponseToGemini(response, model) {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
+
+// Office mode: the model lives in the URL (/v1beta/models/{provider}/{model}:action),
+// so it is resolved here the same way handlePost does.
+async function geminiModelFromPath({ routeCtx }) {
+  const { path } = (await routeCtx?.params) || {};
+  if (!Array.isArray(path) || !path.length) return null;
+  const modelAction = path.length >= 2 ? path[1] : path[0];
+  const modelName = String(modelAction).replace(":streamGenerateContent", "").replace(":generateContent", "");
+  return path.length >= 2 ? `${path[0]}/${modelName}` : modelName;
+}
+
+export const POST = withOfficeGate(handlePost, { kind: "chat", format: "gemini", getModel: geminiModelFromPath, modelInBody: false });

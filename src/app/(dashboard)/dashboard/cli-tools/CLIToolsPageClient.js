@@ -47,7 +47,13 @@ export default function CLIToolsPageClient({ machineId }) {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-1 sm:px-0">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {regularTools.map(([toolId, tool]) => (
-          <ToolSummaryCard key={toolId} toolId={toolId} tool={tool} status={toolStatuses[toolId]} />
+          <ToolSummaryCard
+            key={toolId}
+            toolId={toolId}
+            tool={tool}
+            status={toolStatuses[toolId]}
+            onStatusChange={(id, status) => setToolStatuses(prev => ({ ...prev, [id]: status }))}
+          />
         ))}
       </div>
       <div className="flex flex-col gap-3 sm:gap-4">

@@ -10,6 +10,7 @@ import { MEDIA_PROVIDER_KINDS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Button from "./Button";
 import Modal from "./Modal";
+import { NavGroup, NavItem, navItemClass, navItemActiveClass, navItemIdleClass, navItemCollapsedClass } from "./SidebarNav";
 
 // const VISIBLE_MEDIA_KINDS = ["embedding", "image", "imageToText", "tts", "stt", "webSearch", "webFetch", "video", "music"];
 const VISIBLE_MEDIA_KINDS = ["embedding", "image", "video", "tts", "stt", "speechToSpeech"];
@@ -28,6 +29,11 @@ const navItems = [
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
+// Shown only while Office mode is on (Settings → Office mode).
+const OFFICE_NAV_ITEM = { href: "/dashboard/office", label: "Office", icon: "corporate_fare" };
+// Must match OFFICE_MODE_EVENT in dashboard/profile/OfficeModeCard.js.
+const OFFICE_MODE_EVENT = "polyrouter:office-mode-changed";
+
 const debugItems = [
   { href: "/dashboard/console-log", label: "Console Log", icon: "terminal" },
   { href: "/dashboard/translator", label: "Translator", icon: "translate" },
@@ -43,41 +49,13 @@ const mediaItems = [
   { href: COMBINED_WEB_ITEM.href, label: COMBINED_WEB_ITEM.label, icon: COMBINED_WEB_ITEM.icon },
 ];
 
-const navItemClass = "relative flex h-9 items-center gap-2.5 px-3 text-[13px] leading-none transition-colors";
-const navItemActiveClass = "bg-surface-2 font-medium text-text-main before:absolute before:inset-y-1.5 before:left-0 before:w-[2px] before:bg-accent-fill";
-const navItemIdleClass = "text-text-muted hover:bg-surface-2 hover:text-text-main";
-
-function NavGroup({ label, children }) {
-  return (
-    <div className="flex flex-col gap-px">
-      <p className="eyebrow mb-2 px-3 text-[10.5px]">{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function NavItem({ href, label, icon, active, compact = false, onNavigate }) {
-  return (
-    <Link
-      href={href}
-      onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
-      className={cn(navItemClass, compact && "h-8 text-[12.5px]", active ? navItemActiveClass : navItemIdleClass)}
-    >
-      <span className={cn("material-symbols-outlined", compact ? "text-[16px]" : "text-[18px]", active && "fill-1 text-primary")}>
-        {icon}
-      </span>
-      <span className="truncate">{label}</span>
-    </Link>
-  );
-}
-
 const systemItems = [
+  { href: "/dashboard/pricing", label: "Pricing", icon: "sell" },
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
 ];
 
-export default function Sidebar({ onClose }) {
+export default function Sidebar({ onClose, collapsed = false, onToggleCollapse }) {
   const pathname = usePathname();
   const onMediaRoute = pathname.startsWith("/dashboard/media-providers");
   const [mediaOpen, setMediaOpen] = useState(onMediaRoute);
@@ -86,6 +64,7 @@ export default function Sidebar({ onClose }) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateState, setUpdateState] = useState(null);
   const [enableTranslator, setEnableTranslator] = useState(false);
+  const [officeEnabled, setOfficeEnabled] = useState(false);
   const { copied, copy } = useCopyToClipboard(2000);
 
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
@@ -93,9 +72,20 @@ export default function Sidebar({ onClose }) {
   useEffect(() => {
     fetch("/api/settings")
       .then(res => res.json())
-      .then(data => { if (data.enableTranslator) setEnableTranslator(true); })
+      .then(data => {
+        if (data.enableTranslator) setEnableTranslator(true);
+        setOfficeEnabled(data.office?.enabled === true);
+      })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const onOfficeChange = (event) => setOfficeEnabled(event.detail?.enabled === true);
+    window.addEventListener(OFFICE_MODE_EVENT, onOfficeChange);
+    return () => window.removeEventListener(OFFICE_MODE_EVENT, onOfficeChange);
+  }, []);
+
+  const visibleNavItems = officeEnabled ? [...navItems, OFFICE_NAV_ITEM] : navItems;
 
   // Lazy check for new npm version on mount
   useEffect(() => {
@@ -154,45 +144,70 @@ export default function Sidebar({ onClose }) {
 
   return (
     <>
-      <aside className="flex w-[248px] flex-col border-r border-border bg-sidebar transition-colors duration-300 min-h-full">
+      <aside
+        className={cn(
+          "flex flex-col border-r border-border bg-sidebar transition-[width,background-color,border-color] duration-300 min-h-full",
+          collapsed ? "w-[64px]" : "w-[248px]"
+        )}
+      >
 
         {/* Wordmark: logo in a light tile followed by the name in mono caps (landing style) */}
-        <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border px-5">
-          <Link href="/dashboard" onClick={onClose} aria-label="PolyRouter dashboard" className="inline-flex items-center gap-2.5 whitespace-nowrap font-mono text-sm uppercase leading-none text-text-main">
-            <span className="flex size-[30px] items-center justify-center bg-[#ededed] p-[5px]">
+        <div className={cn("flex h-16 shrink-0 items-center gap-2 border-b border-border", collapsed ? "justify-center px-0" : "justify-between px-5")}>
+          <Link
+            href="/dashboard"
+            onClick={onClose}
+            aria-label="PolyRouter dashboard"
+            title={collapsed ? "PolyRouter" : undefined}
+            className="inline-flex min-w-0 items-center gap-2.5 whitespace-nowrap font-mono text-sm uppercase leading-none text-text-main"
+          >
+            <span className="flex size-[30px] shrink-0 items-center justify-center bg-[#ededed] p-[5px]">
               <img src="/polyrouter-mark.png" alt="" width={20} height={20} className="size-full object-contain brightness-0" />
             </span>
-            PolyRouter
+            {!collapsed && "PolyRouter"}
           </Link>
-          <span className="font-mono text-[10.5px] leading-none text-text-muted">v{APP_CONFIG.version}</span>
+          {!collapsed && (
+            <span className="font-mono text-[10.5px] leading-none text-text-muted">v{APP_CONFIG.version}</span>
+          )}
         </div>
 
         {/* Navigation */}
-        <nav aria-label="Dashboard" className="flex flex-1 flex-col gap-6 overflow-y-auto custom-scrollbar px-3 py-5">
-          <NavGroup label="Workspace">
-            {navItems.map((item) => (
-              <NavItem key={item.href} {...item} active={isActive(item.href)} onNavigate={onClose} />
+        <nav aria-label="Dashboard" className={cn("flex flex-1 flex-col gap-6 overflow-y-auto overflow-x-hidden custom-scrollbar py-5", collapsed ? "px-2" : "px-3")}>
+          <NavGroup label="Workspace" collapsed={collapsed}>
+            {visibleNavItems.map((item) => (
+              <NavItem key={item.href} {...item} collapsed={collapsed} active={isActive(item.href)} onNavigate={onClose} />
             ))}
           </NavGroup>
 
-          <NavGroup label="Media">
+          <NavGroup label="Media" collapsed={collapsed}>
             <button
               type="button"
-              onClick={() => setMediaOpen((v) => !v)}
-              aria-expanded={mediaOpen}
+              onClick={() => {
+                // The submenu can't render in the icon rail, so expand the sidebar to show it
+                if (collapsed) {
+                  onToggleCollapse?.();
+                  setMediaOpen(true);
+                } else {
+                  setMediaOpen((v) => !v);
+                }
+              }}
+              aria-expanded={!collapsed && mediaOpen}
+              title={collapsed ? "Media Providers" : undefined}
               className={cn(
                 navItemClass,
                 "w-full",
-                onMediaRoute && !mediaOpen ? navItemActiveClass : navItemIdleClass
+                collapsed && navItemCollapsedClass,
+                onMediaRoute && (collapsed || !mediaOpen) ? navItemActiveClass : navItemIdleClass
               )}
             >
-              <span className="material-symbols-outlined text-[18px]">perm_media</span>
-              <span className="flex-1 text-left">Media Providers</span>
-              <span className={cn("material-symbols-outlined text-[16px] transition-transform duration-200", mediaOpen && "rotate-180")}>
-                expand_more
-              </span>
+              <span className={cn("material-symbols-outlined text-[18px]", collapsed && onMediaRoute && "fill-1 text-primary")}>perm_media</span>
+              <span className={cn("flex-1 text-left", collapsed && "sr-only")}>Media Providers</span>
+              {!collapsed && (
+                <span className={cn("material-symbols-outlined text-[16px] transition-transform duration-200", mediaOpen && "rotate-180")}>
+                  expand_more
+                </span>
+              )}
             </button>
-            {mediaOpen && (
+            {mediaOpen && !collapsed && (
               <div className="ml-[21px] flex flex-col gap-px border-l border-border pl-2">
                 {mediaItems.map((item) => (
                   <NavItem
@@ -207,20 +222,35 @@ export default function Sidebar({ onClose }) {
             )}
           </NavGroup>
 
-          <NavGroup label="System">
+          <NavGroup label="System" collapsed={collapsed}>
             {systemItems.map((item) => (
-              <NavItem key={item.href} {...item} active={isActive(item.href)} onNavigate={onClose} />
+              <NavItem key={item.href} {...item} collapsed={collapsed} active={isActive(item.href)} onNavigate={onClose} />
             ))}
             {debugItems
               .filter((item) => item.href !== "/dashboard/translator" || enableTranslator)
               .map((item) => (
-                <NavItem key={item.href} {...item} active={isActive(item.href)} onNavigate={onClose} />
+                <NavItem key={item.href} {...item} collapsed={collapsed} active={isActive(item.href)} onNavigate={onClose} />
               ))}
-            <NavItem href="/dashboard/profile" label="Settings" icon="settings" active={isActive("/dashboard/profile")} onNavigate={onClose} />
+            <NavItem href="/dashboard/profile" label="Settings" icon="settings" collapsed={collapsed} active={isActive("/dashboard/profile")} onNavigate={onClose} />
           </NavGroup>
         </nav>
 
-        {updateInfo && (
+        {updateInfo && collapsed && (
+          <div className="flex shrink-0 justify-center border-t border-border p-2">
+            <button
+              type="button"
+              onClick={() => setShowUpdateModal(true)}
+              aria-label={`Update available: v${updateInfo.latestVersion}`}
+              title={`Update available: v${updateInfo.latestVersion}`}
+              className="relative flex size-9 items-center justify-center border border-primary/30 bg-primary/[0.06] text-primary transition-colors hover:bg-primary/[0.12]"
+            >
+              <span className="material-symbols-outlined text-[18px]">upgrade</span>
+              <span className="absolute right-1 top-1 size-1.5 bg-accent-fill animate-pulse" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+
+        {updateInfo && !collapsed && (
           <div className="shrink-0 border-t border-border p-3">
             <div className="border border-primary/30 bg-primary/[0.06] p-3">
               <p className="eyebrow flex items-center gap-2 text-primary">
@@ -340,4 +370,6 @@ export default function Sidebar({ onClose }) {
 
 Sidebar.propTypes = {
   onClose: PropTypes.func,
+  collapsed: PropTypes.bool,
+  onToggleCollapse: PropTypes.func,
 };

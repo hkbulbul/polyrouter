@@ -5,9 +5,14 @@ import { usePathname } from "next/navigation";
 import ToastContainer from "../Toast";
 import Sidebar from "../Sidebar";
 import Header from "../Header";
+import { useSidebarCollapsed } from "@/shared/hooks/useSidebarCollapsed";
+
+// Desktop sidebar collapsed preference (persisted, synced across tabs)
+const SIDEBAR_COLLAPSED_KEY = "polyrouter:sidebar-collapsed";
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, toggleSidebarCollapsed] = useSidebarCollapsed(SIDEBAR_COLLAPSED_KEY);
   const pathname = usePathname();
 
   return (
@@ -24,7 +29,7 @@ export default function DashboardLayout({ children }) {
 
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex">
-        <Sidebar />
+        <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebarCollapsed} />
       </div>
 
       {/* Sidebar - Mobile */}
@@ -38,7 +43,12 @@ export default function DashboardLayout({ children }) {
 
       {/* Main content */}
       <main className="flex flex-col flex-1 h-full min-w-0 relative transition-colors duration-300 isolate">
-        <Header key={pathname} onMenuClick={() => setSidebarOpen(true)} />
+        <Header
+          key={pathname}
+          onMenuClick={() => setSidebarOpen(true)}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebarCollapsed}
+        />
         <div className={`flex-1 overflow-y-auto custom-scrollbar ${pathname === "/dashboard/basic-chat" ? "" : "px-4 py-6 sm:px-6 lg:px-8 lg:py-8"} ${pathname === "/dashboard/basic-chat" ? "flex flex-col overflow-hidden" : ""}`}>
           <div className={`${pathname === "/dashboard/basic-chat" ? "flex-1 w-full h-full flex flex-col" : "max-w-[1240px] mx-auto"}`}>{children}</div>
         </div>

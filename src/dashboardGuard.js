@@ -38,6 +38,11 @@ const PUBLIC_API_PATHS = [
   // /api/sponsors GET bypass below. GET is the only export, so other verbs 405 on their own.
   // Matching is exact-or-prefix, so any future /api/embedding-banners/* would also be public.
   "/api/embedding-banners",
+  // Office mode employee endpoints. They are not admin-authenticated: each
+  // handler requires an employee portal session or a light-client device token.
+  "/api/office/auth",
+  "/api/office/me",
+  "/api/office/client",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
@@ -208,11 +213,15 @@ async function loadSettings() {
   }
 }
 
+// Office mode puts employees on the same network as the admin API, so the
+// "no login required" convenience is never honoured while it is on.
+function isLoginOptional(settings) {
+  return Boolean(settings) && settings.requireLogin === false && settings.office?.enabled !== true;
+}
+
 async function isAuthenticated(request) {
   if (await hasValidToken(request)) return true;
-  const settings = await loadSettings();
-  if (settings && settings.requireLogin === false) return true;
-  return false;
+  return isLoginOptional(await loadSettings());
 }
 
 function isPublicApi(pathname) {
@@ -277,7 +286,7 @@ export async function proxy(request) {
     try {
       const settings = await loadSettings();
       if (settings) {
-        requireLogin = settings.requireLogin !== false;
+        requireLogin = !isLoginOptional(settings);
         tunnelDashboardAccess = settings.tunnelDashboardAccess === true;
 
         // Block tunnel/tailscale access if disabled (redirect to login)

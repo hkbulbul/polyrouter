@@ -41,7 +41,8 @@ async function getInternalHeaders() {
   let apiKey = null;
   try {
     const keys = await getApiKeys();
-    apiKey = keys.find((k) => k.isActive !== false)?.key || null;
+    // Owner keys only — office employee keys are policy-limited.
+    apiKey = keys.find((k) => k.isActive !== false && !k.userId)?.key || null;
   } catch {}
 
   const headers = { "Content-Type": "application/json" };

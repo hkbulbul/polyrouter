@@ -1,3 +1,4 @@
+import { withOfficeGate } from "@/lib/office/gate.js";
 import { handleImageEdit } from "@/sse/handlers/imageEdit.js";
 
 export const maxDuration = 300;
@@ -10,6 +11,8 @@ export async function OPTIONS() {
   } });
 }
 
-export async function POST(request) {
+async function handlePost(request) {
   return handleImageEdit(request);
 }
+
+export const POST = withOfficeGate(handlePost, { kind: "image" });

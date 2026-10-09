@@ -82,15 +82,20 @@ function processTextNode(node) {
   
   if (skipTags.includes(tagName)) return;
   
-  // Store original text if not already stored
-  if (!node._originalText) {
+  // Remember the source text. If the node now holds something that is neither
+  // the stored original nor the translation we last wrote, React re-rendered it
+  // (e.g. a header title after navigation, or "Loading…" → data) — that is the
+  // new original. Without this, a re-process would revert the node to stale text.
+  if (
+    node._originalText === undefined ||
+    (node.nodeValue !== node._originalText && node.nodeValue !== node._translatedText)
+  ) {
     node._originalText = node.nodeValue;
   }
-  
-  // Use original text for translation
-  const original = node._originalText;
-  const translated = translate(original);
-  
+
+  const translated = translate(node._originalText);
+  node._translatedText = translated;
+
   // Only update if different to avoid unnecessary DOM mutations
   if (translated !== node.nodeValue) {
     node.nodeValue = translated;
